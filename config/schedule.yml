@@ -1,0 +1,5 @@
+# sidekiq-cron schedule. Add jobs as:
+# my_job:
+#   cron: "*/5 * * * *"
+#   class: "MyJob"
+#   description: "What it does"

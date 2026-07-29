@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+bundle install
+bin/rails db:prepare
+bin/rails db:seed
+echo
+echo "Setup complete. Seeded users:"
+echo "  admin@example.com / password  (admin)"
+echo "  user@example.com / password  (regular)"
