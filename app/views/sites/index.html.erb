@@ -4,9 +4,27 @@
   <div class="flex items-end justify-between gap-4 mb-8 pb-5 rule-heavy pt-5">
     <div>
       <h1 class="text-2xl font-semibold">Sites</h1>
-      <p class="label mt-2"><%= current_account&.name %></p>
+      <p class="label mt-2">
+        <%= current_account&.name %>
+        <%# The limit is stated here rather than only on the form that refuses.
+            Finding out you cannot add a site after typing its domain is the
+            avoidable version of this. -%>
+        <% if current_account && current_account.site_limit != Billing::Plan::UNLIMITED %>
+          <span class="mx-2">·</span><%= @sites.size %> of <%= current_account.site_limit %> sites
+        <% end %>
+      </p>
     </div>
-    <%= link_to "Add a site", new_site_path, class: "btn btn-primary" %>
+
+    <% if current_account&.at_site_limit? %>
+      <%# No "Add a site" button when it cannot succeed. The link goes where the
+          limit can actually be changed, or nowhere at all on a plan that is
+          already the largest. -%>
+      <% if current_account.can_upgrade? %>
+        <%= link_to "Add more sites", billing_path, class: "btn btn-primary" %>
+      <% end %>
+    <% else %>
+      <%= link_to "Add a site", new_site_path, class: "btn btn-primary" %>
+    <% end %>
   </div>
 
   <div class="card">

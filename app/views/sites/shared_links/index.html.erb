@@ -56,8 +56,12 @@
     </div>
   <% end %>
 
+  <%# The label, the password and the expiry all stay here. The label is written
+      for a client — "Acme monthly" — and naming one in our analytics would be
+      naming a customer's customer. -%>
   <%= form_with model: @shared_link, url: site_shared_links_path(@site),
-                class: "card card-body space-y-6" do |f| %>
+                class: "card card-body space-y-6",
+                data: { analytics_event: "Share Link Created" } do |f| %>
     <%= f.error_summary %>
 
     <h2 class="text-sm font-semibold">New share link</h2>

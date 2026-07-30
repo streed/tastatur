@@ -18,9 +18,16 @@
 
       <div class="flex flex-wrap items-center gap-3 mt-9">
         <% if Tastatur.allow_signup? %>
-          <%= link_to "Start measuring", new_user_registration_path, class: "btn btn-primary" %>
+          <%# The primary conversion on the site. The slug distinguishes it from the
+            same destination reached from the footer or the docs, which is the whole
+            question this event answers; nothing about the visitor is attached. %>
+          <%= link_to "Start measuring", new_user_registration_path, class: "btn btn-primary",
+                      data: { analytics_event: "CTA Clicked",
+                              analytics_props: { cta: "start-measuring", placement: "hero" } } %>
         <% end %>
-        <%= link_to "Read what it collects", privacy_path, class: "btn" %>
+        <%= link_to "Read what it collects", privacy_path, class: "btn",
+                      data: { analytics_event: "CTA Clicked",
+                              analytics_props: { cta: "read-what-it-collects", placement: "hero" } } %>
       </div>
       <p class="label mt-5">Free software · AGPL-3.0 · self-host or hosted</p>
     </div>
@@ -137,7 +144,9 @@
           than our competitors' marketing copy suggests.
         </p>
       </div>
-      <%= link_to "The full technical account", privacy_path, class: "btn mt-8" %>
+      <%= link_to "The full technical account", privacy_path, class: "btn mt-8",
+                  data: { analytics_event: "CTA Clicked",
+                          analytics_props: { cta: "full-technical-account", placement: "claims" } } %>
     </div>
 
     <%# The same two caveats, shown rather than described. -%>

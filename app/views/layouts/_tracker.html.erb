@@ -1,0 +1,18 @@
+<%# Tastatur, measured by Tastatur.
+
+    The same one-line snippet a customer pastes, pointed at this instance's own
+    site key — no separate build, no second script, and no way for our copy to
+    drift from the one we ship. If it ever stops honouring Do Not Track, we find
+    out on our own traffic first.
+
+    Rendered from the application layout only, which is deliberately NOT the
+    layout the public shared dashboards use: those pages are viewed by a
+    customer's own audience, and putting our measurement on somebody else's
+    visitors would be exactly the thing this product exists to refuse.
+
+    Absent unless SELF_MEASUREMENT_SITE_TOKEN is set, so a self-hosted install
+    and the test suite emit nothing at all. See Tastatur.self_measurement_token. -%>
+<% if Tastatur.self_measurement_token %>
+  <script defer data-site="<%= Tastatur.self_measurement_token %>"
+          src="<%= Tastatur.tracker_url %>"></script>
+<% end %>

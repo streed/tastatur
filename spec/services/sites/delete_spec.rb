@@ -9,7 +9,11 @@ require "rails_helper"
 # calling refresh_continuous_aggregate, which TimescaleDB refuses to run inside a
 # transaction.
 RSpec.describe Sites::Delete, :continuous_aggregate do
-  let(:account) { create(:account) }
+  # Three sites on one account, which the free plan's one-site limit would refuse.
+  # An explicit override rather than putting the account on Pro: what this file
+  # needs is headroom, not a paying customer, and `site_limit_override` says exactly
+  # that. See Site#account_within_site_limit.
+  let(:account) { create(:account, site_limit_override: 5) }
   let(:site) { create(:site, account: account, domain: "erased.example.com") }
   let(:survivor) { create(:site, account: account, domain: "kept.example.com") }
 

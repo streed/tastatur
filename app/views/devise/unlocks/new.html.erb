@@ -3,8 +3,13 @@
 <%= render layout: "devise/shared/auth_card",
            locals: { title: "Unlock your account",
                      subtitle: "Too many failed sign-in attempts locked this account. We will email you a link to unlock it." } do %>
+  <%# Reaching this screen at all means somebody was locked out by failed
+      attempts, so the count is worth having on its own: a rise in it is either a
+      credential-stuffing run or a sign that the lockout threshold is too tight
+      for real people. Which account it was stays out of it. %>
   <%= form_for(resource, as: resource_name, url: unlock_path(resource_name),
-               html: { method: :post, class: "card card-body space-y-5" }) do |f| %>
+               html: { method: :post, class: "card card-body space-y-5",
+                       data: { analytics_event: "Unlock Requested" } }) do |f| %>
     <%= f.error_summary %>
     <%= f.field :email, "Email", as: :email_field, autofocus: true, autocomplete: "email" %>
     <div class="pt-1">

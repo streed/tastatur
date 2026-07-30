@@ -6,12 +6,20 @@
       <span class="chip">
         <span class="chip-key"><%= filters.label_for(key) %></span>
         <span class="font-semibold"><%= key == "country" ? country_name(value) : value %></span>
+        <%# The dimension, never `value`, which is beside it on screen and is a
+            path or a country belonging to this site's visitors. %>
         <%= link_to "×", remove_filter_url(site, key), class: "chip-x",
-                    "aria-label": "Remove #{filters.label_for(key)} filter" %>
+                    "aria-label": "Remove #{filters.label_for(key)} filter",
+                    data: { analytics_event: "Filter Removed",
+                            analytics_props: { dimension: key } } %>
       </span>
     <% end %>
 
+    <%# How many were discarded at once distinguishes backing out of one wrong
+        turn from abandoning a whole line of enquiry. %>
     <%= link_to "Clear all", dashboard_url_for(site, filters: Analytics::Filters.new),
-                class: "btn btn-quiet btn-sm" %>
+                class: "btn btn-quiet btn-sm",
+                data: { analytics_event: "Filters Cleared",
+                        analytics_props: { count: filters.applied.size } } %>
   </div>
 <% end %>

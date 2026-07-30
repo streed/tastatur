@@ -99,5 +99,31 @@ RSpec.describe "Rejected events", type: :request do
       expect(response).to have_http_status(:ok)
       expect(response.body).to include("Wrong hostname")
     end
+
+    # THE FAILURE THIS EXAMPLE EXISTS TO PREVENT.
+    #
+    # `counts_for` discovers reasons rather than reading a list, and this page used
+    # to undo that by naming two of them and bucketing `invalid_*`. So the first new
+    # reason — a full plan allowance — made the whole "Rejected events" card appear
+    # showing "Wrong hostname 0 / Wrong origin 0" and nothing else: a site owner
+    # whose events were being refused was shown a card that said nothing was.
+    #
+    # The card now iterates whatever occurred, so this is also the example that
+    # keeps the NEXT reason after this one visible.
+    it "explains a rejection for a full plan allowance, rather than showing two zeroes" do
+      account.update!(event_limit_override: 0)
+      Billing::EventQuota.clear!
+
+      post_event(s: site.public_token, u: "https://example.com/pricing")
+      expect(site.rejection_counts(since: 1.hour.ago)).to include(plan_limit: 1)
+
+      get edit_site_path(site)
+
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to include("Over plan limit")
+      expect(response.body).to include("monthly event allowance")
+      expect(response.body).to include(billing_path)
+      expect(response.body).not_to include("plan_limit")
+    end
   end
 end

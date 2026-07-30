@@ -10,12 +10,18 @@ module DashboardHelper
     site_path(site, **period.to_param, **filters.to_param.symbolize_keys, **overrides)
   end
 
+  # The preset key travels with the event because it is our own vocabulary —
+  # "7d", "12mo" — and says nothing about the site being looked at. The dates it
+  # resolves to would be no more revealing, but they would also answer a question
+  # nobody asked.
   def period_link(site, key, label)
     active = @period.key == key
 
     link_to label,
             dashboard_url_for(site, period: Analytics::Period.parse(key, site: site)),
-            class: "segment", "aria-current": active.to_s
+            class: "segment", "aria-current": active.to_s,
+            data: { analytics_event: "Period Changed",
+                    analytics_props: { period: key, view: "dashboard" } }
   end
 
   # Clicking a breakdown row filters the whole dashboard by that value.
@@ -97,6 +103,46 @@ module DashboardHelper
     key = reason.to_s.delete_prefix("invalid_")
 
     INGEST_FIELD_NAMES.fetch(key, key.humanize.downcase)
+  end
+
+  # Why an event was refused, in words, plus what to do about it.
+  #
+  # Ingest::RejectionCounter records reasons as free-form strings and reads them
+  # back by discovery rather than from a list — a deliberate fix for an earlier
+  # version that iterated a hardcoded pair and therefore counted contract failures
+  # into Redis and never showed them. The settings page then reintroduced the same
+  # bug in the view layer by naming two reasons and rendering nothing for anything
+  # else, so a new reason would make the "Rejected events" card appear showing two
+  # zeroes and no explanation.
+  #
+  # So the labels live here, the view iterates whatever occurred, and an unmapped
+  # reason still renders as a humanised name rather than vanishing.
+  REJECTION_REASONS = {
+    "hostname_mismatch" => {
+      label: "Wrong hostname",
+      note: "The page reported a hostname that is not this site's. Add it under extra hostnames " \
+            "if it is yours."
+    },
+    "origin_mismatch" => {
+      label: "Wrong origin",
+      note: "The browser said the request came from another site. Usually the snippet has been " \
+            "copied somewhere it does not belong."
+    },
+    "plan_limit" => {
+      label: "Over plan limit",
+      note: "This account has used its monthly event allowance, so these events were not recorded."
+    }
+  }.freeze
+
+  def rejection_reason_label(reason)
+    key = reason.to_s
+    return "Malformed #{ingest_field_name(key)}" if key.start_with?("invalid_")
+
+    REJECTION_REASONS.dig(key, :label) || key.humanize
+  end
+
+  def rejection_reason_note(reason)
+    REJECTION_REASONS.dig(reason.to_s, :note)
   end
 
   # Minor units to a readable amount, with the currency named rather than

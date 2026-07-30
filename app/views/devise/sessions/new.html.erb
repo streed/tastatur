@@ -11,8 +11,15 @@
       <%= f.check_box_field :remember_me, "Stay signed in on this device" %>
     <% end %>
 
+    <%# Annotated on the button rather than the form, so a rejected password is
+        counted too: Devise recalls this screen with a 422 and the analytics
+        controller ignores submissions the server refused. Whether the password
+        was right is not this page's to say — "Signed In" is recorded by the
+        server, which is also the only place that knows whether it was this
+        account's first. See SelfMeasurement. %>
     <div class="pt-1">
-      <%= f.submit "Sign in", class: "btn btn-primary w-full justify-center" %>
+      <%= f.submit "Sign in", class: "btn btn-primary w-full justify-center",
+                   data: { analytics_event: "Sign In Submitted" } %>
     </div>
   <% end %>
 <% end %>

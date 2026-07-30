@@ -23,7 +23,13 @@
 	# to a single correct line.
 	@tracker path /t.js
 	header @tracker {
-		>Cache-Control "public, max-age=3600, stale-while-revalidate=86400"
+		# Cache-Control is deliberately absent.
+		#
+		# TrackerController now serves /t.js and sets the hour-long window itself,
+		# so the app is right with or without a proxy in front — which matters,
+		# because Railway has no Caddy and used to get the year-long header from
+		# ActionDispatch::Static. Overriding it here as well would mean two places
+		# to keep in step and one of them silently winning.
 		# The script is meant to be embedded from anywhere.
 		#
 		# Deliberately NOT deferred. rack-cors only matches /api/*, so Rails never

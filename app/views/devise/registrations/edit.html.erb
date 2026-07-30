@@ -2,8 +2,14 @@
 
 <%= render layout: "devise/shared/auth_card",
            locals: { title: "Your login details" } do %>
+  <%# Only the saves that went through: a wrong current password comes back 422
+      and is not a change of anything. Which field was edited is deliberately not
+      recorded — "this person changed their email address" is a fact about a
+      person, and one prop naming the field is all it would take to start
+      keeping those. %>
   <%= form_for(resource, as: resource_name, url: registration_path(resource_name),
-               html: { method: :put, class: "card card-body space-y-5" }) do |f| %>
+               html: { method: :put, class: "card card-body space-y-5",
+                       data: { analytics_event: "Login Details Updated" } }) do |f| %>
     <%= f.error_summary %>
 
     <%= f.field :name, "Your name", autocomplete: "name" %>

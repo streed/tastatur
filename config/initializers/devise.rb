@@ -358,3 +358,30 @@ Devise.setup do |config|
   # changed. Defaults to true, so a user is signed in automatically after changing a password.
   # config.sign_in_after_change_password = true
 end
+
+# The last step of the sign-up funnel, which is the one step nothing in the
+# browser can report.
+#
+# Warden runs this at the moment credentials are accepted, and that moment is the
+# only one in the request that separates somebody who just typed their password
+# from somebody whose session was already valid. A rejected password never gets
+# here at all: Devise recalls the form with a 422, and the analytics controller
+# ignores submissions the server refused.
+#
+# It deliberately does not fire for a programmatic `sign_in` — Devise sets no
+# :authentication event for those — so the first-run wizard and the sign-in that
+# follows a password reset are not counted as funnel conversions. Both are
+# annotated on their own forms as what they actually are.
+#
+# `sign_in_count` is still the value from before this sign-in. Devise's trackable
+# hook, which increments it, is registered when the User model is loaded, and
+# that happens after every initializer has run; Warden calls its callbacks in
+# registration order, so this one goes first. Zero therefore means "has never
+# signed in before", which is as close to an activation as this codebase is
+# willing to measure — the alternative is remembering which person signed in,
+# and that is the thing the product refuses to do. spec/requests/auth_funnel_spec.rb
+# pins the ordering, so a future reshuffle fails a test rather than quietly
+# reporting every returning customer as new.
+Warden::Manager.after_authentication do |user, auth, _options|
+  SelfMeasurement.record(auth.request.session, "Signed In", first_sign_in: user.sign_in_count.to_i.zero?)
+end

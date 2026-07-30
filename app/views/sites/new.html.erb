@@ -8,7 +8,12 @@
     </p>
   </div>
 
-  <%= form_with model: @site, class: "card card-body space-y-6" do |f| %>
+  <%# No properties, and the domain in particular is not one. It is the single
+      most identifying thing on this screen: a customer's domain in our own
+      analytics would tell anyone reading our reports who our customers are. That
+      a site was added is the whole finding. -%>
+  <%= form_with model: @site, class: "card card-body space-y-6",
+                data: { analytics_event: "Site Added" } do |f| %>
     <%= f.error_summary %>
 
     <%= f.field :domain, "Domain",

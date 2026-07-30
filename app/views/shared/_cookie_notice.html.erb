@@ -1,0 +1,51 @@
+<%# The login cookie, disclosed at the point where a stranger might acquire one.
+
+    WHY THIS IS CONDITIONAL ON SIGNUP BEING OPEN.
+
+    Two different situations wear the same word "cookie" here:
+
+    On the hosted service anyone can create an account, so the people who end up
+    with our session cookie are members of the public who arrived from a search
+    result. They are owed a plain statement of what got set and why, at the moment
+    it becomes relevant, rather than a sentence in a policy they had no reason to
+    open.
+
+    On a self-hosted install the only accounts are the operator's own team, on
+    infrastructure the operator controls, under a policy the operator writes. There
+    is no public to disclose to, and a notice on an internal tool is furniture
+    nobody reads. So it does not render there. `Tastatur.allow_signup?` is exactly
+    the right switch: it is already false by default when self-hosted, and it
+    tracks the actual question — can someone who is not you obtain an account here.
+
+    WHY THIS IS NOT A CONSENT BANNER, and must never become one.
+
+    A session cookie that exists solely to keep a signed-in user signed in is
+    strictly necessary and exempt from consent under ePrivacy. There is nothing to
+    accept and nothing to decline, so there are no buttons: an accept/reject dialog
+    would be asking permission we do not need, and it would teach visitors that
+    this product is the kind of thing that requires one. It is precisely the thing
+    Tastatur exists to let people stop doing.
+
+    So: a statement, not a gate. It blocks nothing, it does not overlay the page,
+    and it never appears on a measured site — only on our own. -%>
+<% if Tastatur.allow_signup? %>
+  <aside class="rule pt-5 mt-8 text-[12px] text-muted leading-relaxed" aria-label="Cookie notice">
+    <p>
+      <strong class="text-ink-2">Cookies on this site.</strong>
+      Signing in sets a first-party session cookie so you stay signed in, and a
+      second one if you ask to be remembered. That is all of them: no advertising,
+      no third parties, nothing shared. They are strictly necessary for a login, so
+      there is nothing here to accept or decline.
+    </p>
+    <p class="mt-1.5">
+      <%# The distinction worth drawing even here: this is about the reader's own
+          account, not about anyone they go on to measure. Someone landing on a
+          cookie notice published by an analytics company will reasonably assume
+          the worst, and the answer is one click away. -%>
+      Tastatur sets nothing at all on the visitors to sites you measure — that is
+      the point of it.
+      <%= link_to "How the two differ", privacy_path(anchor: "cookies"),
+                  class: "underline hover:text-signal" %>.
+    </p>
+  </aside>
+<% end %>

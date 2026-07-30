@@ -1,6 +1,9 @@
+<%# As with goals: creating is reported, editing is not, and none of the step
+    fields travel with it — they hold the customer's own paths and event names. -%>
 <%= form_with model: [@site, @funnel],
               url: @funnel.persisted? ? site_funnel_path(@site, @funnel) : site_funnels_path(@site),
-              class: "space-y-6" do |f| %>
+              class: "space-y-6",
+              data: { analytics_event: ("Funnel Created" unless @funnel.persisted?) } do |f| %>
   <%= f.error_summary %>
 
   <div class="card card-body space-y-6">
@@ -42,8 +45,14 @@
     </template>
 
     <div class="px-5 py-4 border-t border-rule flex items-center justify-between gap-4">
+      <%# Reported on the click rather than with the submission, because how many
+          steps people reach for while building is the question, and a funnel
+          abandoned at step five answers it as well as one that was saved.
+          `context` separates designing a funnel from returning to extend one. -%>
       <button type="button" class="btn btn-sm"
-              data-action="nested-form#add" data-nested-form-target="addButton">
+              data-action="nested-form#add" data-nested-form-target="addButton"
+              data-analytics-event="Funnel Step Added"
+              data-analytics-props="<%= { context: @funnel.persisted? ? "edit" : "new" }.to_json %>">
         Add step
       </button>
       <p class="text-[12px] text-muted">

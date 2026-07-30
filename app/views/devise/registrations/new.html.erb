@@ -3,8 +3,16 @@
 <%= render layout: "devise/shared/auth_card",
            locals: { title: "Create an account",
                      subtitle: "You will be measuring your first site a minute from now." } do %>
+  <%# Two annotations, because the gap between them is the number worth having.
+      The button counts every attempt; the form counts only the sign-ups the
+      server accepted, since the analytics controller reports a submission solely
+      when it succeeded. The difference is how many people the form turned away,
+      and it is the one thing a pageview of this screen cannot tell you: a failed
+      sign-up comes back as a 422 re-render at the same URL, so it never
+      produces a second pageview. %>
   <%= form_for(resource, as: resource_name, url: registration_path(resource_name),
-               html: { class: "card card-body space-y-5" }) do |f| %>
+               html: { class: "card card-body space-y-5",
+                       data: { analytics_event: "Account Created" } }) do |f| %>
     <%= f.error_summary %>
 
     <%= f.field :name, "Your name", autofocus: true, autocomplete: "name" %>
@@ -15,7 +23,8 @@
                 autocomplete: "new-password" %>
 
     <div class="pt-1">
-      <%= f.submit "Create account", class: "btn btn-primary w-full justify-center" %>
+      <%= f.submit "Create account", class: "btn btn-primary w-full justify-center",
+                   data: { analytics_event: "Sign Up Submitted" } %>
     </div>
 
     <p class="text-[12px] text-muted">
