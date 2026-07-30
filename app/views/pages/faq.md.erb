@@ -1,0 +1,45 @@
+<%# The FAQ for machine readers, reached as /faq.md or by negotiating
+    `Accept: text/markdown` — see PagesController#faq.
+
+    UNLIKE home.md.erb, THIS FILE HOLDS NO PROSE OF ITS OWN. Both renderings
+    walk Seo::Faq, so there is no second copy of an answer to keep in step with
+    the first, and none of the claims in docs/privacy/claims.md can be
+    accidentally softened in one format and not the other. home.md.erb carries a
+    comment asking a future editor to remember to update the other copy; this is
+    what that comment would prefer to be.
+
+    MIND THE BLANK LINES. Rails renders ERB through Erubi with trimming on, so a
+    line holding nothing but a scriptlet tag is removed along with its newline —
+    which is what you want in HTML and silently destroys a markdown document.
+    Paragraphs written one per line with a loop tag between them arrive with no
+    blank line between them, and markdown then runs the lot together into a
+    single paragraph. That is why an answer is emitted as one join on a double
+    newline rather than iterated, and why the blank lines below are literal and
+    load-bearing.
+
+    Note also that an ERB comment ends at the first closing delimiter inside it,
+    which is why this one describes those tags in words rather than showing one.
+    The same footgun is documented in crawlers/sitemap.xml.erb, where it has to
+    be, because there the stray output would land before the XML declaration. -%>
+# Tastatur — frequently asked questions
+
+> Straight answers about consent banners, GDPR, what happens to visitor IP addresses, why cookieless visitor counts differ from Google Analytics, and when you need a data processing agreement.
+
+Where the honest answer is "it depends" or "no", it says so.
+<% @entries.each do |entry| -%>
+
+## <%= entry.question %>
+
+<%= entry.answer.join("\n\n") %>
+<% if entry.links.any? -%>
+
+<%= entry.links.map { |link| "[#{link.label}](#{public_send(link.route)})" }.join(" · ") %>
+<% end -%>
+<% end -%>
+
+## More
+
+- [What Tastatur collects](<%= privacy_path %>) — the full technical account
+- [Documentation](<%= docs_path(format: :md) %>) — install, custom events, the HTTP API. Also served as markdown.
+- [About](<%= about_path %>)
+- [Source code](<%= Tastatur.maintainer[:source] %>) — AGPL-3.0, self-hostable

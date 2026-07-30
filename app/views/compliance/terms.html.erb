@@ -1,4 +1,7 @@
-<% content_for :title, "Terms · Tastatur" %>
+<% seo title: "Terms and conditions · Tastatur",
+       description: "The agreement covering use of this hosted Tastatur instance. Self-hosting is " \
+                    "governed by the AGPL-3.0 instead, and most of this does not apply.",
+       og_type: "article" %>
 <% entity = Tastatur.legal_value(:entity) %>
 <% contact = Tastatur.legal_value(:email) %>
 <% jurisdiction = Tastatur.legal_value(:jurisdiction) %>

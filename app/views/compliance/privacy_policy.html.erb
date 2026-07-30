@@ -1,4 +1,7 @@
-<% content_for :title, "Privacy policy · Tastatur" %>
+<% seo title: "Privacy policy · Tastatur",
+       description: "How this instance handles its account holders' own data: what is held, how " \
+                    "long it is kept, who else sees it, and the rights you have over it.",
+       og_type: "article" %>
 <% entity = Tastatur.legal_value(:entity) %>
 <% contact = Tastatur.legal_value(:email) %>
 

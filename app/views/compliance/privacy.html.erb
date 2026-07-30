@@ -1,4 +1,11 @@
-<% content_for :title, "Privacy · Tastatur" %>
+<%# No structured_data: Seo::BuildStructuredData has no node for this page, and
+    the honest reason is that schema.org has nothing to say about it that is not
+    already said better by the prose. A WebPage node asserting "this is a page"
+    is markup for its own sake. -%>
+<% seo title: "What Tastatur collects · Tastatur",
+       description: "Exactly what is recorded about a website's visitors, what happens to their " \
+                    "IP address and user-agent, and why the identifier stops working every 24 hours.",
+       og_type: "article" %>
 
 <div class="shell max-w-3xl">
   <div class="pt-5 rule-heavy mb-10">
@@ -177,6 +184,11 @@
 
     <section class="rule pt-6 text-sm text-muted">
       <p>
+        Shorter answers to the questions this page gets asked about — consent banners, GDPR,
+        why the numbers differ from Google Analytics — are on the
+        <%= link_to "FAQ", faq_path, class: "underline hover:text-signal" %>.
+      </p>
+      <p class="mt-2">
         Tastatur is free software under the AGPL-3.0. If you want to verify anything on this page,
         the source is the authority — this document only describes it.
       </p>

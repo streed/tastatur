@@ -1,4 +1,9 @@
-<% content_for :title, "Documentation · Tastatur" %>
+<% seo title: "Documentation · Tastatur",
+       description: "Install Tastatur with one script tag, then send custom events and revenue, " \
+                    "measure single-page apps, define goals and funnels, and call the ingest API.",
+       og_type: "article",
+       markdown: docs_path(format: :md),
+       structured_data: :docs %>
 <% token = @example_site&.public_token || "YOUR_SITE_KEY" %>
 <% tracker = Tastatur.tracker_url %>
 <% ingest = Tastatur.ingest_url %>
@@ -50,6 +55,7 @@
       <p class="label mt-8 mb-3">Deeper</p>
       <ul class="border-t border-rule text-[13px]">
         <% [["What we collect", privacy_path],
+            ["Common questions", faq_path],
             ["Processor terms", dpa_path]].each do |title, path| %>
           <li class="border-b border-rule">
             <%= link_to title, path, class: "block py-2 text-ink-2 hover:text-signal" %>

@@ -144,6 +144,50 @@ module Tastatur
     "0.0.0-dev"
   end
 
+  # --- How this instance describes itself -----------------------------------
+  #
+  # One sentence, in one place, because five separate things quote it and they
+  # were quoting it separately: the llms.txt blockquote, the meta description on
+  # the marketing page, the og:description a link preview renders, and the
+  # `description` field of both the WebSite and SoftwareApplication nodes in
+  # Seo::BuildStructuredData. Four of those five are invisible in a browser, so a
+  # drifting copy is not something anybody would notice by looking at the site.
+  #
+  # It is bound by docs/privacy/claims.md like every other claim we publish. The
+  # size is the measured gzipped size of lib/tracker/t.js — re-measure it here if
+  # the script changes rather than rounding it in the direction we would prefer.
+  DESCRIPTION = "Cookieless, privacy-first web analytics. One script tag, 3.2 KB over the wire. " \
+                "No cookies, no device storage, no fingerprinting, and visitor identifiers stop " \
+                "working after 24 hours.".freeze
+
+  # The image a link preview shows when somebody pastes a URL from this instance
+  # into Slack, a group chat or a social network.
+  #
+  # Defaults to /icon.png, which is 512x512 and therefore above every consumer's
+  # minimum, but is a square app icon rather than a designed 1200x630 card. A
+  # deployment that wants a real one sets SOCIAL_IMAGE_URL instead of editing a
+  # template — same reasoning as TRACKER_URL: this is instance presentation, not
+  # application behaviour, and a self-hosted install should not have to fork a
+  # view to put its own name on its own link previews.
+  #
+  # `base` is required rather than defaulted to base_url, because og:image is
+  # ignored outright unless it is absolute and the host has to be the one the
+  # visitor actually asked for — the same rule as the Sitemap: line in
+  # robots.txt.
+  def self.social_image_url(base:)
+    ENV["SOCIAL_IMAGE_URL"].presence || "#{base}/icon.png"
+  end
+
+  # Whether a deployment has supplied a card of its own, which is a different
+  # question from what the URL is: the shipped default is a square 512x512 app
+  # icon and the wide `summary_large_image` card format letterboxes a square
+  # into bars. Asked by SeoHelper so the view layer does not have to know the
+  # name of an environment variable — every other deployment decision in this
+  # application is a predicate on this module, and this one is no different.
+  def self.social_image_configured?
+    ENV["SOCIAL_IMAGE_URL"].present?
+  end
+
   # --- Authorship -----------------------------------------------------------
   #
   # Who BUILT Tastatur, which is a fixed fact and true of every copy of it.

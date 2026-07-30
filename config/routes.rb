@@ -93,6 +93,12 @@ Rails.application.routes.draw do
   get "about", to: "pages#about"
   get "pricing", to: "pricing#show"
 
+  # The questions people ask before choosing an analytics tool. No `format:
+  # false` here, unlike llms.txt below: this one WANTS Rails' implicit
+  # `(.:format)` segment, because /faq.md is how a machine reader fetches it
+  # without content negotiation — exactly as /docs.md does.
+  get "faq", to: "pages#faq"
+
   # The llms.txt convention (https://llmstxt.org): a markdown index at a
   # well-known path telling an AI agent what is here and where the
   # markdown-native pages live. `format: false` keeps ".txt" as a literal part

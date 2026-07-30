@@ -1,4 +1,10 @@
-<% content_for :title, "Tastatur: cookieless web analytics" %>
+<%# The description is Tastatur::DESCRIPTION rather than a sentence written here,
+    so the meta tag, the link preview, the JSON-LD and llms.txt cannot end up
+    describing the product four different ways. -%>
+<% seo title: "Tastatur — cookieless web analytics",
+       description: Tastatur::DESCRIPTION,
+       markdown: markdown_root_path,
+       structured_data: :home %>
 
 <div class="shell">
   <%# --- Hero. Asymmetric split on a strict grid: the Bauhaus move is the
@@ -144,9 +150,14 @@
           than our competitors' marketing copy suggests.
         </p>
       </div>
-      <%= link_to "The full technical account", privacy_path, class: "btn mt-8",
-                  data: { analytics_event: "CTA Clicked",
-                          analytics_props: { cta: "full-technical-account", placement: "claims" } } %>
+      <div class="flex flex-wrap gap-3 mt-8">
+        <%= link_to "The full technical account", privacy_path, class: "btn",
+                    data: { analytics_event: "CTA Clicked",
+                            analytics_props: { cta: "full-technical-account", placement: "claims" } } %>
+        <%= link_to "Common questions", faq_path, class: "btn btn-quiet",
+                    data: { analytics_event: "CTA Clicked",
+                            analytics_props: { cta: "faq", placement: "claims" } } %>
+      </div>
     </div>
 
     <%# The same two caveats, shown rather than described. -%>

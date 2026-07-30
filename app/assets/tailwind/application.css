@@ -102,6 +102,15 @@
     color: var(--color-ink);
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
+
+    /* Reserve the scrollbar's width whether or not one is showing. `.shell` is
+       centred with `margin-inline: auto`, so a page that scrolls narrows the
+       viewport and moves every centred thing — the header most visibly — by
+       half a scrollbar. Navigating between a long report and a short form then
+       makes the whole chrome twitch sideways. `overflow-y: scroll` also fixes
+       it but paints a dead track on every short page; this leaves the gutter
+       empty. */
+    scrollbar-gutter: stable;
   }
 
   body {

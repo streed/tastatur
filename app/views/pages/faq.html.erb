@@ -1,0 +1,97 @@
+<% seo title: "Questions about cookieless analytics · Tastatur",
+       description: "Straight answers about consent banners, GDPR, what happens to visitor " \
+                    "IP addresses, why cookieless visitor counts differ from Google Analytics, " \
+                    "and when you need a DPA.",
+       og_type: "article",
+       markdown: faq_path(format: :md),
+       structured_data: :faq %>
+
+<div class="shell">
+  <div class="pt-5 rule-heavy mb-10 max-w-3xl">
+    <p class="label mt-5 mb-3">Questions</p>
+    <h1 class="text-3xl font-semibold tracking-[-0.03em]">Questions people actually ask</h1>
+    <p class="text-ink-2 mt-3 leading-relaxed">
+      Mostly about consent, compliance and why the numbers differ from what they had before.
+      Where the honest answer is "it depends" or "no", it says so — a FAQ that answers every
+      question in our favour is an advertisement with question marks in it.
+    </p>
+  </div>
+
+  <div class="grid lg:grid-cols-12 gap-10">
+    <%# --- Contents. Same treatment as the docs page: sticky on wide screens,
+        a plain list on narrow ones. The anchors are also what a search result
+        links directly to when it deep-links one answer. -%>
+    <nav class="lg:col-span-3 lg:sticky lg:top-8 lg:self-start" aria-label="Contents">
+      <p class="label mb-3">Contents</p>
+      <ul class="border-t border-rule">
+        <% @entries.each do |entry| %>
+          <li class="border-b border-rule">
+            <a href="#<%= entry.anchor %>" class="block py-2 text-[13px] text-ink-2 hover:text-signal leading-snug">
+              <%= entry.question %>
+            </a>
+          </li>
+        <% end %>
+      </ul>
+
+      <p class="label mt-8 mb-3">Deeper</p>
+      <ul class="border-t border-rule text-[13px]">
+        <% [["What it collects", privacy_path],
+            ["Documentation", docs_path],
+            ["Processor terms", dpa_path]].each do |title, path| %>
+          <li class="border-b border-rule">
+            <%= link_to title, path, class: "block py-2 text-ink-2 hover:text-signal" %>
+          </li>
+        <% end %>
+      </ul>
+    </nav>
+
+    <%# --- The answers. One <section> per entry with the question as its
+        heading, which is the structure both a reader and an extractor want:
+        the answer to a question is the text between that heading and the next
+        one, with nothing else interleaved. -%>
+    <div class="lg:col-span-9 divide-y divide-rule">
+      <% @entries.each do |entry| %>
+        <section id="<%= entry.anchor %>" class="scroll-mt-24 py-10 first:pt-0">
+          <h2 class="text-xl font-semibold tracking-[-0.02em]">
+            <a href="#<%= entry.anchor %>" class="hover:text-signal"><%= entry.question %></a>
+          </h2>
+
+          <div class="mt-4 space-y-4 text-[15px] text-ink-2 leading-relaxed max-w-2xl">
+            <% entry.answer.each do |paragraph| %>
+              <p><%= paragraph %></p>
+            <% end %>
+          </div>
+
+          <% if entry.links.any? %>
+            <div class="flex flex-wrap gap-2 mt-6">
+              <%# `route` is the NAME of a path helper, so a link whose route has
+                  been removed raises here rather than rendering a 404 as though
+                  it worked. See Seo::FaqEntry::Link. -%>
+              <% entry.links.each do |link| %>
+                <%= link_to link.label, public_send(link.route), class: "btn btn-quiet btn-sm" %>
+              <% end %>
+            </div>
+          <% end %>
+        </section>
+      <% end %>
+
+      <section class="py-10">
+        <p class="text-[15px] text-ink-2 leading-relaxed max-w-2xl">
+          Something not answered here? The
+          <%= link_to "source is public", Tastatur.maintainer[:source],
+                      class: "underline hover:text-signal", rel: "noopener" %>,
+          which is the only reason any of the above is worth more than a promise — every claim
+          on this page corresponds to code you can go and read.
+        </p>
+        <div class="flex flex-wrap gap-3 mt-6">
+          <% if Tastatur.allow_signup? %>
+            <%= link_to "Start measuring", new_user_registration_path, class: "btn btn-primary",
+                        data: { analytics_event: "CTA Clicked",
+                                analytics_props: { cta: "start-measuring", placement: "faq" } } %>
+          <% end %>
+          <%= link_to "Read what it collects", privacy_path, class: "btn" %>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
