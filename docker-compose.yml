@@ -52,7 +52,7 @@ x-app: &app
     # it, which is not Reedster. See docs/self-hosting/configuration.md
     LEGAL_ENTITY: Reedster LLC
     LEGAL_EMAIL: privacy@reedster.llc
-    LEGAL_JURISDICTION: the State of Delaware, USA
+    LEGAL_JURISDICTION: the State of Washington, USA
   depends_on:
     timescaledb:
       condition: service_healthy
@@ -155,7 +155,7 @@ services:
       # it, which is not Reedster. See docs/self-hosting/configuration.md
       LEGAL_ENTITY: Reedster LLC
       LEGAL_EMAIL: privacy@reedster.llc
-      LEGAL_JURISDICTION: the State of Delaware, USA
+      LEGAL_JURISDICTION: the State of Washington, USA
       RUN_MIGRATIONS: "1"
     command: bin/rails server -b 0.0.0.0 -p 3000
     ports:
