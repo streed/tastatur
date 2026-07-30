@@ -1,9 +1,64 @@
 require "rails_helper"
 
-# Only the plan's site limit. Domain normalisation and hostname policy have their
-# own coverage (spec/lib/ingest/hostname_policy_spec.rb and the request specs),
-# and duplicating it here would mean two files to update for one change.
+# The plan's site limit, and the one place domain normalisation has consequences
+# beyond itself: whether the same site can be added twice. Normalisation's own
+# rules and the hostname policy are covered in
+# spec/lib/ingest/hostname_policy_spec.rb and the request specs, and duplicating
+# them here would mean two files to update for one change.
 RSpec.describe Site do
+  # The uniqueness validation is only worth as much as the normalisation that
+  # runs before it. Both halves are load-bearing and neither is obvious from
+  # reading one of them: `before_validation :normalize_domain` is what makes
+  # "https://WWW.Example.com/" and "example.com" the same row, and dropping it
+  # to a plain string comparison would let every one of these through.
+  describe "adding the same domain twice" do
+    let(:account) { create(:account, plan: "pro") }
+
+    before { account.sites.create!(domain: "example.com") }
+
+    it "refuses an exact repeat" do
+      duplicate = build(:site, account: account, domain: "example.com")
+
+      expect(duplicate).not_to be_valid
+      expect(duplicate.errors[:domain]).to include("has already been taken")
+    end
+
+    # Everything a person actually pastes out of a browser's address bar.
+    [
+      "https://example.com",
+      "http://example.com/",
+      "WWW.Example.COM",
+      "https://WWW.Example.com/pricing?ref=x",
+      "example.com:3000",
+      "example.com."
+    ].each do |pasted|
+      it "refuses #{pasted.inspect}, which normalises to the same host" do
+        expect(build(:site, account: account, domain: pasted)).not_to be_valid
+      end
+    end
+
+    # Scoped to the account ON PURPOSE, and this is the assertion that says so.
+    # An agency and its client both legitimately measure the same host, and a
+    # global constraint would let anyone squat a domain they do not own and
+    # permanently block its owner from onboarding.
+    it "allows a different account to measure the same domain" do
+      other = create(:account, plan: "pro")
+
+      expect(other.sites.build(domain: "example.com")).to be_valid
+    end
+
+    # The validation reads; this is what enforces. A spec on the validation alone
+    # would still pass with the index dropped, and the race in SitesController
+    # would then insert the duplicate instead of being caught.
+    it "is enforced by the database even when the validation is bypassed" do
+      # `validate: false` skips before_validation too, so the token that
+      # assign_public_token would have minted has to be supplied by hand.
+      duplicate = build(:site, account: account, domain: "example.com", public_token: "0123456789ABCDEF")
+
+      expect { duplicate.save!(validate: false) }.to raise_error(ActiveRecord::RecordNotUnique)
+    end
+  end
+
   describe "the account's site limit" do
     it "allows the first site on a free account and refuses the second" do
       account = create(:account, plan: "free")

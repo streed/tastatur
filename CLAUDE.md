@@ -306,6 +306,31 @@ Before "fixing" any of these, read the linked document.
   through `connection.quote` and the column list is a frozen constant. The
   Brakeman warning is a reviewed false positive recorded in
   `config/brakeman.ignore`.
+- **`robots.txt` does not disallow `/share/`,** and adding that line is the way
+  to publish an unlisted dashboard rather than hide one. A crawler refused the
+  page never loads the `noindex` meta tag it carries, so a slug that leaked
+  through a referrer stays indexed — and the slug is the secret. Left crawlable,
+  the tag is obeyed and the URL is dropped outright.
+  `app/views/crawlers/robots.text.erb`
+- **The sitemap lists literal route helpers** instead of walking the routing
+  table for public GETs. The derived version is shorter and publishes
+  `/share/:slug`, which is unauthenticated by design. Adding a page to
+  `Seo::BuildSitemap` is meant to be a deliberate edit.
+- **Every button that hands off to Stripe carries `data: { turbo: false }`,** and
+  removing it breaks paying for the product. Turbo submits the form with `fetch`
+  and then follows our 302 with `fetch` too, so the request that lands on
+  `checkout.stripe.com` is cross-origin and Stripe's CORS policy refuses the
+  preflight. The customer gets a console error and a button that does nothing;
+  the server sees an ordinary POST and answers a perfectly good redirect, so
+  there is nothing to log, alert on, or detect from Ruby. `allow_other_host:
+  true` in `BillingController` is only the other half. `spec/requests/billing_spec.rb`
+  pins the attribute onto the rendered forms.
+- **`robots.txt` and `sitemap.xml` are served by the application, and
+  `public/robots.txt` must stay deleted.** `ActionDispatch::Static` runs before
+  the router, so a file there shadows the route silently while production stamps
+  it with a one-year cache header — the `/t.js` bug again. `Sitemap:` also has
+  no relative form, so a static file would advertise our host on every
+  self-hosted install. `CrawlersController`
 
 ### 13. The privacy invariants
 

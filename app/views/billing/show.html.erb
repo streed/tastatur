@@ -41,7 +41,14 @@
           authoritative state; open the portal to see it.
         </p>
       <% end %>
-      <%= button_to "Billing portal", billing_portal_path, class: "btn btn-primary" %>
+      <%# `turbo: false` because this action redirects to billing.stripe.com. Turbo
+          would submit the form with fetch() and then follow the redirect with fetch
+          too, which makes it a cross-origin request Stripe does not permit — the
+          customer gets a CORS error in the console and a button that does nothing.
+          A native form submission follows the redirect as a page navigation, which
+          is what handing off to another site means. Same for every button below. -%>
+      <%= button_to "Billing portal", billing_portal_path, class: "btn btn-primary",
+                    form: { data: { turbo: false } } %>
       <p class="text-[12px] text-muted mt-5 leading-relaxed">
         Cards, invoices, VAT details and cancellation are all handled by Stripe's
         billing portal. No card number ever reaches Tastatur.
@@ -196,13 +203,16 @@
       <% end %>
 
       <div class="flex flex-wrap items-center gap-3">
+        <%# Both of these leave for Stripe, so both opt out of Turbo — see the note on
+            the portal button above for what happens when they do not. -%>
         <% if @account.can_upgrade? %>
           <%= button_to "Upgrade to #{Billing::Plan.pro.name}", billing_checkout_path,
-                        class: "btn btn-primary" %>
+                        class: "btn btn-primary", form: { data: { turbo: false } } %>
         <% end %>
 
         <% if @account.stripe_customer? %>
-          <%= button_to "Billing portal", billing_portal_path, class: "btn" %>
+          <%= button_to "Billing portal", billing_portal_path, class: "btn",
+                        form: { data: { turbo: false } } %>
         <% end %>
 
         <%= link_to "Compare plans", pricing_path, class: "btn btn-quiet" %>

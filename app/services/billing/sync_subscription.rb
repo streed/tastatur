@@ -98,7 +98,10 @@ module Billing
 
       return Failure(:superseded) if superseded?(subscription, status)
 
-      adjust_override_for(plan)
+      # A downgrade must not retroactively spend the month, and an upgrade must
+      # clear the grandfathering a downgrade left behind. Assigns override
+      # fields; the update! below persists them alongside the plan.
+      GrandfatherAllowance.call(account: @account, plan: plan)
 
       @account.update!(
         stripe_customer_id: id_of(subscription[:customer]) || @account.stripe_customer_id,
@@ -151,55 +154,6 @@ module Billing
         "it is already on #{current} (#{@account.subscription_status})"
       )
       true
-    end
-
-    # Stops a downgrade from retroactively spending an allowance the customer has
-    # already paid for, and cleans up after itself on the way back up.
-    #
-    # THE PROBLEM. The meter counts a whole calendar month and the plan sets the
-    # ceiling that count is measured against. Dropping from Pro to Free on the 20th
-    # therefore measures three million Pro-era events against Free's 100,000 and
-    # refuses everything until the 1st — while /pricing promises that cancelling
-    # leaves every site collecting, and that Free includes 100,000 events a month,
-    # of which such an account would get none in the month it downgraded.
-    #
-    # So on a downgrade the ceiling becomes "what has been used already, plus the
-    # new plan's full allowance", expiring at the end of the month. The customer
-    # gets exactly the allowance they are now paying for, immediately.
-    #
-    # ONLY WHEN THE PLAN ACTUALLY CHANGES. Applying it on every sync would ratchet:
-    # the nightly reconciliation would re-read "used" — now larger — and raise the
-    # ceiling again, so the cap would recede forever.
-    def adjust_override_for(plan)
-      return if @account.plan == plan.key
-
-      if plan.unlimited_events? || plan.monthly_event_limit >= @account.event_limit
-        return clear_expiring_override
-      end
-
-      used = UsageMeter.used(@account.id)
-      return if used <= plan.monthly_event_limit
-
-      _, period_end = UsageMeter.period_bounds
-
-      @account.event_limit_override = used + plan.monthly_event_limit
-      @account.event_limit_override_until = period_end
-
-      Rails.logger.info(
-        "[tastatur] account #{@account.id} downgraded to #{plan.key} having used #{used} events this month; " \
-        "allowing #{@account.event_limit_override} until #{period_end.to_date} so the month is not pre-spent"
-      )
-    end
-
-    # An upgrade must not be capped by the grandfathering left over from an earlier
-    # downgrade — an override of 3,100,000 would otherwise sit below Pro's ten
-    # million and quietly become the real limit. Only overrides WITH an expiry are
-    # cleared; one without is a deliberate support grant and is not ours to remove.
-    def clear_expiring_override
-      return if @account.event_limit_override_until.nil?
-
-      @account.event_limit_override = nil
-      @account.event_limit_override_until = nil
     end
 
     def plan_for(subscription, status)

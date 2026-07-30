@@ -104,6 +104,16 @@ Rails.application.routes.draw do
   get "llms.txt", to: "pages#llms", as: :llms, format: false, defaults: { format: :md }
   get "index.md", to: "pages#home", as: :markdown_root, format: false, defaults: { format: :md }
 
+  # robots.txt and sitemap.xml, served by the application rather than out of
+  # public/ — see CrawlersController for the two bugs that decision avoids, and
+  # note that public/robots.txt must stay deleted or the first of these is never
+  # reached, since ActionDispatch::Static runs ahead of the router.
+  # `format: false` keeps the extension a literal part of the path exactly as it
+  # does for llms.txt above, so ".xml" is not read as a format and negotiated
+  # away by an Accept header.
+  get "robots.txt", to: "crawlers#robots", as: :robots, format: false, defaults: { format: :text }
+  get "sitemap.xml", to: "crawlers#sitemap", as: :sitemap, format: false, defaults: { format: :xml }
+
   # --- Compliance -----------------------------------------------------------
   get "privacy", to: "compliance#privacy"
   get "data-request", to: "compliance#data_request", as: :data_request
@@ -143,6 +153,14 @@ Rails.application.routes.draw do
 
     # Listed, never opened. Admin::SitePolicy has no show action on purpose.
     resources :sites, only: %i[index]
+
+    # No index and no show — accounts are reached through the person who wrote
+    # in, from the accounts card on their user page.
+    resources :accounts, only: [] do
+      member do
+        patch :plan, action: :update_plan
+      end
+    end
   end
 
   require "sidekiq/web"
