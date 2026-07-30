@@ -76,7 +76,16 @@ services:
     ports:
       - "5455:5432"
     volumes:
-      - pgdata:/home/postgres/pgdata/data
+      # /var/lib/postgresql/data, which is what PGDATA is set to in
+      # timescale/timescaledb:latest-pg17 and what the image declares as its VOLUME.
+      #
+      # This used to mount at /home/postgres/pgdata/data, which is the path the
+      # timescaledb-HA image uses and this one does not. The effect was silent and
+      # total: the named volume held an empty directory Postgres never looked at,
+      # while the actual database went into an anonymous volume with a random name.
+      # Backing up `pgdata` backed up nothing. Verified with `SHOW data_directory`
+      # and by counting files on both paths -- 24 against 0.
+      - pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
