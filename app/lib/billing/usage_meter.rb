@@ -12,7 +12,7 @@ module Billing
   # refused for being over the limit. Not "events stored". That is deliberate and
   # it is what makes one counter enough — the refused count is
   # `max(0, used - limit)`, so nothing has to be tracked twice, and the billing
-  # screen can say "we received 118,402 events; your plan covers 100,000" rather
+  # screen can say "we received 518,402 events; your plan covers 500,000" rather
   # than the uselessly self-fulfilling "you used exactly your limit".
   #
   # Bots and events refused by the hostname policy are counted by neither, because

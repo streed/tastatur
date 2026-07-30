@@ -18,16 +18,16 @@ RSpec.describe Account do
       free = create(:account, plan: "free")
       pro = create(:account, plan: "pro")
 
-      expect(free.event_limit).to eq(100_000)
+      expect(free.event_limit).to eq(500_000)
       expect(free.site_limit).to eq(1)
       expect(pro.event_limit).to eq(10_000_000)
       expect(pro.site_limit).to eq(20)
     end
 
     it "prefers an override to the plan's allowance" do
-      account = create(:account, plan: "free", event_limit_override: 500_000, site_limit_override: 7)
+      account = create(:account, plan: "free", event_limit_override: 750_000, site_limit_override: 7)
 
-      expect(account.event_limit).to eq(500_000)
+      expect(account.event_limit).to eq(750_000)
       expect(account.site_limit).to eq(7)
     end
 
@@ -47,19 +47,19 @@ RSpec.describe Account do
     # the rest of the month and dates the grant, rather than leaving it in force
     # forever.
     it "stops honouring an override once its expiry has passed" do
-      account = create(:account, plan: "free", event_limit_override: 3_100_000,
+      account = create(:account, plan: "free", event_limit_override: 3_500_000,
                                  event_limit_override_until: 10.days.from_now)
-      expect(account.event_limit).to eq(3_100_000)
+      expect(account.event_limit).to eq(3_500_000)
 
       account.update!(event_limit_override_until: 1.second.ago)
-      expect(account.event_limit).to eq(100_000)
+      expect(account.event_limit).to eq(500_000)
     end
 
     it "treats an override with no expiry as permanent, which is what support grants" do
-      account = create(:account, plan: "free", event_limit_override: 500_000)
+      account = create(:account, plan: "free", event_limit_override: 750_000)
 
       expect(account.event_limit_override_until).to be_nil
-      expect(account.event_limit).to eq(500_000)
+      expect(account.event_limit).to eq(750_000)
     end
 
     it "will not record an expiry with no override behind it" do

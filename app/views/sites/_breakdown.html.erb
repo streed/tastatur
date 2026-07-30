@@ -1,5 +1,10 @@
 <% result = panel[:result]
    dimension = panel[:dimension]
+   # What our OWN analytics is told this panel is. Identical to `dimension` for
+   # the eight fixed panels, and deliberately not for custom event properties,
+   # whose dimension name ("props:plan") is the customer's schema rather than
+   # our vocabulary. Same rule as `row.value` below, one level up.
+   analytics_dimension = panel[:analytics_dimension] || dimension
    max = result.rows.map(&:visitors).max.to_i
    # Public shared dashboards pass drillable: false. Filtering someone else's
    # audience is a re-identification tool, so the rows are not clickable there
@@ -45,7 +50,7 @@
           <%= link_to drill_down_url(site, dimension, row.value), class: "bar-row",
                       title: "Filter by #{row.label}",
                       data: { analytics_event: "Filter Applied",
-                              analytics_props: { dimension: dimension, position: index + 1 } } do %><%= bar %><% end %>
+                              analytics_props: { dimension: analytics_dimension, position: index + 1 } } do %><%= bar %><% end %>
         <% else %>
           <div class="bar-row"><%= bar %></div>
         <% end %>

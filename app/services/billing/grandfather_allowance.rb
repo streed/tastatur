@@ -6,9 +6,9 @@ module Billing
   #
   # THE PROBLEM. The meter counts a whole calendar month and the plan sets the
   # ceiling that count is measured against. Dropping from Pro to Free on the 20th
-  # therefore measures three million Pro-era events against Free's 100,000 and
+  # therefore measures three million Pro-era events against Free's 500,000 and
   # refuses everything until the 1st — while /pricing promises that cancelling
-  # leaves every site collecting, and that Free includes 100,000 events a month,
+  # leaves every site collecting, and that Free includes 500,000 events a month,
   # of which such an account would get none in the month it downgraded.
   #
   # So on a downgrade the ceiling becomes "what has been used already, plus the
@@ -57,7 +57,7 @@ module Billing
     private
 
     # An upgrade must not be capped by the grandfathering left over from an earlier
-    # downgrade — an override of 3,100,000 would otherwise sit below Pro's ten
+    # downgrade — an override of 3,500,000 would otherwise sit below Pro's ten
     # million and quietly become the real limit. Only overrides WITH an expiry are
     # cleared; one without is a deliberate support grant and is not ours to remove.
     def clear_expiring_override

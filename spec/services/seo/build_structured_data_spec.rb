@@ -94,7 +94,7 @@ RSpec.describe Seo::BuildStructuredData do
       offers = node(:pricing, "SoftwareApplication")["offers"]
 
       expect(offers.map { |o| o["name"] }).to eq(%w[Free Pro])
-      expect(offers.last).to include("price" => "40", "priceCurrency" => "USD")
+      expect(offers.last).to include("price" => "30", "priceCurrency" => "USD")
       expect(offers.last.dig("priceSpecification", "referenceQuantity"))
         .to include("value" => 1, "unitCode" => "MON")
     end

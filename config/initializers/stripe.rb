@@ -2,7 +2,7 @@
 #
 # To wire up payments:
 #   1. Create ONE product in the Stripe dashboard with a recurring monthly price
-#      matching Billing::Plan::PRO (currently $40/month).
+#      matching Billing::Plan::PRO (currently $30/month).
 #   2. Grab your API keys from https://dashboard.stripe.com/apikeys
 #   3. Add a webhook endpoint pointing at https://YOUR_HOST/billing/stripe/webhook
 #      subscribed to the events listed in Billing::ApplyStripeEvent::HANDLED.

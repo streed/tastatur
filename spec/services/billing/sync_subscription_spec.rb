@@ -226,9 +226,9 @@ RSpec.describe Billing::SyncSubscription do
 
   # A downgrade must not retroactively spend the month. The meter counts the whole
   # calendar month, so a Pro account that recorded three million events and then
-  # cancels on the 20th would be measured against Free's 100,000 and refused
+  # cancels on the 20th would be measured against Free's 500,000 and refused
   # everything until the 1st — while /pricing promises that cancelling leaves every
-  # site collecting, and that Free includes 100,000 events a month.
+  # site collecting, and that Free includes 500,000 events a month.
   describe "a mid-month downgrade" do
     before do
       account.update!(plan: "pro", subscription_status: "active", stripe_subscription_id: "sub_1")
@@ -243,7 +243,7 @@ RSpec.describe Billing::SyncSubscription do
       account.reload
 
       expect(account.plan).to eq("free")
-      expect(account.event_limit).to eq(3_100_000)
+      expect(account.event_limit).to eq(3_500_000)
       expect(account.event_limit_override_until).to eq(Billing::UsageMeter.period_bounds.last)
 
       Billing::EventQuota.clear!
@@ -258,7 +258,7 @@ RSpec.describe Billing::SyncSubscription do
 
       account.reload.update_column(:event_limit_override_until, 1.second.ago)
 
-      expect(account.reload.event_limit).to eq(100_000)
+      expect(account.reload.event_limit).to eq(500_000)
     end
 
     it "does not grandfather an account that was under the new allowance anyway" do
@@ -270,7 +270,7 @@ RSpec.describe Billing::SyncSubscription do
       described_class.call(account: account, subscription_id: "sub_1")
 
       expect(account.reload.event_limit_override).to be_nil
-      expect(account.event_limit).to eq(100_000)
+      expect(account.event_limit).to eq(500_000)
     end
 
     # Applying it on every sync would ratchet: the nightly reconciliation would
@@ -288,10 +288,10 @@ RSpec.describe Billing::SyncSubscription do
       expect(account.reload.event_limit_override).to eq(granted)
     end
 
-    # An override of 3,100,000 left over from a downgrade would otherwise sit below
+    # An override of 3,500,000 left over from a downgrade would otherwise sit below
     # Pro's ten million and quietly become the real limit.
     it "is cleared again by an upgrade" do
-      account.update!(plan: "free", event_limit_override: 3_100_000,
+      account.update!(plan: "free", event_limit_override: 3_500_000,
                       event_limit_override_until: 10.days.from_now)
 
       allow(Stripe::Subscription).to receive(:retrieve).with("sub_1").and_return(stripe_subscription)

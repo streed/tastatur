@@ -94,7 +94,7 @@ RSpec.describe "Billing when Stripe is not configured", type: :request do
 
     it "records events past what the free plan would have allowed" do
       site = create(:site, account: account)
-      Billing::UsageMeter.record(account.id, count: 500_000)
+      Billing::UsageMeter.record(account.id, count: 600_000)
 
       result = Ingest::RecordEvent.call(
         payload: { s: site.public_token, u: "https://#{site.domain}/" },
@@ -303,7 +303,7 @@ RSpec.describe "Billing when Stripe is not configured", type: :request do
       Billing::EventQuota.clear!
 
       expect(Tastatur.billing_enabled?).to be(true)
-      expect(account.event_limit).to eq(100_000)
+      expect(account.event_limit).to eq(500_000)
       expect(account.site_limit).to eq(1)
     end
   end

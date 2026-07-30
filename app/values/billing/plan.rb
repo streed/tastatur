@@ -57,7 +57,7 @@ module Billing
       name: "Free",
       price_cents: 0,
       currency: "usd",
-      monthly_event_limit: 100_000,
+      monthly_event_limit: 500_000,
       site_limit: 1,
       purchasable: false
     )
@@ -65,7 +65,7 @@ module Billing
     PRO = new(
       key: "pro",
       name: "Pro",
-      price_cents: 4_000,
+      price_cents: 3_000,
       currency: "usd",
       monthly_event_limit: 10_000_000,
       site_limit: 20,
@@ -150,8 +150,8 @@ module Billing
     def unlimited_events? = monthly_event_limit == UNLIMITED
     def unlimited_sites? = site_limit == UNLIMITED
 
-    # 4000 -> "40". Whole dollars, because both published prices are whole
-    # dollars and "$40.00" on a pricing page reads like a form field.
+    # 3000 -> "30". Whole dollars, because both published prices are whole
+    # dollars and "$30.00" on a pricing page reads like a form field.
     def price_display
       return "0" if price_cents.zero?
       return (price_cents / 100).to_s if (price_cents % 100).zero?

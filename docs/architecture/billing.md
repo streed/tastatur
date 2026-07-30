@@ -76,8 +76,8 @@ and only for a missing signing secret: see the status table below.
 
 | | Free | Pro |
 |---|---|---|
-| Price | $0 | $40/month |
-| Events a month | 100,000 | 10,000,000 |
+| Price | $0 | $30/month |
+| Events a month | 500,000 | 10,000,000 |
 | Sites | 1 | 20 |
 | Teammates | Unlimited | Unlimited |
 
@@ -196,8 +196,8 @@ HTTP response is still 202, like every other outcome on that endpoint — see
 
 That is what makes one counter enough: the refused figure is
 `max(0, used - limit)`, so nothing is tracked twice and there is no second counter
-to drift from the first. It also lets the billing screen say "we received 118,402
-events; your plan covers 100,000" instead of the uselessly self-fulfilling "you used
+to drift from the first. It also lets the billing screen say "we received 518,402
+events; your plan covers 500,000" instead of the uselessly self-fulfilling "you used
 exactly your limit".
 
 Keys are `tastatur:usage:{account_id}:{YYYYMM}` with a 62-day TTL, so the previous
@@ -478,7 +478,7 @@ a message about site limits and the only way out would be deleting nineteen site
 
 **And the month is not cut short.** Because the meter counts a whole calendar month
 and the plan sets the ceiling, a Pro account that had recorded three million events
-and then cancelled on the 20th would be measured against Free's 100,000 and refused
+and then cancelled on the 20th would be measured against Free's 500,000 and refused
 everything until the 1st — eleven days of collection destroyed by a billing event,
 contradicting both the promise above and the Free plan's advertised allowance.
 
@@ -491,7 +491,7 @@ number applies again. Three details matter:
 - It only fires when the plan actually changes. Applying it on every sync would
   ratchet — the nightly reconciliation would re-read a larger "used" and raise the
   ceiling again, so the cap would recede forever.
-- An upgrade clears it, or an override of 3,100,000 would sit below Pro's ten million
+- An upgrade clears it, or an override of 3,500,000 would sit below Pro's ten million
   and quietly become the real limit.
 - Only overrides WITH an expiry are cleared. One without is a deliberate support
   grant and is not the sync's to remove.
@@ -501,7 +501,7 @@ upward: writing the count down would be undone within the hour by the reconcilia
 reading the true stored total.
 
 The honest consequence: somebody can pay for one month, create twenty sites, cancel,
-and keep them. That is bounded by the free plan's 100,000 events, which is the limit
+and keep them. That is bounded by the free plan's 500,000 events, which is the limit
 that actually costs us anything, and it is a much better trade than deleting a
 customer's measurement as a billing action.
 
@@ -562,7 +562,7 @@ bin/rails tastatur:billing:verify
 Checks that the Stripe price still costs what `/pricing` publishes, in the same
 currency, recurring monthly, and active. The failure it exists to catch is a price
 edited in the dashboard with nothing in the application noticing: the pricing page
-keeps saying $40, customers are charged something else, and the first report comes
+keeps saying $30, customers are charged something else, and the first report comes
 from somebody reading their card statement.
 
 It is a task rather than a boot check because `assets:precompile` boots the app in

@@ -27,7 +27,7 @@ module Analytics
     ].freeze
 
     Report = Struct.new(:site, :period, :filters, :summary, :timeseries,
-                        :breakdowns, :goals, :realtime, keyword_init: true)
+                        :breakdowns, :properties, :goals, :realtime, keyword_init: true)
 
     def initialize(site:, period:, filters: Filters.new)
       @site = site
@@ -44,6 +44,7 @@ module Analytics
           summary: Summary.call(site: @site, period: @period, filters: @filters).value!,
           timeseries: Timeseries.call(site: @site, period: @period, filters: @filters).value!,
           breakdowns: breakdowns,
+          properties: properties,
           goals: GoalReport.call(site: @site, period: @period, filters: @filters).value!,
           realtime: Realtime.call(site: @site).value!
         )
@@ -51,6 +52,43 @@ module Analytics
     end
 
     private
+
+    # Property panels, and ONLY when the dashboard is scoped to something that
+    # gives them a meaning.
+    #
+    # A property belongs to an event: `plan=pro` on Signup and `plan=pro` on
+    # Cancelled are different facts, and pooling them across every event a site
+    # sends produces a panel whose rows cannot be interpreted. So the entry
+    # point is the Custom events panel — click "Signup", and its properties
+    # appear beneath the breakdowns.
+    #
+    # It is also what keeps the ordinary dashboard's cost unchanged. The lateral
+    # expansion in PropertyBreakdown is cheap against one event name in one
+    # window; against every row a site has, it is a scan the unfiltered
+    # dashboard has no reason to pay for. Note the second branch: once someone
+    # has drilled into a property value the panels must stay, or the filter chip
+    # would refer to a card that had vanished.
+    #
+    # Public shared dashboards therefore never reach this — they are rendered
+    # with no filters at all, deliberately (see SharedDashboardsController), and
+    # property values are the most re-identifying thing a customer can send us.
+    def properties
+      return [] unless @filters.event_scoped? || @filters.property_scoped?
+
+      PropertyBreakdown.call(site: @site, period: @period, filters: @filters).value!
+                       .map do |name, result|
+        {
+          dimension: "#{Filters::PROPERTY_PREFIX}#{name}",
+          title: name,
+          # What OUR analytics is told when someone drills into this panel. The
+          # property key is the customer's own schema — `plan`, `user_id`,
+          # `workspace` — and belongs in our database no more than `row.value`
+          # does. See the note in sites/_breakdown.html.erb.
+          analytics_dimension: "property",
+          result: result
+        }
+      end
+    end
 
     # One scan for all eight panels rather than one each. See Breakdown.batch —
     # measured at 1,211 ms for eight separate scans over 600,000 events, which was

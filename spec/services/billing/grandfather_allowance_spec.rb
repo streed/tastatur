@@ -34,7 +34,7 @@ RSpec.describe Billing::GrandfatherAllowance do
       result = described_class.call(account: account, plan: Billing::Plan.free)
 
       expect(result).to eq(Dry::Monads::Success(:granted))
-      expect(account.event_limit_override).to eq(3_100_000)
+      expect(account.event_limit_override).to eq(3_500_000)
       expect(account.event_limit_override_until).to eq(Billing::UsageMeter.period_bounds.last)
     end
 
@@ -59,7 +59,7 @@ RSpec.describe Billing::GrandfatherAllowance do
   describe "an upgrade" do
     let(:account) do
       create(:account, plan: "free",
-                       event_limit_override: 3_100_000,
+                       event_limit_override: 3_500_000,
                        event_limit_override_until: 10.days.from_now)
     end
 
