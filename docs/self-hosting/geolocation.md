@@ -20,6 +20,68 @@ bin/rails tastatur:geoip:status      # verify
 Until you do, country breakdowns are empty and everything else works normally.
 Geolocation is an optional enrichment, so a fresh install is usable immediately.
 
+## If every country says "Unknown" — check the proxy chain first
+
+A working database with the wrong IP address looks exactly like a missing
+database. Before re-downloading anything:
+
+```bash
+bin/rails tastatur:geoip:status        # is the database there?
+bin/rails tastatur:cloudflare:status   # is the right address reaching it?
+```
+
+The second one works a realistic chain end to end and tells you whether the
+address it resolves is the visitor's or a proxy's.
+
+**Why this happens.** Rails trusts loopback and the RFC 1918 private ranges, and
+takes the right-most address in `X-Forwarded-For` that is not one of them. With a
+public edge in front, that address is the edge:
+
+```
+client → Cloudflare → platform → app
+X-Forwarded-For: 24.48.0.1, 172.71.150.22
+                 ^ the visitor  ^ Cloudflare, a public address
+```
+
+Depending on the last hop this reports either a wrong country for everybody (the
+edge's) or none at all (a carrier-grade NAT or IPv6 unique-local address, which
+no database has an entry for).
+
+**This costs far more than a country column.** `Ingest::Identifier` mixes the
+address into the visitor HMAC, so if every request resolves to the same proxy,
+every visitor behind it becomes *the same visitor*. Unique visitors and visits
+are both undercounted, and the breakdown that made the problem visible was the
+least of it.
+
+**The fix.** Tell the application what sits in front of it:
+
+| Variable | Set it to |
+|---|---|
+| `TRUST_CLOUDFLARE` | `true` if your site is proxied through Cloudflare |
+| `TRUSTED_PROXY_RANGES` | comma-separated CIDRs for any other edge — another CDN, a load balancer, a bastion |
+
+Carrier-grade NAT (`100.64.0.0/10`) and IPv6 unique-local (`fd00::/8`) are always
+trusted and need no configuration: neither is routable, so neither can ever be a
+visitor. They are absent from Rails' list only because they postdate it.
+
+`TRUST_CLOUDFLARE` uses Cloudflare's published ranges from
+`config/cloudflare_ips.yml` rather than believing the `CF-Connecting-IP` header.
+Most guides suggest the header; it is the wrong advice whenever your origin stays
+reachable directly, because a header you trust unconditionally is a header
+anyone can set — and forging it picks your country, your visitor identity and
+your rate-limit bucket. Trusting the *range* leaves a forged `X-Forwarded-For`
+entry sitting to the left of the real client, which is exactly where the
+right-most rule ignores it.
+
+It is off by default because Cloudflare's ranges are also the exit addresses of
+Cloudflare WARP. On an install that is *not* behind Cloudflare, trusting them
+would throw away the real address of every WARP user.
+
+Refresh the range list when Cloudflare publishes changes — rarely — with
+`bin/rails tastatur:cloudflare:refresh`. A stale list fails visibly rather than
+silently: an unknown range is treated as the client, so countries go wrong again
+instead of quietly going right.
+
 ## Which database, and why
 
 **DB-IP IP-to-Country Lite**, under CC BY 4.0.
