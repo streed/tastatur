@@ -82,6 +82,19 @@ substantially; `session_days` collapses only as much as visitors view multiple
 pages, but bounce rate cannot be derived from any event-grain aggregate, so it
 earns its place regardless.
 
+One knowable bias rides along with `session_days`: its grain is *(day, session)*,
+so a session that crosses UTC midnight materialises as two rows — counted as two
+visits, each fragment bouncing or not on its own pageviews, each contributing its
+own shorter duration to the average. The raw-scan path folds the same session into
+one row, so the aggregated and raw paths can disagree by exactly the number of
+midnight-spanning sessions in the window. This is the same splitting problem that
+disqualifies an hour-grain session rollup (discussed under the timezone cliff
+below) at 1/24th the frequency: only sessions active across midnight UTC are
+affected, a fraction of a percent for most sites. Exactness would mean re-folding
+on `session_hash` across the boundary, which stops the aggregate being a plain
+per-bucket read — not worth it at this size, but the asymmetry is real and
+deliberate, so do not "fix" one path to match the other without reading this.
+
 ### What was considered and rejected
 
 **A wide "every dimension" aggregate** grouped by visitor *and* path *and*

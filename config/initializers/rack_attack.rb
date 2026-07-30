@@ -166,6 +166,29 @@ class Rack::Attack
     req.params.dig("user", "email")&.downcase&.strip if req.path == "/users/sign_in" && req.post?
   end
 
+  # --- The second factor ---------------------------------------------------
+  # A six-digit code is a 10^6 keyspace, and TwoFactor::VerifyChallenge already
+  # destroys a code after five wrong guesses. That per-code budget is the real
+  # control; this is what stops somebody paying for a fresh code every five
+  # guesses and grinding indefinitely.
+  #
+  # Keyed on the client rather than the email, because the email is not in the
+  # request at all by this point — the pending marker is in an encrypted session
+  # cookie, and reading it here would mean decrypting a session in middleware.
+  throttle("two_factor/client", limit: 15, period: 5.minutes) do |req|
+    client_key(req) if req.path == "/two-factor" && req.post?
+  end
+
+  # The resend button sends mail to an address the caller has already named, so
+  # it is the same class of exposure as the confirmation and unlock forms below:
+  # a free way to make this instance deliver mail, which burns the sending
+  # domain's reputation. TwoFactor::IssueChallenge also refuses to send twice
+  # within twenty seconds per account, which is the half a distributed caller
+  # could otherwise walk around.
+  throttle("two_factor_resend/client", limit: 5, period: 10.minutes) do |req|
+    client_key(req) if req.path == "/two-factor/resend" && req.post?
+  end
+
   throttle("signups/client", limit: 5, period: 1.hour) do |req|
     client_key(req) if req.path == "/users" && req.post?
   end

@@ -48,11 +48,23 @@ module Analytics
       return {} if known.empty?
 
       scope = Scope.new(site: site, period: period, filters: filters)
-      rows = grouped_rows(scope, known)
+
+      # entry_page is session-grain under a filter (see #fetch) and needs a
+      # WHERE clause of its own there, so it cannot ride in the shared scan.
+      # One extra query, only on filtered dashboards, which are the rare case
+      # the batch optimisation was not built for.
+      inline = scope.filters.any? ? known - ["entry_page"] : known
+      rows = inline.any? ? grouped_rows(scope, inline) : {}
+      total = total_from(rows)
 
       known.index_with do |dimension|
-        new(site: site, period: period, dimension: dimension, filters: filters, limit: limit)
-          .result_from(rows.fetch(dimension, []))
+        service = new(site: site, period: period, dimension: dimension, filters: filters, limit: limit)
+
+        if inline.include?(dimension)
+          service.result_from(rows.fetch(dimension, []), total_visitors: total)
+        else
+          service.call.value!
+        end
       end
     end
 
@@ -96,24 +108,33 @@ module Analytics
       #   eight separate scans, two-phase   1,214 ms
       #   one scan, COUNT(DISTINCT)           866 ms   <- this
       #   one scan, two-phase               1,356 ms   <- slower than doing nothing
+      # The trailing () grouping set adds one grand-total row — distinct
+      # visitors over the whole scope, no dimension — which is the percentage
+      # denominator for every panel. Riding in the same scan, it costs nothing;
+      # its dimension CASE yields NULL, so group_by files it under nil.
       sql = <<~SQL
         SELECT
           CASE #{selects.map { |s| "WHEN #{s}" }.join(' ')} END AS dimension,
           CASE #{values.map { |v| "WHEN #{v}" }.join(' ')} END AS value,
-          COUNT(DISTINCT visitor_hash)                    AS visitors,
-          COUNT(*) FILTER (WHERE event_name = 'pageview') AS pageviews
+          COUNT(DISTINCT visitor_hash) AS visitors,
+          #{scope.volume_expression}   AS pageviews
         FROM (
           SELECT visitor_hash, event_name,
                  #{columns.each_with_index.map { |c, i| "#{c} AS #{aliases[i]}" }.join(', ')}
           FROM events
           WHERE #{where}
         ) e
-        GROUP BY GROUPING SETS (#{aliases.map { |a| "(#{a})" }.join(', ')})
+        GROUP BY GROUPING SETS (#{aliases.map { |a| "(#{a})" }.join(', ')}, ())
         ORDER BY 1, visitors DESC, pageviews DESC, 2 ASC
       SQL
 
       scope.select_all(sql, binds).group_by { |row| row["dimension"] }
     end
+
+    def self.total_from(rows)
+      rows.fetch(nil, []).first&.fetch("visitors").to_i
+    end
+    private_class_method :total_from
 
     def initialize(site:, period:, dimension:, filters: Filters.new, limit: DEFAULT_LIMIT)
       @scope = Scope.new(site: site, period: period, filters: filters)
@@ -125,23 +146,30 @@ module Analytics
       column = Filters::DIMENSIONS[@dimension]
       return Failure(:unknown_dimension) if column.nil?
 
-      Success(result_from(fetch(column)))
+      Success(result_from(fetch(column), total_visitors: total_visitors))
     end
 
     # Shared by the single-dimension and batch paths, so both apply exactly the same
     # suppression to exactly the same row shape.
-    def result_from(rows)
+    #
+    # `total_visitors` is the distinct-visitor count for the whole scope, not the
+    # sum of the rows. Summing per-row visitor counts — which is what this used to
+    # do — counts a visitor once for every value they appear under, so a visitor
+    # who read three pages inflated the pages denominator threefold and every
+    # percentage understated its row. Against the true audience, "42%" means 42%
+    # of the filtered visitors are in this row, and rows legitimately sum past
+    # 100% because one visitor can be in several.
+    def result_from(rows, total_visitors:)
       # A conditional dimension collects everything it does not describe into a
       # single NULL bucket — every non-entry event for entry_page, every pageview
       # for event. That bucket is not a value, it is the absence of one, and left in
       # it would be both the largest row in the panel and meaningless.
       rows = rows.reject { |row| row["value"].nil? } if CONDITIONAL.key?(@dimension)
 
-      total = rows.sum { |row| row["visitors"].to_i }
       kept, withheld = partition(rows)
 
       Result.new(
-        rows: kept.first(@limit).map { |row| to_row(row, total) },
+        rows: kept.first(@limit).map { |row| to_row(row, total_visitors) },
         suppressed_rows: withheld.size,
         suppressed_visitors: withheld.sum { |row| row["visitors"].to_i },
         threshold: @scope.k_threshold
@@ -151,6 +179,8 @@ module Analytics
     private
 
     def fetch(column)
+      return entry_pages_of_qualifying_sessions if @dimension == "entry_page" && @scope.filters.any?
+
       where, binds = @scope.raw_conditions
 
       # The single-dimension path expresses the conditional dimensions as a WHERE
@@ -164,17 +194,58 @@ module Analytics
       # rows tie on visitors, so a table does not reshuffle between refreshes.
       #
       # No LIMIT in SQL: we need the full result set to compute an honest
-      # "n others withheld" count and the percentage denominator. The GROUP BY
-      # has already collapsed it to one row per distinct value.
+      # "n others withheld" count. The GROUP BY has already collapsed it to one
+      # row per distinct value.
       @scope.select_all(<<~SQL, binds)
         SELECT
-          #{column}                                       AS value,
-          COUNT(DISTINCT visitor_hash)                    AS visitors,
-          COUNT(*) FILTER (WHERE event_name = 'pageview') AS pageviews
+          #{column}                    AS value,
+          COUNT(DISTINCT visitor_hash) AS visitors,
+          #{@scope.volume_expression}  AS pageviews
         FROM events
         WHERE #{where}
         GROUP BY 1
         ORDER BY visitors DESC, pageviews DESC, 1 ASC
+      SQL
+    end
+
+    # Entry pages are session-grain: the panel's question is "where did the
+    # selected sessions begin", not "which entry events match the filter".
+    # ANDing the filter onto is_entry — the plain path above — answers the
+    # second question, which is almost always degenerate: under event=Signup no
+    # entry event matches unless the session's very first hit was the custom
+    # event, so the panel sat empty below a summary full of converting
+    # visitors; under page=/pricing the panel could only ever contain /pricing
+    # itself. So the filter qualifies sessions — the same rule
+    # Analytics::Summary applies to bounce rate and duration — and the rows are
+    # the entry events of every session that qualified.
+    #
+    # The volume column stays "entry pageviews", NOT volume_expression: session
+    # qualification re-admits every event those sessions produced, so this
+    # WHERE is not pinned to the filtered event and COUNT(*) would mean
+    # nothing panel-appropriate here.
+    def entry_pages_of_qualifying_sessions
+      where, binds = @scope.session_qualified_conditions
+
+      @scope.select_all(<<~SQL, binds)
+        SELECT
+          path                                            AS value,
+          COUNT(DISTINCT visitor_hash)                    AS visitors,
+          COUNT(*) FILTER (WHERE event_name = 'pageview') AS pageviews
+        FROM events
+        WHERE #{where} AND is_entry
+        GROUP BY 1
+        ORDER BY visitors DESC, pageviews DESC, 1 ASC
+      SQL
+    end
+
+    # The percentage denominator: distinct visitors under the scope's filters,
+    # without any dimension condition. The batch path reads the same number out
+    # of its grand-total grouping set; this is the single-query equivalent.
+    def total_visitors
+      where, binds = @scope.raw_conditions
+
+      @scope.select_one(<<~SQL, binds)["visitors"].to_i
+        SELECT COUNT(DISTINCT visitor_hash) AS visitors FROM events WHERE #{where}
       SQL
     end
 

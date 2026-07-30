@@ -1,9 +1,19 @@
 class SitesController < ApplicationController
   before_action :set_site, only: %i[show edit update destroy]
 
+  # An account with no sites yet is sent straight to the form, because the empty
+  # list is not information — it is a step.
+  #
+  # `policy(Site).create?` guards it, and that guard is load-bearing rather than
+  # tidy. Without it, anyone who cannot create a site and has none to look at is
+  # redirected to a form that refuses them; `deny_access` then redirects *back*
+  # using the referer, which is this page, which redirects to the form again.
+  # That is a genuine loop, and it is reachable by two ordinary people: a viewer
+  # in an account whose sites were all deleted, and — since site creation now
+  # requires a confirmed address — anyone who has not confirmed one.
   def index
     @sites = policy_scope(Site).ordered
-    redirect_to new_site_path if @sites.empty?
+    redirect_to new_site_path if @sites.empty? && policy(Site).create?
   end
 
   # The dashboard.
@@ -30,6 +40,13 @@ class SitesController < ApplicationController
   # leftover case: the user's only account was deleted while their session lived on.
   # Rare, reachable, and a blank error page is a poor way to discover it.
   before_action :require_account, only: %i[new create]
+
+  # SitePolicy#create? already refuses an unconfirmed address, and would do so
+  # with "You do not have access to that." — which is true, useless, and reads
+  # like a permissions problem the person should ask an admin about. This runs
+  # first purely so the refusal names the actual reason and the actual remedy.
+  # The policy remains the enforcement; this is the explanation.
+  before_action :require_confirmed_email, only: %i[new create]
 
   def new
     @site = current_account.sites.new
@@ -70,6 +87,19 @@ class SitesController < ApplicationController
   end
 
   private
+
+  def require_confirmed_email
+    return if current_user.confirmed?
+
+    # `skip_authorization` for the same reason as require_account below: the
+    # refusal happens before there is a record to authorize, and the reason it
+    # happens has nothing to do with the account. Documented rather than assumed,
+    # per CLAUDE.md.
+    skip_authorization
+    redirect_to sites_path,
+                alert: "Confirm your email address before adding a site. " \
+                       "We sent a link when you signed up — check your spam folder, or request another."
+  end
 
   def require_account
     return if current_account.present?

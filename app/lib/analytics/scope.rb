@@ -92,6 +92,34 @@ module Analytics
       ["site_id = ? AND occurred_at >= ? AND occurred_at < ?", [site.id, period.from, period.to]]
     end
 
+    # Every event of every session that has at least one event matching the
+    # filters — the qualify-then-roll-up shape that session-grain reads need.
+    # The filter chooses which sessions count; the outer conditions then admit
+    # everything those sessions did inside the period.
+    def session_qualified_conditions
+      qualifying, qualifying_binds = raw_conditions
+      all_events, all_binds = unfiltered_conditions
+
+      [
+        "#{all_events} AND session_hash IN (SELECT session_hash FROM events WHERE #{qualifying})",
+        all_binds + qualifying_binds
+      ]
+    end
+
+    # The event-grain volume column, aliased "pageviews" by every query that
+    # reads it.
+    #
+    # Under an event filter the WHERE clause pins event_name to the filtered
+    # event, so COUNT(*) FILTER (WHERE event_name = 'pageview') is structurally
+    # zero — the two conditions cannot both hold, and the dashboard rendered
+    # "0 pageviews" above panels full of the very visitors it claimed not to
+    # have. The volume that means something there is the matching events
+    # themselves, and the views relabel the tile and series "Events"
+    # (DashboardHelper#volume_label).
+    def volume_expression
+      filters.event_scoped? ? "COUNT(*)" : "COUNT(*) FILTER (WHERE event_name = 'pageview')"
+    end
+
     def sanitize(sql, binds)
       ActiveRecord::Base.sanitize_sql_array([sql, *binds])
     end

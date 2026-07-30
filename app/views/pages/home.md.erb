@@ -1,0 +1,105 @@
+<%# The marketing page for machine readers, negotiated via Accept:
+    text/markdown — see PagesController#home. The content mirrors
+    home.html.erb; when the claims there change, change them here too. -%>
+# Tastatur — cookieless web analytics
+
+> Know how people use your site. Learn nothing about them.
+
+Web analytics. No cookies, nothing of ours to consent to. One script tag,
+3.2 KB over the wire. No cookies, no local storage, no device identifier, no
+fingerprinting. There is nothing of ours for a consent banner to ask about.
+
+Free software, AGPL-3.0. Self-host it or use the hosted service.
+
+## The entire installation
+
+```html
+<script defer data-site="YOUR_SITE_KEY" src="<%= Tastatur.tracker_url %>"></script>
+```
+
+## The numbers that define it
+
+- **0** cookies set or read
+- **0** bytes written to the visitor's device
+- **24h** before an identifier stops working
+- **2** letters of location, the country code
+
+## How an anonymous visit is counted
+
+1. **A request arrives.** Your visitor's browser sends the page path and
+   referrer host. Their IP and user-agent arrive too, as they do with every
+   HTTP request on the internet.
+2. **It becomes a digest.** IP, user-agent and site are combined with a secret
+   that changes daily into a truncated HMAC. The IP and user-agent are then
+   discarded. Never logged, never stored.
+3. **The secret is destroyed.** Every 24 hours the secret is replaced and the
+   old one deleted from a store that never writes to disk. Yesterday's digests
+   can no longer be recomputed by anyone, including us.
+
+## The cookie question
+
+Two different things get called cookies. Here is exactly where each one
+applies.
+
+**On your visitors' devices: nothing.** No cookie is set and none is read.
+Nothing is written to localStorage, sessionStorage or IndexedDB. No identifier
+is stored on the device in any form. This is the part that determines whether
+you need a consent banner for Tastatur, and it is the promise the product is
+built around.
+
+**On this dashboard, for account holders: up to three.** A first-party session
+cookie, set when you sign in, so you stay signed in. A second if you tick
+"stay signed in". A third if you use two-factor authentication and ask us not
+to send a code to this browser every time. All strictly necessary for a login
+and exempt from consent on that basis. They are set on our site, for account
+holders, and never touch the sites you measure or the people who visit them.
+
+We say this explicitly because "no cookies" is used loosely in this category.
+A login needs a session cookie; pretending otherwise would be nonsense rather
+than privacy. What matters is that nothing of ours reaches your visitors.
+
+## Still a real analytics tool
+
+Privacy is a constraint on how the numbers are collected, not an excuse for
+having fewer of them.
+
+- **Traffic over time** — visitors, pageviews and visits, bucketed by hour,
+  day, week or month in your own timezone.
+- **Funnels** — multi-step funnels with per-step drop-off, ordered correctly
+  even when visitors backtrack.
+- **Goals and revenue** — match a path or a custom event, with conversion
+  rates against an honest denominator.
+- **Sources and campaigns** — referrers grouped into recognisable sources,
+  plus full utm_* campaign breakdowns.
+- **Filter and drill down** — click any row to filter the whole dashboard.
+  Filter state lives in the URL, so it stays shareable.
+- **Shareable dashboards** — give a client or colleague a read-only link,
+  optionally password-protected.
+
+## What we will not claim
+
+Measuring without tracking has real costs. Here they are.
+
+- **Returning visitors get counted again.** Because the identifier expires
+  daily, a 30-day visitor figure is the sum of 30 daily figures, not a count
+  of distinct people. Any tool offering cross-day uniques without a banner is
+  keeping something durable.
+- **Small rows are hidden.** Breakdown rows describing only a handful of
+  visitors are withheld, because such a row can identify someone.
+- **We will not promise you skip the banner.** That depends on your
+  jurisdiction and on every other script on your site. Tastatur stores nothing
+  on your visitors' devices; the rest is your counsel's call, and Germany in
+  particular is stricter than our competitors' marketing copy suggests.
+
+## Learn more
+
+- [Documentation](<%= docs_path(format: :md) %>) — install, script options,
+  custom events, the HTTP API. Also served as markdown.
+- [What it collects, the full technical account](<%= privacy_path %>)
+- [About](<%= about_path %>)
+<% if Tastatur.billing_enabled? -%>
+- [Pricing](<%= pricing_path %>)
+<% end -%>
+<% if Tastatur.allow_signup? -%>
+- [Sign up](<%= new_user_registration_path %>)
+<% end -%>

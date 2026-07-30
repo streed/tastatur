@@ -23,13 +23,24 @@ module ChartHelper
   }.freeze
 
   # points: Array<Analytics::Timeseries::Point>
-  def timeseries_chart(points, interval:)
+  #
+  # `volume_label` names the second series — "Pageviews" normally, "Events"
+  # when the dashboard is filtered to a custom event and the series carries
+  # matching events instead (see Analytics::Scope#volume_expression).
+  def timeseries_chart(points, interval:, volume_label: "Pageviews")
     return content_tag(:p, "No data in this period.", class: "text-sm text-muted py-12 text-center") if points.blank?
 
     plot_w = WIDTH - PAD[:left] - PAD[:right]
     plot_h = HEIGHT - PAD[:top] - PAD[:bottom]
 
-    max = [points.map(&:pageviews).max.to_i, 1].max
+    # BOTH series bound the scale. Scaling to pageviews alone — which is what
+    # this used to do — drew the visitors line above the plot area whenever a
+    # bucket had more visitors than pageviews, and the viewBox then clipped it
+    # to nothing. That is every bucket on an event-filtered dashboard (its
+    # volume is matching events, its visitors the people who fired them), and
+    # it is reachable unfiltered too: a visitor whose only event in a bucket is
+    # a custom event counts toward visitors and adds no pageview.
+    max = [points.flat_map { |p| [p.visitors, p.pageviews] }.max.to_i, 1].max
     ticks = axis_ticks(max)
     scale_max = [ticks.last, 1].max
 
@@ -46,7 +57,7 @@ module ChartHelper
           viewBox: "0 0 #{WIDTH} #{HEIGHT}",
           class: "w-full block h-auto",
           role: "img",
-          aria: { label: chart_description(points) }
+          aria: { label: chart_description(points, volume_label) }
         ) do
           safe_join([
             gridlines(ticks, scale_max, x, y, plot_w),
@@ -55,7 +66,7 @@ module ChartHelper
             hover_targets(points, x, plot_h)
           ])
         end,
-        tooltip_element(points, interval),
+        tooltip_element(points, interval, volume_label),
         # The same numbers as a real table, visually hidden.
         #
         # `role="img"` with an aria-label is the minimum, and it is what this had:
@@ -67,7 +78,7 @@ module ChartHelper
         # A table is the standard alternative and costs nothing to anyone else,
         # since it is removed from the visual flow rather than merely hidden —
         # `display: none` would take it out of the accessibility tree too.
-        sr_only_data_table(points, interval)
+        sr_only_data_table(points, interval, volume_label)
       ])
     end
   end
@@ -135,12 +146,12 @@ module ChartHelper
     )
   end
 
-  def tooltip_element(points, interval)
+  def tooltip_element(points, interval, volume_label)
     labels = points.map { |p| bucket_label(p.bucket, interval) }
 
     tag.div(
       class: "pointer-events-none absolute hidden card px-3 py-2 text-xs z-10",
-      data: { chart_target: "tooltip", labels: labels.to_json }
+      data: { chart_target: "tooltip", labels: labels.to_json, volume_label: volume_label.downcase }
     )
   end
 
@@ -153,21 +164,21 @@ module ChartHelper
     end
   end
 
-  def chart_description(points)
-    "Visitors and pageviews over #{points.size} intervals, " \
+  def chart_description(points, volume_label)
+    "Visitors and #{volume_label.downcase} over #{points.size} intervals, " \
       "peaking at #{points.map(&:visitors).max} visitors."
   end
 
   # Every plotted point, as a table, for anyone not reading the picture.
-  def sr_only_data_table(points, interval)
+  def sr_only_data_table(points, interval, volume_label)
     tag.div(class: "sr-only") do
       tag.table do
         safe_join([
-          tag.caption("Visitors and pageviews per #{interval}"),
+          tag.caption("Visitors and #{volume_label.downcase} per #{interval}"),
           tag.thead(tag.tr(safe_join([
             tag.th(interval.to_s.capitalize, scope: "col"),
             tag.th("Visitors", scope: "col"),
-            tag.th("Pageviews", scope: "col")
+            tag.th(volume_label, scope: "col")
           ]))),
           tag.tbody(safe_join(points.map do |point|
             tag.tr(safe_join([

@@ -65,10 +65,19 @@ RSpec.configure do |config|
     config.before(:suite) { Tastatur::TestDatabase.truncatable_tables }
   end
 
+  # The flag is restored afterwards because it is set on the example *group*, not
+  # on the example. Leaving it false means every later example in that group — and
+  # in any group nested inside it — also runs without a transaction, while only the
+  # tagged ones truncate. Their rows then survive into the rest of the suite, and
+  # what fails is some unrelated example that counted on an empty table
+  # (`User.administrators.count`, `Tastatur.needs_first_run_setup?`), on some seeds
+  # and not others.
   config.around(:example, :continuous_aggregate) do |example|
+    was_transactional = self.class.use_transactional_tests
     self.class.use_transactional_tests = false
     example.run
     Tastatur::TestDatabase.truncate!
+    self.class.use_transactional_tests = was_transactional
   end
 
   # You can uncomment this line to turn off ActiveRecord support entirely.

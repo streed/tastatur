@@ -40,6 +40,7 @@ module Analytics
 
     def call
       goals = @site.goals.order(:name).to_a
+      goals = goals.select { |goal| convertible?(goal) } if @scope.filters.event_scoped?
       return Success([]) if goals.empty?
 
       denominator = total_visitors
@@ -47,6 +48,22 @@ module Analytics
     end
 
     private
+
+    # Under an event filter, a goal that cannot match the filtered event is not
+    # a zero — it is a contradiction. The measurement below ANDs the filter with
+    # the goal's matcher, so a pageview goal (event_name = 'pageview' against a
+    # WHERE pinned to the custom event) and an event goal for a different name
+    # both produce structurally-impossible SQL that reports "0 conversions,
+    # 0.0%" as though it had measured something. Those rows are noise, and worse:
+    # they read as "this goal stopped converting". So the panel keeps only the
+    # goals the filtered event can satisfy.
+    #
+    # Ruby's matches? rather than SQL: for a wildcard matcher it is the stricter
+    # of the two (LIKE approximates single `*` as `%`), and the stricter answer
+    # is the honest one for "could this goal ever match".
+    def convertible?(goal)
+      !goal.pageview? && goal.matcher.matches?(@scope.filters["event"])
+    end
 
     def total_visitors
       where, binds = @scope.raw_conditions

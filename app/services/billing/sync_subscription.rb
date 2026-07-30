@@ -27,21 +27,34 @@ module Billing
 
     def initialize(account:, subscription_id: nil)
       @account = account
-      @subscription_id = subscription_id.presence || account.stripe_subscription_id
+
+      # NOT seeded from `account.stripe_subscription_id`. Doing that here is what
+      # made discovery unreachable: the column is never blank for an account that
+      # has ever subscribed, so `presence` in `call` always short-circuited and
+      # Stripe was never asked. The column is a last resort and is read in `call`,
+      # after discovery, not before it.
+      @subscription_id = subscription_id.presence
     end
 
     def call
       return Failure(:not_billable) unless @account.billable?
 
-      # An account that has just paid has a Stripe subscription and no record of it
-      # yet, because the customer's browser gets back from Checkout before the
-      # webhook arrives. Asking Stripe which subscriptions the customer has closes
-      # that gap; without it the billing screen says "Free" moments after payment,
-      # which is exactly when somebody tries to pay a second time.
+      # NO id ARGUMENT MEANS "WHATEVER THIS CUSTOMER IS ON NOW", and it asks Stripe
+      # rather than trusting the column.
       #
-      # Only reached when no id is known. Every other caller — both webhook paths
-      # and the nightly reconciliation — passes one, so this costs nothing there.
-      @subscription_id = @subscription_id.presence || discover_subscription_id
+      # It used to fall back to `account.stripe_subscription_id` first and only ask
+      # Stripe when that was blank — which meant it never asked for any account that
+      # had ever subscribed, because the column is written for cancelled
+      # subscriptions too. A customer who cancelled and then re-subscribed therefore
+      # had the OLD, cancelled subscription re-read on their return from Checkout,
+      # and was written back to `free` seconds after a successful charge: the
+      # billing screen said "Free" with an Upgrade button, and the nightly
+      # reconciliation then re-confirmed that every night forever.
+      #
+      # `discover_subscription_id` lists newest-first, so this resolves to the
+      # subscription that actually matters. The column is only a fallback for when
+      # Stripe reports nothing at all.
+      @subscription_id = @subscription_id.presence || discover_subscription_id || @account.stripe_subscription_id
       return Failure(:no_subscription) if @subscription_id.blank?
 
       # No `expand:` — a subscription already carries its items inline, and each
@@ -83,6 +96,10 @@ module Billing
       plan = plan_for(subscription, status)
       return Failure(:unknown_price) if plan.nil?
 
+      return Failure(:superseded) if superseded?(subscription, status)
+
+      adjust_override_for(plan)
+
       @account.update!(
         stripe_customer_id: id_of(subscription[:customer]) || @account.stripe_customer_id,
         stripe_subscription_id: subscription[:id],
@@ -103,6 +120,86 @@ module Billing
       )
 
       Success(@account)
+    end
+
+    # An event about a subscription the account has already moved off, arriving
+    # after the one it moved to.
+    #
+    # THE FAILURE: a customer cancels, re-subscribes, and Stripe then delivers the
+    # old subscription's own `deleted` event — emitted at its period end, and
+    # retried for up to three days, so it can easily land after the new
+    # subscription is live. Both subscriptions carry the same
+    # `metadata.account_public_id`, so the event is attributed correctly and then
+    # applied, writing `plan: free` and the OLD subscription id over a paying
+    # customer. From then on the nightly reconciliation reads the old id and
+    # re-confirms free every night: the backstop cements the error.
+    #
+    # "Always re-fetch makes ordering irrelevant" holds only while an account has
+    # one subscription in its lifetime. Across cancel-and-resubscribe it does not,
+    # so this is the ordering guard: a DIFFERENT subscription may not take an
+    # entitled account away from the one it is entitled by.
+    def superseded?(subscription, status)
+      incoming = subscription[:id].to_s
+      current = @account.stripe_subscription_id.to_s
+
+      return false if current.blank? || incoming == current
+      return false if ENTITLING_STATUSES.include?(status)
+      return false unless @account.subscription_in_good_standing? || @account.subscription_status == "past_due"
+
+      Rails.logger.info(
+        "[tastatur] ignored #{status} subscription #{incoming} for account #{@account.id}: " \
+        "it is already on #{current} (#{@account.subscription_status})"
+      )
+      true
+    end
+
+    # Stops a downgrade from retroactively spending an allowance the customer has
+    # already paid for, and cleans up after itself on the way back up.
+    #
+    # THE PROBLEM. The meter counts a whole calendar month and the plan sets the
+    # ceiling that count is measured against. Dropping from Pro to Free on the 20th
+    # therefore measures three million Pro-era events against Free's 100,000 and
+    # refuses everything until the 1st — while /pricing promises that cancelling
+    # leaves every site collecting, and that Free includes 100,000 events a month,
+    # of which such an account would get none in the month it downgraded.
+    #
+    # So on a downgrade the ceiling becomes "what has been used already, plus the
+    # new plan's full allowance", expiring at the end of the month. The customer
+    # gets exactly the allowance they are now paying for, immediately.
+    #
+    # ONLY WHEN THE PLAN ACTUALLY CHANGES. Applying it on every sync would ratchet:
+    # the nightly reconciliation would re-read "used" — now larger — and raise the
+    # ceiling again, so the cap would recede forever.
+    def adjust_override_for(plan)
+      return if @account.plan == plan.key
+
+      if plan.unlimited_events? || plan.monthly_event_limit >= @account.event_limit
+        return clear_expiring_override
+      end
+
+      used = UsageMeter.used(@account.id)
+      return if used <= plan.monthly_event_limit
+
+      _, period_end = UsageMeter.period_bounds
+
+      @account.event_limit_override = used + plan.monthly_event_limit
+      @account.event_limit_override_until = period_end
+
+      Rails.logger.info(
+        "[tastatur] account #{@account.id} downgraded to #{plan.key} having used #{used} events this month; " \
+        "allowing #{@account.event_limit_override} until #{period_end.to_date} so the month is not pre-spent"
+      )
+    end
+
+    # An upgrade must not be capped by the grandfathering left over from an earlier
+    # downgrade — an override of 3,100,000 would otherwise sit below Pro's ten
+    # million and quietly become the real limit. Only overrides WITH an expiry are
+    # cleared; one without is a deliberate support grant and is not ours to remove.
+    def clear_expiring_override
+      return if @account.event_limit_override_until.nil?
+
+      @account.event_limit_override = nil
+      @account.event_limit_override_until = nil
     end
 
     def plan_for(subscription, status)

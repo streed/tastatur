@@ -1,0 +1,102 @@
+<%# Two-factor authentication, on the account page beside the login details it
+    belongs with rather than on a settings screen nobody would find.
+
+    It is a property of the PERSON, not of the account: the same switch protects
+    every account they are a member of, and an owner cannot set it for their
+    teammates. The copy says so, because a card sitting under an account heading
+    reasonably reads as an account-wide control. -%>
+<div class="card" id="two-factor">
+  <div class="card-head">
+    <h2 class="text-sm font-semibold">Two-factor authentication</h2>
+    <span class="label"><%= current_user.two_factor_enabled? ? "On" : "Off" %></span>
+  </div>
+
+  <div class="card-body flex flex-wrap items-start justify-between gap-4">
+    <div class="max-w-lg">
+      <% if current_user.two_factor_enabled? %>
+        <p class="text-sm text-ink-2">
+          Signing in asks for a <%= TwoFactor::IssueChallenge::CODE_LENGTH %>-digit code emailed to
+          <strong class="text-ink"><%= current_user.email %></strong>, so a stolen password is not
+          enough on its own.
+        </p>
+        <p class="text-[12px] text-muted mt-2">
+          This covers your login everywhere, including any other account you are a member of.
+          It does not change anything for your teammates.
+        </p>
+      <% else %>
+        <p class="text-sm text-ink-2">
+          Ask for an emailed code as well as a password when signing in. It is the difference
+          between a leaked password being an incident and being an inconvenience.
+        </p>
+        <%# Said plainly rather than left for the reader to work out. Email as a
+            second factor is weaker than an authenticator app, and a product that
+            implies otherwise is selling reassurance instead of security. -%>
+        <p class="text-[12px] text-muted mt-2">
+          Codes go to your email, so this protects you against a leaked password and not against
+          somebody who already reads your inbox.
+        </p>
+      <% end %>
+    </div>
+
+    <div class="shrink-0">
+      <% if current_user.two_factor_enabled? %>
+        <%= button_to "Turn off", two_factor_setting_path, method: :delete,
+                      class: "btn btn-sm text-negative",
+                      form: { data: { turbo_confirm: "Turn off two-factor authentication? " \
+                                                     "Every trusted device is forgotten too." } } %>
+      <% else %>
+        <%= button_to "Turn on", two_factor_setting_path,
+                      class: "btn btn-primary btn-sm",
+                      data: { analytics_event: "Two Factor Enabled" } %>
+      <% end %>
+    </div>
+  </div>
+
+  <% if current_user.two_factor_enabled? %>
+    <div class="card-body border-t border-rule bg-surface-2">
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+        <p class="label">Devices that skip the code</p>
+        <% if @trusted_devices.any? %>
+          <%= button_to "Forget all", all_trusted_devices_path, method: :delete,
+                        class: "btn btn-quiet btn-sm text-negative",
+                        form: { data: { turbo_confirm: "Ask for a code on every device from now on?" } } %>
+        <% end %>
+      </div>
+
+      <% if @trusted_devices.empty? %>
+        <p class="text-[12px] text-muted">
+          None. Every sign-in asks for a code. Tick "don't ask on this browser" on the code screen
+          to add one.
+        </p>
+      <% else %>
+        <%# No browser name, no operating system, no city. Every other product
+            puts them here and they would genuinely help you recognise a device —
+            but they are derived from the user-agent and the IP address, and this
+            codebase tells customers it keeps neither. See the migration. -%>
+        <ul class="divide-y divide-rule border-t border-rule">
+          <% @trusted_devices.each do |device| %>
+            <li class="flex items-center justify-between gap-4 py-3">
+              <div>
+                <p class="text-sm">
+                  Trusted <%= time_ago_in_words(device.created_at) %> ago
+                </p>
+                <p class="label mt-0.5">
+                  <% if device.last_used_at %>
+                    Last used <%= time_ago_in_words(device.last_used_at) %> ago<span class="mx-2">·</span>
+                  <% end %>
+                  Expires <%= device.expires_at.to_date.to_fs(:long) %>
+                </p>
+              </div>
+              <%= button_to "Forget", trusted_device_path(device), method: :delete,
+                            class: "btn btn-quiet btn-sm shrink-0" %>
+            </li>
+          <% end %>
+        </ul>
+        <p class="text-[12px] text-muted mt-3">
+          We deliberately do not record which browser or where from — those come from a user-agent
+          and an IP address, and Tastatur keeps neither.
+        </p>
+      <% end %>
+    </div>
+  <% end %>
+</div>

@@ -71,18 +71,42 @@ class Account < ApplicationRecord
 
   # --- Plan and limits -------------------------------------------------------
 
-  # On a self-hosted install there is no billing and no meaningful cap. Every
-  # limit question routes through here rather than through `plan`, so the
-  # self-hosted path never depends on Stripe being configured — and an account row
-  # left on "free" from before SELF_HOSTED was set is not suddenly capped.
+  # Does billing apply to this account at all?
+  #
+  # Two reasons it might not: a self-hosted install has switched it off, and a
+  # hosted deployment with no Stripe keys cannot take money. Both are handled by
+  # Tastatur.billing_enabled? — see the reasoning there. The important half is the
+  # second: enforcing a plan limit on an instance that cannot sell an upgrade is a
+  # paywall with no cashier, so limits are off until Stripe is wired up.
+  #
+  # Every limit question routes through here rather than through `plan`, which is
+  # also why an account row left on "free" from before SELF_HOSTED was set is not
+  # suddenly capped.
   def billable?
-    !Tastatur.self_hosted?
+    Tastatur.billing_enabled?
   end
 
-  # What this account is allowed. Deliberately not the `plan` string: that is a
-  # key, and every allowance is derived from the catalogue entry it names.
+  # Can this account's existing subscription still be managed — cancelled, card
+  # updated, invoices read?
+  #
+  # Deliberately NOT `billable?`. Stripe keeps charging whatever our configuration
+  # holds, so an instance that has lost its price id can no longer SELL but must
+  # still let people leave. See Tastatur.billing_manageable?.
+  def billing_manageable?
+    Tastatur.billing_manageable? && stripe_customer?
+  end
+
+  # The catalogue entry this account is DESCRIBED by. Keyed on deployment mode, not
+  # on the billing gate.
+  #
+  # It used to return SELF_HOSTED whenever `!billable?`, which meant a hosted
+  # customer paying $40 a month was told their plan was "Self-hosted" the moment an
+  # env var went missing — on the account screen, the plan screen and in the usage
+  # email. The limits are what the gate governs, and `event_limit`, `site_limit` and
+  # `can_upgrade?` all short-circuit on `billable?` before they reach here, so
+  # describing the account honestly costs nothing.
   def billing_plan
-    return Billing::Plan.self_hosted unless billable?
+    return Billing::Plan.self_hosted if Tastatur.self_hosted?
 
     Billing::Plan.find!(plan)
   end
@@ -95,16 +119,33 @@ class Account < ApplicationRecord
   # "tidies" it into `event_limit_override.presence`.
   #
   # THE OVERRIDES ARE IGNORED WHEN THERE IS NO BILLING. They exist so support can
-  # lift a hosted customer over a cap, and on a self-hosted install there is no
-  # support and no cap — so a value left in the column by an import or an earlier
-  # deployment must not be able to throttle an instance somebody is running on their
-  # own hardware. Billing::EventQuota short-circuits on the same condition, and
-  # these two disagreeing is precisely the bug this guard removes: the model would
-  # report a limit that enforcement did not apply.
+  # lift a hosted customer over a cap; where there is no billing there is no support
+  # and no cap, so a value left in the column by an import or an earlier deployment
+  # must not be able to throttle an instance nobody is charging. Billing::EventQuota
+  # short-circuits on the same condition, and these two disagreeing is precisely the
+  # bug this guard removes: the model would report a limit enforcement did not apply.
   def event_limit
     return Billing::Plan::UNLIMITED unless billable?
 
-    event_limit_override || billing_plan.monthly_event_limit
+    effective_event_limit_override || billing_plan.monthly_event_limit
+  end
+
+  # An override with `event_limit_override_until` in the past is over.
+  #
+  # The expiry exists because a mid-month downgrade would otherwise be retroactive:
+  # the meter counts every event received in the calendar month, so an account that
+  # recorded three million events on Pro and then cancelled would be measured
+  # against Free's 100,000 and refused everything for the rest of the month.
+  # Billing::SyncSubscription grandfathers that by writing an override of
+  # "already used + the new allowance", expiring at the end of the month.
+  #
+  # A support-granted override has no expiry and is therefore permanent until
+  # somebody removes it.
+  def effective_event_limit_override
+    return nil if event_limit_override.nil?
+    return nil if event_limit_override_until.present? && event_limit_override_until.past?
+
+    event_limit_override
   end
 
   def site_limit

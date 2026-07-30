@@ -51,13 +51,17 @@ module Analytics
 
     # Filtered or sub-daily: the aggregates hold no dimension columns and
     # cannot bucket finer than a day, so scan the hypertable.
+    #
+    # The volume column is pageviews, except under an event filter, where it is
+    # the matching events — a WHERE clause pinned to one event name contains no
+    # pageviews to count. See Scope#volume_expression.
     def raw_totals(scope)
       where, binds = scope.raw_conditions
 
       scope.select_one(<<~SQL, binds)
         SELECT
-          COUNT(*) FILTER (WHERE event_name = 'pageview') AS pageviews,
-          COUNT(DISTINCT visitor_hash)                    AS visitors
+          #{scope.volume_expression}   AS pageviews,
+          COUNT(DISTINCT visitor_hash) AS visitors
         FROM events
         WHERE #{where}
       SQL
@@ -100,14 +104,7 @@ module Analytics
         #
         # So the filter selects session hashes, and the rollup then reads every
         # event those sessions produced inside the period.
-        qualifying, qualifying_binds = scope.raw_conditions
-        all_events, all_binds = scope.unfiltered_conditions
-
-        rollup(
-          scope,
-          "#{all_events} AND session_hash IN (SELECT session_hash FROM events WHERE #{qualifying})",
-          all_binds + qualifying_binds
-        )
+        rollup(scope, *scope.session_qualified_conditions)
       end
     end
 
@@ -141,6 +138,10 @@ module Analytics
       transform_keys(&:to_sym)
 
       attribute :visitors,    Types::Strict::Integer
+      # The volume metric: pageviews, EXCEPT under an event filter, where it
+      # carries the count of matching events instead and the views label it
+      # "Events". Both periods of a comparison share the same filters, so
+      # `change(:pageviews)` always compares like with like.
       attribute :pageviews,   Types::Strict::Integer
       attribute :sessions,    Types::Strict::Integer
       attribute :bounce_rate, Types::Strict::Float

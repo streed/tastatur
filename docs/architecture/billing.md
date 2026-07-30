@@ -3,10 +3,74 @@
 How the hosted service decides what an account is allowed, how it counts what an
 account has used, and how Stripe is wired to it.
 
-**None of this exists on a self-hosted install.** With `SELF_HOSTED=1` there are no
-plans, no limits, no upgrade interface and no Stripe: every question routes through
-`Account#billable?` first. If you are reading this to run your own instance, the
+**None of this exists unless billing is switched on AND configured.** Everything
+routes through `Tastatur.billing_enabled?`, which is false in two cases:
+
+- `SELF_HOSTED=1` — switched off deliberately.
+- The Stripe variables are not set — not switched off, just not finished.
+
+In both, there are no plan limits, no upgrade interface, no pricing page, no webhook
+endpoint and no Stripe calls. If you are reading this to run your own instance, the
 short version is that you can stop here.
+
+### Why unconfigured counts as off
+
+Because the alternative was the worst state available. Plan limits used to be gated on
+deployment mode alone, so a hosted deployment with no Stripe keys enforced them: every
+account capped at one site and 100,000 events, with an upgrade button whose only
+possible answer was "payments are not configured on this instance". A paywall with no
+cashier, and nobody chose it — it was what a half-finished setup produced.
+
+So configuration is treated exactly like deployment mode. `billing_configured?`
+requires:
+
+| | Why |
+|---|---|
+| `STRIPE_SECRET_KEY` | nothing can be created at Stripe without it |
+| `STRIPE_WEBHOOK_SECRET` | without it every delivery is refused, so a subscription is paid for and never applied — the one failure invisible from outside |
+| a price for at least one purchasable plan | there has to be something to sell |
+
+`STRIPE_PUBLISHABLE_KEY` is deliberately **not** required: payment happens on hosted
+Checkout, so this application renders no card form and loads no Stripe.js. Requiring a
+variable nothing reads would mean telling a correct deployment it is broken.
+
+`any?` rather than `all?` on the prices, so a second paid plan added later without a
+price id degrades to "that one plan cannot be bought" — `StartCheckout` returns
+`price_not_configured` — instead of taking the whole billing system down.
+
+It comes back on by itself the moment the variables are set: no migration, no restart
+order to get right. `bin/rails tastatur:billing:verify` reports the state deliberately,
+and `required_env.rb` logs **BILLING IS DISABLED** at boot with the missing names and
+the consequence, because "safe" is not the same as "what you wanted".
+
+### Selling and managing are separate questions
+
+`billing_enabled?` answers "can this instance SELL": plan limits, `/pricing`,
+checkout, the upgrade interface. `billing_manageable?` answers "can it MANAGE what
+somebody already bought", and asks only for `STRIPE_SECRET_KEY`.
+
+Conflating them was a real mistake, caught in review. Stripe keeps charging an
+existing subscriber whatever our environment holds. So a deployment that lost
+`STRIPE_PRICE_PRO` — with a perfectly valid API key — took away the plan screen, the
+nav link and `POST /billing/portal`, which is the only route in the product to
+cancelling, updating a card or reading an invoice. Taking the money and removing the
+cancel button is not a state to arrive at by misconfiguration.
+
+So when billing is off but the account has a Stripe customer, `/billing` stays
+reachable and renders **read-only**: a notice saying billing is not configured, the
+last recorded subscription state, and the portal button. No allowance (none is being
+enforced), no prices (this instance could not charge them), no upgrade button — and
+`POST /billing/checkout` refuses with an explanation rather than a silent redirect.
+
+`Account#billing_plan` is keyed on deployment mode rather than on the gate, for the
+same reason: it used to answer `SELF_HOSTED` whenever `!billable?`, so a hosted
+customer paying $40 a month was told their plan was "Self-hosted" the moment a
+variable went missing. The limits are what the gate governs — `event_limit`,
+`site_limit` and `can_upgrade?` all short-circuit on `billable?` before they reach
+`billing_plan` — so describing the account honestly costs nothing.
+
+The other place that does not simply 404 when unconfigured is the webhook endpoint,
+and only for a missing signing secret: see the status table below.
 
 ## The two plans
 
@@ -166,6 +230,21 @@ negation, which is a complete partition — `event_name` is `NOT NULL`. There is
 example asserting the identity against raw rows, so a migration that ever made the
 column nullable would fail a test rather than quietly under-report.
 
+### Giving an allowance back
+
+A site token is public by construction, so somebody can post events claiming the
+site's own hostname and there is no way to prevent it — only to bound the rate and
+undo it afterwards, which is what `rails tastatur:events:purge` is for (see
+[ingest.md](ingest.md)).
+
+Once events cost allowance, deleting the rows stopped being a complete undo: the
+victim's month stayed spent and their genuine traffic stayed refused until the 1st. So
+the purge also calls `UsageMeter.credit` for the part of its window inside the current
+month, counted before the DELETE because afterwards there is nothing left to count.
+This is **the one case where the upward-only rule yields**, and it is safe for the
+same reason it is needed: the credited events have been deleted, so the aggregate no
+longer counts them either and the hourly repair will not put them back.
+
 ### The trap for anything that writes history
 
 `events_by_hour`'s refresh policy only looks back three days, so an invalidation
@@ -187,9 +266,17 @@ silently report zero for old periods.
 
 ### Warnings
 
-`Billing::NotifyUsageThreshold` emails **owners and admins** at 80% and again once
-the allowance is gone. Members and viewers are not told, because they cannot change
-the plan and it would be noise they cannot act on.
+`Billing::NotifyUsageThreshold` emails **owners** at 80% and again once the allowance
+is gone. Nobody else is told, because the email's primary action is a button that
+changes the plan and `manage_billing?` is owner-only — mailing an admin would be
+mailing them a link that bounces them off `/billing`. For the same reason every
+`billing_path` link in the interface is gated on `manage_billing?`, and every link
+that needs a permission is gated on that permission. An admin still sees refused
+events explained on the site settings and installation screens.
+
+The claim key is released if the mail cannot be enqueued: the key means the warning
+was SENT, and holding it for one that was not suppresses the warning for the rest of
+the month. Same rule as the webhook receipt.
 
 Once per level per month, guarded by a Redis `SET NX` key containing the month. A
 boolean column would need clearing on the first of the month by something, and that
@@ -217,6 +304,16 @@ cancellation are the **billing portal**. Neither is rebuilt here. No card number
 ever touches this application or its logs, which keeps the PCI obligation at SAQ-A,
 and it means there is nothing for a Content Security Policy to allow — the only
 thing this app does is issue a redirect.
+
+**A second checkout is refused by asking Stripe, not by reading our columns.** A
+second Checkout session creates a second subscription on the same customer and bills
+them twice, and Stripe will do it without complaint. Checking `plan` and
+`subscription_status` was not enough, because those are written only by a successful
+sync — so the state where a double charge is most likely is exactly the state where
+they are stale. `StartCheckout` lists the customer's subscriptions and refuses if any
+is `active`, `trialing`, `past_due`, `unpaid`, `incomplete` or `paused`. That list is
+deliberately wider than `ENTITLING_STATUSES`: `unpaid` entitles nobody, but Stripe
+will still collect the outstanding invoice if the card is fixed.
 
 The account reference travels twice: `client_reference_id` on the session, and
 `subscription_data.metadata.account_public_id` so that later
@@ -255,7 +352,7 @@ It is exempt from Rack::Attack's per-client throttle. Stripe delivers every
 customer's events from a small fixed set of its own addresses, so under a per-client
 limit the whole instance shares one throttle key — and a 429 is a failed delivery.
 
-### Every handler re-fetches
+### Every handler re-fetches, and checks it is the right subscription
 
 `Billing::SyncSubscription` never trusts the object in the payload. Stripe does not
 guarantee delivery order: an `updated` from a cancellation and one from a plan
@@ -264,10 +361,35 @@ account permanently wrong with nothing to correct it. Re-fetching costs one API 
 on an endpoint that sees a handful of events per customer per month, and it makes
 ordering irrelevant — whatever is at Stripe now is what gets written.
 
+Re-fetching alone is not enough, because it only settles ordering while an account
+has ONE subscription in its lifetime. Two more rules cover the rest:
+
+- **A subscription id argument means that subscription; no argument means "whatever
+  this customer is on now", asked of Stripe.** The account's stored id is a last
+  resort, consulted only when Stripe reports no subscription at all. Reading the
+  column first is what broke re-subscribing customers: it is written for cancelled
+  subscriptions too, so it was never blank for anyone who had ever subscribed, and
+  the return from Checkout re-read the CANCELLED subscription and wrote the account
+  back to free seconds after a successful charge — which the nightly reconciliation
+  then re-confirmed every night.
+- **A different, non-entitling subscription may not take an entitled account away
+  from the one entitling it** (`SyncSubscription#superseded?`). Stripe emits the old
+  subscription's `deleted` at its period end and retries for three days, so after a
+  cancel-and-resubscribe it can arrive *after* the new subscription is live, carrying
+  the same account metadata — so it is attributed correctly and then applied. Ignored,
+  and logged.
+
 For invoice events the subscription id comes from the account's own record rather
 than from the invoice, because the invoice's link to its subscription has moved
 between API versions (it now lives under `parent.subscription_details`). The account
 was found by customer id, so it is the same subscription either way.
+
+**The type is checked before the shape.** The contract requires `data.object.id`, and
+several real Stripe objects have none — a Balance has no id field at all, an upcoming
+invoice sends null. Validating first meant answering 400 to genuine Stripe traffic,
+which is guaranteed with `stripe listen` (it forwards every type) and one dashboard
+click away on a live endpoint; enough failed deliveries and Stripe disables the
+endpoint for every customer on the instance.
 
 ### Idempotency
 
@@ -298,10 +420,11 @@ disables an endpoint that keeps failing. So 2xx means "do not send this again".
 | Event type not handled | 200 | Nothing to do |
 | Bad or stale signature | 400 | Not from Stripe, or replayed |
 | Body is not JSON | 400 | `construct_event` raises `JSON::ParserError`, not a `StripeError` |
-| Envelope missing required fields | 400 | Contract refused it |
+| Envelope missing required fields | 400 | Contract refused it — only reachable for a type we handle |
 | Stripe unreachable while applying | 503 | A retry is exactly what is wanted |
-| `STRIPE_WEBHOOK_SECRET` unset | 503 | Ours to fix; a retry afterwards succeeds |
+| `STRIPE_WEBHOOK_SECRET` unset | 503 | Ours to fix, and transient: a retry once it is set succeeds, and the log names the variable. Checked BEFORE the billing-enabled gate, which is also false without a secret and would answer 404 — discarding both the diagnosis and the retry |
 | Self-hosted | 404 | The endpoint genuinely does not exist there |
+| Billing otherwise unconfigured | 404 | Nothing to sell, so nothing to hear about. Every service downstream would refuse the event anyway, so accepting it would only write a receipt for work that cannot happen |
 
 ### The API-version hazard
 
@@ -353,6 +476,30 @@ the limit. The site limit is validated `on: :create` only — an unscoped valida
 would refuse every save on all twenty sites, so changing a timezone would fail with
 a message about site limits and the only way out would be deleting nineteen sites.
 
+**And the month is not cut short.** Because the meter counts a whole calendar month
+and the plan sets the ceiling, a Pro account that had recorded three million events
+and then cancelled on the 20th would be measured against Free's 100,000 and refused
+everything until the 1st — eleven days of collection destroyed by a billing event,
+contradicting both the promise above and the Free plan's advertised allowance.
+
+So `SyncSubscription#adjust_override_for` grandfathers the remainder: on a downgrade
+it writes `event_limit_override = events already used + the new plan's allowance` and
+dates it `event_limit_override_until = end of the month`. The customer gets the full
+smaller allowance immediately, and next month the override expires and the plan's own
+number applies again. Three details matter:
+
+- It only fires when the plan actually changes. Applying it on every sync would
+  ratchet — the nightly reconciliation would re-read a larger "used" and raise the
+  ceiling again, so the cap would recede forever.
+- An upgrade clears it, or an override of 3,100,000 would sit below Pro's ten million
+  and quietly become the real limit.
+- Only overrides WITH an expiry are cleared. One without is a deliberate support
+  grant and is not the sync's to remove.
+
+The ceiling is adjusted rather than the counter because `UsageMeter#repair` is one-way
+upward: writing the count down would be undone within the hour by the reconciliation
+reading the true stored total.
+
 The honest consequence: somebody can pay for one month, create twenty sites, cancel,
 and keep them. That is bounded by the free plan's 100,000 events, which is the limit
 that actually costs us anything, and it is a much better trade than deleting a
@@ -364,6 +511,15 @@ customer's measurement as a billing action.
 |---|---|---|---|
 | `ReconcileUsageJob` | `13 * * * *` | `within_5_minutes` | The counter enforcement reads drifts below reality, so published allowances quietly stop being the allowances applied. Warning emails also stop |
 | `ReconcileSubscriptionsJob` | `41 4 * * *` | `within_1_hour` | A webhook Stripe gave up delivering is never noticed, so an account stays on a plan nobody is paying for — or an upgraded account stays capped. Webhook receipts also stop being pruned |
+
+`ReconcileSubscriptions` sweeps by **customer** id, not subscription id. The
+subscription column is written only by a successful sync, so sweeping on it reached
+exactly the accounts whose webhooks had already arrived and skipped the failure the
+job exists for: an account whose every delivery was refused has a customer id from
+checkout, no subscription id, and was billed monthly while capped at the free plan
+with nothing raising. Sweeping by customer means the discovery step runs for those
+rows, which also makes `Failure(:no_subscription)` an ordinary outcome — an abandoned
+checkout — rather than something to count as a failure.
 
 ## Setting it up
 
@@ -380,6 +536,22 @@ customer's measurement as a billing action.
 non-self-hosted deployment, `STRIPE_WEBHOOK_SECRET` especially: without it the
 endpoint refuses every delivery, so subscriptions are bought and never applied —
 Stripe shows the charge, the customer stays on Free, and nothing raises.
+
+### Switching it on part-way through a month
+
+Worth knowing before you do it, because it is surprising rather than wrong: while
+billing is off nothing is capped, but the meter is still reconciled from
+`events_by_hour` on the hour. So an instance that has been recording freely and then
+has its Stripe keys set will, at the next reconciliation, measure each account's
+whole month-to-date against its plan — and any account already past its allowance is
+refused for the rest of the month and emailed about it.
+
+Nothing is lost that would not have been lost anyway: with billing on from the 1st
+those accounts would have been refused *earlier*, so this over-delivers rather than
+under-delivers. But if you would rather nobody is surprised, switch on at the start
+of a month, or grant the affected accounts an `event_limit_override` with an
+`event_limit_override_until` at month end — which is exactly the mechanism a
+mid-month downgrade uses.
 
 ### Verifying the price
 

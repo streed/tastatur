@@ -114,9 +114,17 @@ class AddBillingToAccounts < ActiveRecord::Migration[8.1]
     remove_column :accounts, :subscription_status
     remove_column :accounts, :site_limit_override
 
-    # Rolling back cannot restore which accounts were on a retired plan, and it
-    # cannot tell an inherited quota from one deliberately set to 10,000. Both are
-    # one-way. The old default is restored so the column is valid again.
+    # `pro` is not a key the pre-migration model accepts, so leaving it behind would
+    # make every paying account fail its own `plan` validation the moment the old
+    # code loaded — every save on those rows refused, for a reason nothing explains.
+    # Mapped to `growth`, the nearest of the three retired keys. This does not
+    # restore which accounts were originally on which: that information is gone the
+    # moment `up` runs, and a rollback is an abandonment of the feature rather than a
+    # round trip.
+    execute "UPDATE accounts SET plan = 'growth' WHERE plan = 'pro'"
+
+    # Rolling back also cannot tell an inherited quota from one deliberately set to
+    # 10,000. The old default is restored so the column is valid again.
     execute "UPDATE accounts SET event_limit_override = #{OLD_DEFAULT_EVENT_LIMIT} WHERE event_limit_override IS NULL"
     change_column_default :accounts, :event_limit_override, from: nil, to: OLD_DEFAULT_EVENT_LIMIT
     change_column_null :accounts, :event_limit_override, false

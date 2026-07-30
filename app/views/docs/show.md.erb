@@ -1,0 +1,304 @@
+<%# The documentation for machine readers, reached with Accept: text/markdown
+    or as /docs.md — see DocsController#show. The content mirrors
+    show.html.erb; when the docs there change, change them here too. -%>
+<% token = @example_site&.public_token || "YOUR_SITE_KEY" -%>
+<% tracker = Tastatur.tracker_url -%>
+<% ingest = Tastatur.ingest_url -%>
+# Using Tastatur
+
+One script tag installs it. Everything below is optional.
+<% if @example_site -%>
+Examples are filled in with your real site key for <%= @example_site.domain %>,
+so they can be copied as-is.
+<% end -%>
+
+## Install
+
+Paste this into your `<head>`. That is the entire installation, and nothing
+below is required to get numbers.
+
+```html
+<script defer data-site="<%= token %>" src="<%= tracker %>"></script>
+```
+
+`defer` keeps it off the critical path. The script is about 3.2 KB over the
+wire and makes one request per pageview. Visits from `localhost`, private
+network ranges and `file:` are ignored, so local development will not appear in
+your numbers.
+
+## Script options
+
+Attributes on the script tag. All optional.
+
+| Attribute | Status | Meaning |
+|---|---|---|
+| `data-site` | required | Your site key. Public by design; it appears in your page source. |
+| `data-api` | optional | Override the ingest endpoint. Only needed if you proxy events through a different path than the script. |
+| `data-hash` | optional | Count URL fragment changes as pageviews. For apps that route on `#`. |
+| `data-auto` | default `"true"` | Set to `"false"` to stop automatic pageviews and send them yourself. |
+| `data-exclude` | optional | Present means collect nothing. Useful on a staging build from the same codebase. |
+| `data-ignore-dnt` | optional | Stop honouring Do Not Track and Global Privacy Control. Read the note under Opt-out before using this. |
+
+```html
+<script defer
+  data-site="<%= token %>"
+  data-hash
+  src="<%= tracker %>"></script>
+```
+
+## Custom events
+
+Anything worth counting that is not a pageview: a signup, a download, a plan
+selected.
+
+```javascript
+tastatur('event', 'Signup')
+
+tastatur('event', 'Signup', { props: { plan: 'pro', source: 'pricing-page' } })
+```
+
+- **Event names** are free text up to 120 characters. Keep them stable;
+  renaming one starts a new series rather than renaming the old.
+- **Properties** are limited to 24 keys per event, 60 characters per key and
+  500 per value. Values may be strings, numbers or booleans.
+- **Do not put personal data in properties.** This is the one field whose
+  contents you control, and nothing in Tastatur can tell that
+  `{ email: "…" }` should not have been sent.
+
+If you call `tastatur()` from code that may run before the deferred script has
+loaded, add this stub first. It queues calls and replays them once the script
+is ready.
+
+```javascript
+window.tastatur = window.tastatur || function () {
+  (window.tastatur.q = window.tastatur.q || []).push(arguments)
+}
+```
+
+## Revenue
+
+Attach a monetary value to an event and it shows up against your goals.
+
+```javascript
+tastatur('event', 'Purchase', {
+  revenue: { amount: 4900, currency: 'EUR' },
+  props:   { plan: 'growth' }
+})
+```
+
+`amount` is in minor units, so 4900 is €49.00. A currency is required whenever
+an amount is sent: without one, a total would silently mix euros and yen.
+
+## Single-page apps
+
+Handled automatically. There is nothing to configure for React, Vue, Svelte,
+Turbo, HTMX or hand-rolled routing.
+
+- The script patches `history.pushState` and `replaceState`, and listens for
+  `popstate`, so client-side navigation counts as a pageview.
+- Views are deduplicated against the last URL sent. Frameworks that call
+  `replaceState` during hydration would otherwise double-count every first
+  pageview.
+- Back/forward cache restores are counted via `pageshow`, because a restored
+  page does not re-run the script.
+- If you route on the URL fragment, add `data-hash`.
+
+To take control yourself, set `data-auto="false"` and call it from your router:
+
+```javascript
+router.afterEach(() => tastatur('pageview'))
+```
+
+## Goals
+
+A goal is a page or an event worth counting, with a conversion rate attached.
+
+| Kind | Example | Meaning |
+|---|---|---|
+| Exact path | `/pricing` | Matches that page only. |
+| Starts with | `/blog` | Matches /blog and everything beneath it. |
+| Wildcard | `/blog/**` | `*` matches inside one path segment, `**` matches across segments. |
+| Custom event | `Signup` | Matches an event name you send. |
+
+Goals are matched against history, so creating one immediately reports on data
+you already have. You do not need to set them up in advance.
+
+## Funnels
+
+An ordered sequence of steps, with the drop-off between each. Steps use the
+same matchers as goals. A visitor counts at step 3 only if they reached it
+*after* step 2, which means someone who backtracks and returns is still counted
+correctly.
+
+**Pick a window of 24 hours or less.** Visitor identifiers expire daily, so a
+funnel spanning more than a day cannot follow anyone across that boundary and
+will undercount. The funnel view says so when the window is longer, rather than
+quietly reporting a low number.
+
+## Filtering and sharing
+
+Click any row on the dashboard to filter everything by it.
+
+- Filter state lives in the URL, so a filtered view can be bookmarked, sent to
+  a colleague, or kept open in a tab.
+- Filterable dimensions: page, entry page, source, referrer, country, browser,
+  operating system, device, screen class, every `utm_*` field, event name and
+  hostname.
+- **Shared dashboards** give a read-only link that needs no account, optionally
+  password-protected and optionally expiring. They do not offer filters,
+  because narrow filters on someone else's audience are a re-identification
+  tool.
+
+## Content Security Policy
+
+If your site sets a CSP, allow this origin in two directives.
+
+```
+script-src <%= Tastatur.base_url %>;
+connect-src <%= Tastatur.base_url %>;
+```
+
+`script-src` lets the browser fetch `t.js`; `connect-src` lets it send the
+beacon. The script needs no `unsafe-inline`, no `unsafe-eval`, and sets no
+cookie, so it does not interact with your `cookie` or `frame` policy at all.
+
+## Server-side events
+
+The ingest endpoint is a plain HTTP API, so backend and mobile events work
+without the script.
+
+```bash
+curl -X POST <%= ingest %> \
+  -H 'Content-Type: application/json' \
+  -H 'X-Forwarded-For: <the end user's IP>' \
+  -H 'User-Agent: <the end user's user-agent>' \
+  -d '{
+        "s": "<%= token %>",
+        "u": "https://example.com/checkout",
+        "n": "Purchase",
+        "v": 4900,
+        "c": "EUR"
+      }'
+```
+
+**Pass the end user's address and user-agent, not your server's.** Otherwise
+every server-side event collapses into one visitor located wherever your
+server is. This only works from a host your Tastatur instance trusts as a
+proxy.
+
+| Key | Meaning |
+|---|---|
+| `s` | Site key |
+| `u` | Absolute URL of the page or screen |
+| `n` | Event name. Defaults to `"pageview"` |
+| `r` | Referrer URL |
+| `w` | Viewport width in pixels, bucketed server-side |
+| `p` | Properties object |
+| `v` | Revenue in minor units |
+| `c` | Three-letter currency code |
+
+The endpoint answers `202` for everything, including a payload it rejected.
+That is deliberate: a distinguishable response would let anyone test which site
+keys are valid. Check your dashboard to confirm events are arriving.
+
+## Without JavaScript
+
+A tracking pixel for visitors who run no scripts.
+
+```html
+<noscript>
+  <img src="<%= Tastatur.base_url %>/api/pixel?s=<%= token %>&u=https://example.com/"
+       alt="" width="1" height="1" referrerpolicy="no-referrer-when-downgrade">
+</noscript>
+```
+
+The `u` parameter has to be written per page, so this is most practical in a
+server-rendered layout where you can interpolate the current URL. Everything
+else behaves the same, including bot filtering and the opt-out check.
+
+## Opt-out
+
+Do Not Track and Global Privacy Control are honoured by default.
+
+- If a visitor's browser sends `DNT: 1` or `Sec-GPC: 1`, no identifier is
+  computed and no event is stored. Only an anonymous per-hour counter is
+  incremented, so you can see that some requests opted out without any record
+  of who.
+- This is checked in the script *and* again server-side, because the endpoint
+  is a public API that an older cached script or the pixel might call without
+  checking.
+- There is no per-person opt-out flag, because storing one would mean keeping a
+  durable identifier for exactly the people who asked us not to.
+
+`data-ignore-dnt` turns this off. A working opt-out is a condition of the
+audience-measurement consent exemptions Tastatur is designed to qualify for, so
+disabling it likely forfeits that argument. Take your own advice before using
+it.
+
+## Ad blockers
+
+Some block Tastatur. You can proxy it through your own domain, and here is our
+position on doing so.
+
+The script derives its endpoint from its own `src`, so proxying the script
+through your domain automatically proxies the events with it. Point a path on
+your site at this instance:
+
+```nginx
+location /stats.js  { proxy_pass <%= Tastatur.base_url %>/t.js; }
+location /stats/api { proxy_pass <%= Tastatur.base_url %>/api/event; }
+```
+
+```html
+<script defer data-site="<%= token %>" src="/stats.js"></script>
+```
+
+**Where we stand on this.** Blockers exist because tracking earned them.
+Tastatur sets no cookie, stores nothing on the device and builds no cross-site
+profile, so a blocked Tastatur request protects nobody from anything.
+
+That said, proxying is a way around a user's stated choice, and we will not
+pretend otherwise. It is documented because you will find it anyway and it is
+better done with the tradeoff in front of you. Note also that Do Not Track and
+Global Privacy Control are still honoured through a proxy, so a visitor who has
+explicitly objected remains uncounted.
+
+## What gets collected
+
+The short version. The long version is a page of its own.
+
+| Field | Detail |
+|---|---|
+| Page path | Query string stripped except `utm_*` tags. Personal data is removed from the path itself: emails, tokens, UUIDs and long ids are replaced with placeholders. |
+| Referrer host | news.ycombinator.com, not the full referring URL. |
+| Country | Two letters. No region, no city, no coordinates. |
+| Browser and OS | Family plus major version only. |
+| Device class | One of desktop, mobile, tablet. |
+| Screen class | One of five buckets. The exact pixel width is never stored. |
+| Visitor identifier | A truncated HMAC of a daily-rotating secret with the IP, user-agent and site. Unlinkable once the secret is destroyed. |
+
+Raw IP addresses and user-agent strings are never written to the database, a
+log, or disk. A returning visitor is counted as a new visitor tomorrow, so a
+30-day figure is the sum of 30 daily figures rather than a count of distinct
+people.
+
+### Cookies, precisely
+
+**On your visitors' devices: nothing.** No cookie is set and none is read.
+Nothing is written to localStorage, sessionStorage or IndexedDB. No identifier
+is stored on the device in any form. This is the part that determines whether
+you need a consent banner for Tastatur, and it is the promise the product is
+built around.
+
+**On this dashboard, for account holders: up to three.** A first-party session
+cookie, set when you sign in, so you stay signed in. A second if you tick
+"stay signed in". A third if you use two-factor authentication and ask us not
+to send a code to this browser every time. All strictly necessary for a login
+and exempt from consent on that basis. They are set on our site, for account
+holders, and never touch the sites you measure or the people who visit them.
+
+## Deeper
+
+- [What we collect, the full technical account](<%= privacy_path %>)
+- [Check what we hold about you](<%= data_request_path %>)
+- [Processor terms](<%= dpa_path %>)

@@ -45,20 +45,41 @@ RSpec.describe "Pricing", type: :request do
     expect(response.body).to include(Tastatur.maintainer[:source])
   end
 
-  describe "on a self-hosted install" do
-    before { allow(Tastatur).to receive(:self_hosted?).and_return(true) }
-
-    it "does not exist, because there is nothing to sell" do
-      # A user has to exist, or the first-run setup wizard claims the request before
-      # this controller is reached — which is also correct, just a different guard.
-      create(:user)
+  describe "where there is nothing to sell" do
+    # Both reasons, because they are different states that must reach the same place:
+    # a self-hosted install has switched billing off, and a hosted one with no Stripe
+    # keys has not finished switching it on. Publishing prices an instance cannot
+    # charge is worse than publishing none — it is an offer that fails at the button.
+    it "does not exist on a self-hosted install" do
+      allow(Tastatur).to receive(:self_hosted?).and_return(true)
+      # `needs_first_run_setup?` rather than creating a user: that predicate is
+      # `self_hosted? && !User.exists?`, so the example would otherwise depend on the
+      # users table being empty — a whole-suite property no example controls. The
+      # non-transactional `:continuous_aggregate` specs can leave a row behind, and
+      # then this passed or failed on the random seed.
+      allow(Tastatur).to receive(:needs_first_run_setup?).and_return(false)
 
       get "/pricing"
 
       expect(response).to redirect_to(root_path)
     end
 
-    it "is superseded by the setup wizard on a brand-new install" do
+    it "does not exist when Stripe is not configured" do
+      allow(Tastatur).to receive(:billing_enabled?).and_return(false)
+
+      get "/pricing"
+
+      expect(response).to redirect_to(root_path)
+    end
+
+    # The first-run wizard is registered on ApplicationController and therefore runs
+    # before this controller's own guard, so on a brand-new self-hosted install the
+    # setup screen wins. Asserted because both redirects are "correct" and it would
+    # otherwise be unclear which one a reader should expect.
+    it "is superseded by the setup wizard when one is pending" do
+      allow(Tastatur).to receive(:self_hosted?).and_return(true)
+      allow(Tastatur).to receive(:needs_first_run_setup?).and_return(true)
+
       get "/pricing"
 
       expect(response).to redirect_to(first_run_path)

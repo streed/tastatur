@@ -41,7 +41,7 @@
             <%= usage.period_end.to_date.to_fs(:long) %>.
           </p>
         </div>
-        <% unless Tastatur.self_hosted? %>
+        <% if Tastatur.billing_enabled? && policy(current_account).manage_billing? %>
           <%= link_to "Review plan", billing_path, class: "btn btn-primary btn-sm ml-auto shrink-0" %>
         <% end %>
       </div>

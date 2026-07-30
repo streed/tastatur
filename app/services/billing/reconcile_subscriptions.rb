@@ -19,13 +19,25 @@ module Billing
     WATCHED = %w[plan subscription_status cancel_at_period_end].freeze
 
     def call
-      return Success(empty_report) if Tastatur.self_hosted?
+      return Success(empty_report) unless Tastatur.billing_enabled?
 
       checked = 0
       changed = 0
       failed = 0
 
-      Account.where.not(stripe_subscription_id: nil).find_each do |account|
+      # KEYED ON THE CUSTOMER, NOT THE SUBSCRIPTION.
+      #
+      # It used to sweep `where.not(stripe_subscription_id: nil)`, and that column is
+      # written in exactly one place — by a successful sync. So the only accounts the
+      # backstop could see were the accounts whose webhooks had already arrived: it
+      # skipped precisely the failure it exists for. An account whose every delivery
+      # was refused (a rotated signing secret, an endpoint Stripe disabled) has a
+      # customer id from checkout and no subscription id, and stayed on the free plan
+      # while being billed monthly, with nothing raising anywhere.
+      #
+      # Sweeping by customer means SyncSubscription's discovery runs for those rows
+      # and finds the subscription at Stripe.
+      Account.where.not(stripe_customer_id: nil).find_each do |account|
         checked += 1
         before = account.attributes.slice(*WATCHED)
 
@@ -39,6 +51,12 @@ module Billing
             "[tastatur] reconciliation corrected account #{account.id}: #{before.inspect} -> #{after.inspect}. " \
             "A webhook was missed."
           )
+        in Failure(:no_subscription)
+          # A customer with no subscription at all: somebody who started checkout and
+          # abandoned it, or cancelled long ago. Expected, and not a failure — it is
+          # the normal state for a good number of rows now that the sweep is keyed on
+          # the customer.
+          next
         in Failure(_)
           # SyncSubscription has already logged and reported the reason. Counting it
           # here keeps one failing account from being read as the whole sweep having

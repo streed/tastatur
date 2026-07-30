@@ -70,4 +70,26 @@ RSpec.describe "Dashboard drill-down", type: :request do
     expect(response.body).not_to include("Filtered by")
     expect(response.body).not_to include("Clear all")
   end
+
+  # Drilling into the custom events panel scopes the dashboard to one event, and
+  # the volume metric then IS the matching events — a WHERE clause pinned to one
+  # event name contains no pageviews to count. The tile and series relabel to
+  # match (see DashboardHelper#volume_label); a tile still reading "Pageviews: 0"
+  # above panels full of the event's own visitors was the bug.
+  describe "filtering by a custom event" do
+    before { create_event(site, event_name: "Signup", path: "/pricing", visitor: "v0", at: 1.hour.ago) }
+
+    it "relabels the volume metric to Events" do
+      get site_path(site, event: "Signup")
+
+      expect(response.body).to include(">Events<")
+      expect(response.body).not_to include(">Pageviews<")
+    end
+
+    it "keeps the Pageviews label everywhere else" do
+      get site_path(site, page: "/pricing")
+
+      expect(response.body).to include(">Pageviews<")
+    end
+  end
 end

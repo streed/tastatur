@@ -73,6 +73,32 @@ module Admin
       redirect_back_to_user notice: "Password reset email sent to #{@user.email}."
     end
 
+    # The escape hatch for two-factor authentication, and the reason
+    # TwoFactor::Enable can skip an enrolment challenge.
+    #
+    # Codes go to the address on the account. When that mailbox stops working —
+    # an employer's domain expiring, a provider closing an account — the person
+    # is locked out by a control they switched on themselves, and every remedy
+    # inside the product requires signing in first. Without this the only fix is
+    # a Rails console on a production container.
+    #
+    # It can only turn the feature OFF. An administrator who could turn it on
+    # could aim somebody's codes at a mailbox of their choosing, which is a
+    # takeover with extra steps. Trusted devices go with it (see
+    # TwoFactor::Disable), so this cannot be used to leave a browser
+    # pre-authorised either.
+    def disable_two_factor
+      authorize [:admin, @user], :disable_two_factor?
+
+      case TwoFactor::Disable.call(user: @user)
+      in Success(_)
+        audit("disabled two-factor authentication for", @user)
+        redirect_back_to_user notice: "Two-factor authentication is off for #{@user.email}."
+      in Failure(:already_disabled)
+        redirect_back_to_user notice: "#{@user.email} was not using two-factor authentication."
+      end
+    end
+
     def grant_admin
       authorize [:admin, @user], :grant_admin?
 

@@ -103,9 +103,40 @@ module Billing
       end
     end
 
-    # Test and support hook. Not called from application code — the counter is
-    # supposed to be corrected by `repair`, never cleared, because clearing it is
-    # indistinguishable from giving away a month of quota.
+    # Gives an allowance back, and the only caller is the purge of fabricated events.
+    #
+    # THE ONE PLACE THE UPWARD-ONLY RULE HAS TO YIELD. A site token is public by
+    # construction, so someone can post events claiming the site's own hostname and
+    # there is no way to prevent it — only to bound the rate and undo it afterwards,
+    # which is what `rails tastatur:events:purge` is for. Without this, that undo
+    # stopped being an undo the moment events cost allowance: the fabricated rows
+    # would be deleted and the aggregates reconciled, but the victim's month would
+    # stay spent and their real traffic would stay refused until the 1st.
+    #
+    # Safe against the hourly repair for the same reason it exists: the events being
+    # credited have been deleted, so the aggregate no longer counts them either, and
+    # `repair` will not put them back.
+    #
+    # Floors at zero. Crediting more than was counted is a mistake in the caller's
+    # arithmetic, not a reason to hold a negative counter that then absorbs a real
+    # month of traffic.
+    def credit(account_id, count:, at: Time.current)
+      return used(account_id, at: at) if count.to_i <= 0
+
+      redis_key = key(account_id, at)
+
+      REDIS_POOL.with do |redis|
+        remaining = redis.decrby(redis_key, count.to_i)
+        next remaining unless remaining.negative?
+
+        redis.set(redis_key, 0, ex: TTL.to_i)
+        0
+      end
+    end
+
+    # Test hook. Not called from application code — an allowance is given back with
+    # `credit`, which says how much and why; deleting the key is indistinguishable
+    # from giving away a whole month.
     def reset!(account_id, at: Time.current)
       REDIS_POOL.with { |redis| redis.del(key(account_id, at)) }
     end

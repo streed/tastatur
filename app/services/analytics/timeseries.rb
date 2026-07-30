@@ -131,15 +131,20 @@ module Analytics
 
     # Filtered, or a timezone whose offset does not align to the aggregate
     # buckets. Exact, and bounded by the (site_id, occurred_at) index.
+    #
+    # The volume series is pageviews, except under an event filter, where it is
+    # the matching events (see Scope#volume_expression) — the chart's second
+    # line would otherwise sit at zero while the visitors line shows the very
+    # people who fired the event.
     def from_raw
       where, binds = @scope.raw_conditions
       bucket = @scope.bucket_expression
 
       @scope.select_all(<<~SQL, binds)
         SELECT
-          #{bucket}                                       AS bucket,
-          COUNT(DISTINCT visitor_hash)                    AS visitors,
-          COUNT(*) FILTER (WHERE event_name = 'pageview') AS pageviews
+          #{bucket}                    AS bucket,
+          COUNT(DISTINCT visitor_hash) AS visitors,
+          #{@scope.volume_expression}  AS pageviews
         FROM events
         WHERE #{where}
         GROUP BY 1

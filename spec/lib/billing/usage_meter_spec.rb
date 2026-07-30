@@ -116,6 +116,48 @@ RSpec.describe Billing::UsageMeter do
     end
   end
 
+  # THE ONE PLACE THE UPWARD-ONLY RULE YIELDS.
+  #
+  # A site token is public by construction, so someone can post events claiming the
+  # site's own hostname and there is no way to prevent it — only to bound the rate
+  # and undo it, which `rails tastatur:events:purge` is for. Without a credit, that
+  # undo stopped being an undo once events cost allowance: the rows would be deleted
+  # and the aggregates reconciled while the victim's month stayed spent and their
+  # real traffic stayed refused until the 1st.
+  describe ".credit" do
+    it "gives the allowance back" do
+      described_class.record(account.id, count: 50_000)
+
+      expect(described_class.credit(account.id, count: 30_000)).to eq(20_000)
+      expect(described_class.used(account.id)).to eq(20_000)
+    end
+
+    # Crediting more than was counted is a mistake in the caller's arithmetic, not a
+    # reason to hold a negative counter that then absorbs a real month of traffic.
+    it "floors at nothing rather than going negative" do
+      described_class.record(account.id, count: 10)
+
+      expect(described_class.credit(account.id, count: 999)).to eq(0)
+      expect(described_class.used(account.id)).to eq(0)
+    end
+
+    it "ignores a non-positive credit" do
+      described_class.record(account.id, count: 5)
+
+      expect(described_class.credit(account.id, count: 0)).to eq(5)
+      expect(described_class.credit(account.id, count: -3)).to eq(5)
+    end
+
+    # The credited events have been deleted, so the aggregate no longer counts them
+    # either — which is what stops the hourly repair from putting them straight back.
+    it "is not undone by the next reconciliation" do
+      described_class.record(account.id, count: 50_000)
+      described_class.credit(account.id, count: 50_000)
+
+      expect(described_class.repair(account.id, recorded: 0)).to eq(0)
+    end
+  end
+
   # The prefix has to be in the spec-suite reset list or counters survive between
   # examples and between whole suite runs — with a 62-day TTL, keyed by an account
   # id that `TRUNCATE ... RESTART IDENTITY` hands out again. That is not a skewed

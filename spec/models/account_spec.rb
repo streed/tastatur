@@ -1,6 +1,18 @@
 require "rails_helper"
 
 RSpec.describe Account do
+  # THE GUARD FOR EVERY LIMIT EXAMPLE IN THE SUITE.
+  #
+  # Plan limits do not apply unless billing is switched on AND configured, so a suite
+  # running unconfigured would pass every limit example by measuring nothing — and
+  # would keep passing if enforcement were deleted outright. spec/support/stripe.rb
+  # establishes the configured state; this fails, by name, if it ever stops.
+  it "runs with billing enabled, or every limit example below is vacuous" do
+    expect(Tastatur.billing_enabled?).to be(true),
+           "billing is disabled in this run, so plan limits are not being enforced and the examples " \
+           "below prove nothing. Check spec/support/stripe.rb and STRIPE_PRICE_PRO."
+  end
+
   describe "plan allowances" do
     it "reads every limit from the catalogue rather than from a column" do
       free = create(:account, plan: "free")
@@ -28,6 +40,31 @@ RSpec.describe Account do
       account = create(:account, plan: "free", event_limit_override: 0)
 
       expect(account.event_limit).to eq(0)
+    end
+
+    # The expiry exists so a mid-month downgrade cannot retroactively spend an
+    # allowance the customer already paid for: Billing::SyncSubscription grandfathers
+    # the rest of the month and dates the grant, rather than leaving it in force
+    # forever.
+    it "stops honouring an override once its expiry has passed" do
+      account = create(:account, plan: "free", event_limit_override: 3_100_000,
+                                 event_limit_override_until: 10.days.from_now)
+      expect(account.event_limit).to eq(3_100_000)
+
+      account.update!(event_limit_override_until: 1.second.ago)
+      expect(account.event_limit).to eq(100_000)
+    end
+
+    it "treats an override with no expiry as permanent, which is what support grants" do
+      account = create(:account, plan: "free", event_limit_override: 500_000)
+
+      expect(account.event_limit_override_until).to be_nil
+      expect(account.event_limit).to eq(500_000)
+    end
+
+    it "will not record an expiry with no override behind it" do
+      expect { create(:account, event_limit_override_until: 1.day.from_now) }
+        .to raise_error(ActiveRecord::StatementInvalid, /event_limit_override_expiry_check/)
     end
 
     it "refuses a negative event override and a site override below one" do

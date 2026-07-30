@@ -49,7 +49,7 @@ module Billing
 
     # The account's cap, from the process-local cache.
     def limit_for(account_id)
-      return Billing::Plan::UNLIMITED if Tastatur.self_hosted?
+      return Billing::Plan::UNLIMITED unless Tastatur.billing_enabled?
       return Billing::Plan::UNLIMITED if account_id.blank?
 
       now = Process.clock_gettime(Process::CLOCK_MONOTONIC)

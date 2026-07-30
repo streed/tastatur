@@ -132,7 +132,7 @@ namespace :tastatur do
     # read zero events against months of stored traffic until the hourly
     # reconciliation caught up. `notify: false` because nobody wants a
     # "you are near your limit" email from seeding demo data.
-    Billing::ReconcileUsage.call(notify: false) unless Tastatur.self_hosted?
+    Billing::ReconcileUsage.call(notify: false) if Tastatur.billing_enabled?
 
     puts "Done. Site token: #{site.public_token}"
   end

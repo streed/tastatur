@@ -124,5 +124,51 @@ RSpec.describe Analytics::Breakdown do
 
       expect(breakdown(dimension: "entry_page").rows.map(&:value)).to eq(["/landing"])
     end
+
+    # Entry pages are session-grain, so a filter selects sessions, and the rows
+    # are where those sessions began. ANDing the filter onto is_entry — which is
+    # what this used to do — could only ever return the filter's own value: a
+    # session that entered at /home and then read /pricing has no entry event on
+    # /pricing, so filtering by the page everyone actually visited emptied the
+    # panel of everything except (at most) /pricing itself.
+    describe "under a filter" do
+      before do
+        site.update!(k_anonymity_threshold: 0)
+        create_event(site, visitor: "v1", path: "/home", is_entry: true, at: 2.hours.ago)
+        create_event(site, visitor: "v1", path: "/pricing", at: 1.hour.ago)
+        create_event(site, visitor: "v2", path: "/elsewhere", is_entry: true, at: 1.hour.ago)
+      end
+
+      it "shows where the qualifying sessions began, not the filter value back" do
+        result = breakdown(dimension: "entry_page", filters: Analytics::Filters.new(page: "/pricing"))
+
+        expect(result.rows.map(&:value)).to eq(["/home"])
+      end
+
+      it "excludes sessions the filter does not select" do
+        result = breakdown(dimension: "entry_page", filters: Analytics::Filters.new(page: "/pricing"))
+
+        expect(result.rows.map(&:value)).not_to include("/elsewhere")
+      end
+    end
+  end
+
+  describe "percentage" do
+    # The denominator is the audience — distinct visitors under the scope —
+    # not the sum of the rows. Summing per-row visitor counts double-counts
+    # anyone who appears under several values, so every percentage understated
+    # its row: here /a would have read 66.7% instead of "everyone visited it".
+    # Rows may legitimately sum past 100%, because one visitor can be in many.
+    it "reports each row's share of the audience" do
+      site.update!(k_anonymity_threshold: 0)
+      create_event(site, visitor: "both", path: "/a", at: 2.hours.ago)
+      create_event(site, visitor: "both", path: "/b", at: 1.hour.ago)
+      create_event(site, visitor: "only-a", path: "/a", at: 1.hour.ago)
+
+      rows = breakdown.rows
+
+      expect(rows.find { |row| row.value == "/a" }.percentage).to eq(100.0)
+      expect(rows.find { |row| row.value == "/b" }.percentage).to eq(50.0)
+    end
   end
 end

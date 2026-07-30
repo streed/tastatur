@@ -1,5 +1,13 @@
 <%# Shared chrome for every Devise screen, so sign in, sign up, password reset,
-    confirmation and unlock are one shape rather than five near-misses. %>
+    confirmation and unlock are one shape rather than five near-misses.
+
+    `links: false` for a screen that is not a Devise one. The link row below calls
+    `resource_name` and `devise_mapping`, which only exist inside a Devise
+    controller — so the two-factor challenge, which looks like a sign-in screen
+    and is served by a controller of our own, raises a NameError without it. The
+    challenge carries its own actions ("send a new code", "not you?") and would
+    have nothing to say in that row anyway. %>
+<% show_links = local_assigns.fetch(:links, true) %>
 <div class="shell max-w-md py-16">
   <div class="pt-5 rule-heavy">
     <h1 class="text-2xl font-semibold mt-5"><%= title %></h1>
@@ -10,7 +18,9 @@
 
   <div class="mt-8"><%= yield %></div>
 
-  <div class="mt-8 rule pt-5 flex flex-wrap gap-x-5 gap-y-2 text-[13px] text-ink-2">
-    <%= render "devise/shared/links" %>
-  </div>
+  <% if show_links %>
+    <div class="mt-8 rule pt-5 flex flex-wrap gap-x-5 gap-y-2 text-[13px] text-ink-2">
+      <%= render "devise/shared/links" %>
+    </div>
+  <% end %>
 </div>

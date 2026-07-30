@@ -47,16 +47,67 @@ Two rules specific to this project:
   account on the wrong plan.
 - Monthly event allowances, metered on the ingest path and reconciled hourly against
   the `events_by_hour` aggregate. Events past the allowance are not recorded and
-  there is no overage charge; owners and admins are emailed at 80% and again if the
+  there is no overage charge; owners are emailed at 80% and again if the
   allowance runs out, and refused events are shown on the site's settings screen
   rather than disappearing. Bot traffic and events claiming a hostname that is not
   the customer's are dropped before metering, so no allowance is spent on
   measurement nobody can read. See `docs/architecture/billing.md`.
-- Downgrading never deletes anything: an account that cancels Pro keeps all twenty
-  sites collecting and is simply unable to add a twenty-first.
+- Downgrading never deletes anything and never cuts the month short: an account that
+  cancels Pro keeps all twenty sites collecting, is simply unable to add a
+  twenty-first, and keeps the smaller plan's full event allowance for the remainder of
+  the month it downgraded in rather than finding the month already spent.
+- Only owners see or are emailed anything about billing, matching the policy that
+  guards the recurring charge. Every link in the interface that needs a permission is
+  now shown only to somebody who has it.
+- Billing stays switched off until Stripe is actually configured, not just until
+  `SELF_HOSTED` says so. A deployment with no Stripe keys previously enforced plan
+  limits — one site, 100,000 events — behind an upgrade button whose only possible
+  answer was "payments are not configured on this instance". Now there are no limits,
+  no upgrade interface, no pricing page and no webhook endpoint until the keys are
+  present, at which point it switches itself on. The boot log says
+  `BILLING IS DISABLED` and names what is missing, because the safe state is not
+  necessarily the intended one. Selling and managing are separate: an instance that
+  can no longer sell still lets anyone who already subscribed cancel, change their
+  card or read their invoices, because Stripe keeps charging them either way and
+  taking the money while removing the cancel button is not a state to reach by
+  misconfiguration.
+
+- Optional two-factor authentication on sign-in, by emailed six-digit code. Off by
+  default and switched on per person from the account page, because it protects a
+  login rather than an account — the same switch covers every account that person
+  belongs to, and an account owner cannot set it for their teammates. A browser can
+  be trusted for thirty days so a daily user is not challenged every morning, and
+  those devices are listed and revocable individually or all at once. Email is a
+  weaker second factor than an authenticator app and the settings screen says so
+  rather than implying otherwise.
+- An instance administrator can turn somebody's two-factor authentication off, and
+  cannot turn it on. That asymmetry is the point: the off switch is the remedy for a
+  person locked out because the mailbox their codes go to stopped working, and an on
+  switch would let an operator aim a customer's codes at an address they control.
+- The marketing page and the docs answer `Accept: text/markdown` with a markdown
+  rendering of the same content (also fetchable directly as `/index.md` and
+  `/docs.md`), for LLM agents and AI crawlers that read pages as text. Browsers
+  are unaffected — a request that prefers HTML still gets HTML. An `/llms.txt`
+  index (llmstxt.org) points agents at the markdown pages and the policy
+  documents, listing pricing only where billing is actually enabled.
 
 ### Privacy
 
+- The dashboard sets a third first-party cookie when somebody uses two-factor
+  authentication and asks not to be challenged on a particular browser: a random
+  value, valid for thirty days, matching a row they can delete at any time. Like the
+  other two it is strictly necessary for a login and is disclosed on `/privacy`, in
+  the privacy policy and in the cookie notice, all of which previously said "one, and
+  a second if you ask to be remembered".
+- The trusted-device list deliberately records no browser name, operating system or
+  location. Every comparable product puts them on that screen and they would genuinely
+  help somebody recognise a device — but they are derived from a user-agent and an IP
+  address, which this project says it keeps for neither visitors nor, in that form,
+  account holders. A device is identified to its owner by when it was trusted and when
+  it was last used. `spec/privacy_invariants_spec.rb` fails a migration that adds such
+  a column.
+- Sign-in codes are stored as bcrypt digests, never in the clear, and are destroyed
+  on use, on expiry, and after five wrong guesses.
 - Visitor identity is an HMAC-SHA-256 digest of a daily-rotating random salt, the
   site id, the IP address and the user-agent, truncated to 128 bits. The IP and
   user-agent exist as local variables and are never written to the database, a log,
@@ -107,6 +158,27 @@ Two rules specific to this project:
   of replicas. The ingest path answers 202 when throttled so a measured site never
   sees an error from us.
 - Session cookies are marked secure in production, and HSTS is set.
+- A correct password no longer produces a session of any kind when a second factor
+  is outstanding. The obvious implementation — sign in, then block every request with
+  a `before_action` until the code is entered — was rejected because `/sidekiq` is
+  mounted behind a Warden check inside `config/routes.rb`, where no controller
+  callback runs; a "signed in but gated" session would have walked a stolen admin
+  password straight into the job console. The Warden session is torn down and all
+  that remains is a ten-minute marker carrying the user id, a remember-me preference
+  and the authenticatable salt, so a password changed in between invalidates it.
+- Adding a site now requires a confirmed email address, in `SitePolicy#create?`
+  rather than only in Devise's configuration. Unconfirmed users cannot hold a session
+  today, so this is belt and braces — which is exactly why it is written down: the
+  guarantee otherwise rests on `allow_unconfirmed_access_for` being `0.days`, and
+  relaxing that to let new users look around before confirming would silently hand
+  site creation to anyone who can type an address they do not own. Reading and
+  deleting are deliberately not gated.
+- Fixed a redirect loop reachable by two ordinary people. The site list redirected an
+  empty account to the "add a site" form, the form refused anyone without permission,
+  and `deny_access` redirected back to the list using the referer — round and round.
+  A viewer in an account whose sites had all been deleted could reach it, and the
+  confirmation rule above would have made it reachable for unconfirmed users too. The
+  list now only redirects somebody who could actually create a site.
 
 ### Changed
 
@@ -129,6 +201,33 @@ Two rules specific to this project:
 
 ### Fixed
 
+- **Filtering the dashboard by a custom event reported "0 pageviews" above panels
+  full of the visitors who fired it.** The filter pins `event_name` in the WHERE
+  clause and "pageviews" counts events named `pageview` — two conditions that can
+  never both hold, so the tile, the chart's volume line and the goal panel were all
+  structurally zero the moment the one panel built to surface custom events was
+  clicked. The volume metric now switches to the matching events themselves,
+  labelled "Events" wherever it is named; visits, bounce rate and duration were
+  already session-scoped and are unchanged. Goals the filtered event cannot satisfy
+  are dropped from the goal panel rather than shown as "0.0%", which read as "this
+  goal stopped converting" while measuring a contradiction.
+- **The chart clipped the visitors line whenever a bucket had more visitors than
+  pageviews.** The y-axis was scaled to the pageviews series alone, so the taller
+  visitors line was drawn above the plot area and the viewBox cut it off — on an
+  event-filtered dashboard that was every bucket, and the whole chart rendered
+  empty. Both series now bound the scale.
+- **Entry pages went degenerate under any filter.** The filter was ANDed onto
+  `is_entry`, so filtering by the page everyone visited emptied the panel of
+  everything except (at most) that page itself, and filtering by a custom event
+  emptied it entirely. Entry pages are session-grain: the filter now selects
+  sessions — the same rule bounce rate and duration already follow — and the panel
+  shows where those sessions began.
+- **Breakdown percentages divided by the wrong total.** The denominator was the sum
+  of per-row visitor counts, which counts a visitor once for every value they
+  appear under — a visitor who read three pages inflated the pages denominator
+  threefold. Percentages were computed and never rendered, so nothing visible was
+  wrong yet; the denominator is now the distinct-visitor count for the scope, so
+  the first consumer inherits a number that means "share of the audience".
 - **An existing user added to an account was told nothing at all.** Their site list
   quietly grew and they were left to notice. A brand-new invitee fared only slightly
   better: they got Devise's bare password-reset email, which out of context reads as

@@ -9,6 +9,16 @@ module Billing
   # data for. It also means there is nothing for a Content Security Policy to
   # allow — see config/initializers/content_security_policy.rb.
   class StartCheckout < ApplicationService
+    # Subscription statuses that mean Stripe still has a live relationship with this
+    # customer — either collecting, or retrying, or about to. Buying a second
+    # subscription while any of these exists means paying twice for one month.
+    #
+    # Wider than Billing::SyncSubscription::ENTITLING_STATUSES on purpose: `unpaid`
+    # does not entitle the customer to anything, but Stripe will still collect the
+    # outstanding invoice if they fix their card, so it is emphatically not a reason
+    # to sell them a second subscription.
+    LIVE_STATUSES = %w[active trialing past_due unpaid incomplete paused].freeze
+
     def initialize(account:, success_url:, cancel_url:, plan: Billing::Plan.pro)
       @account = account
       @plan = plan
@@ -20,7 +30,7 @@ module Billing
       return Failure(:not_billable) unless @account.billable?
       return Failure(:not_purchasable) unless @plan.purchasable
       return Failure(price_not_configured: @plan.stripe_price_env_var) if @plan.stripe_price_id.blank?
-      return Failure(:already_subscribed) if already_on_this_plan?
+      return Failure(:already_subscribed) if existing_subscription?
 
       session = Stripe::Checkout::Session.create(session_params(ensure_customer))
 
@@ -34,11 +44,24 @@ module Billing
 
     private
 
-    # Someone already paying should be sent to the portal to change their
-    # subscription, not through checkout again — a second checkout would create a
-    # SECOND subscription and bill them twice, and Stripe will happily do it.
-    def already_on_this_plan?
-      @account.billing_plan.key == @plan.key && @account.subscription_in_good_standing?
+    # Someone who already has a subscription must go to the portal, not through
+    # checkout again. A second checkout creates a SECOND subscription on the same
+    # Stripe customer and bills them twice, and Stripe will do it without complaint.
+    #
+    # ASKS STRIPE, NOT OUR COLUMNS. Checking `plan` and `subscription_status` was
+    # not enough, because those are written only by a successful sync — so the exact
+    # state where a second charge is most likely is the state where they are stale:
+    # the customer has paid, every webhook was refused, and the account still reads
+    # `free` with no subscription id. It also let an `unpaid` or `past_due`
+    # subscription through, where Stripe is still collecting or still retrying, so
+    # the customer could end up paying both.
+    #
+    # One extra API call, on a path taken a handful of times per customer ever.
+    def existing_subscription?
+      return false if @account.stripe_customer_id.blank?
+
+      Stripe::Subscription.list({ customer: @account.stripe_customer_id, status: "all", limit: 20 })
+                          .data.any? { |subscription| LIVE_STATUSES.include?(subscription[:status].to_s) }
     end
 
     # A Stripe customer for the account, created once and kept.

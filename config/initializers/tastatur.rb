@@ -16,6 +16,77 @@ module Tastatur
     @self_hosted
   end
 
+  # Can this instance actually take money?
+  #
+  # WHY THIS IS SEPARATE FROM `self_hosted?`. There are two reasons billing might
+  # not work, and only one of them is a deliberate choice. A self-hosted operator
+  # has switched it off. A hosted deployment with no Stripe keys has not switched
+  # anything off — it is half-configured, and until this predicate existed that
+  # produced the worst possible state: plan limits enforced, so every account was
+  # capped at one site and 100,000 events, with an upgrade button that could only
+  # answer "payments are not configured on this instance". A paywall with no
+  # cashier. Nobody chose that, and nothing said so.
+  #
+  # So configuration is treated exactly like deployment mode: until Stripe is
+  # wired up, billing does not exist. No limits, no upgrade interface, no pricing
+  # page, no webhook endpoint, no Stripe calls. The moment the variables are set it
+  # comes on by itself, with no migration and no restart-order dance.
+  #
+  # WHAT COUNTS AS CONFIGURED, and why each part:
+  #
+  #   STRIPE_SECRET_KEY      nothing can be created at Stripe without it
+  #   STRIPE_WEBHOOK_SECRET  without it every delivery is refused, so a
+  #                          subscription is paid for and never applied — the one
+  #                          failure that is invisible from the outside
+  #   a price for one plan   there has to be something to sell
+  #
+  # STRIPE_PUBLISHABLE_KEY is deliberately NOT required: payment happens on
+  # Stripe's hosted Checkout, so this application renders no card form and loads no
+  # Stripe.js. Requiring a variable nothing reads would mean a deployment that is
+  # correct being told it is broken.
+  #
+  # `any?` rather than `all?` on the prices, so a second paid plan added later
+  # without a price id degrades to "that one plan cannot be bought"
+  # (Billing::StartCheckout returns `price_not_configured`) instead of taking the
+  # whole billing system down with it.
+  def self.billing_configured?
+    stripe = Rails.configuration.stripe
+
+    stripe[:secret_key].present? &&
+      stripe[:webhook_secret].present? &&
+      Billing::Plan.purchasable_plans.any?(&:configured?)
+  end
+
+  # Can this instance SELL? Plan limits, the pricing page, checkout and the upgrade
+  # interface all ask this.
+  #
+  # Deliberately NOT memoized: it is read on the ingest path, but `self_hosted?`
+  # short-circuits it there for the deployment that cares most, and the remaining
+  # work is three `present?` calls. A memo would buy that back at the price of a
+  # stale answer after the configuration changes, which is the bug this predicate
+  # exists to prevent.
+  def self.billing_enabled?
+    !self_hosted? && billing_configured?
+  end
+
+  # Can this instance MANAGE a subscription somebody already has? A different
+  # question, and conflating the two was a real mistake.
+  #
+  # Stripe keeps charging an existing subscriber whatever our environment holds. So
+  # when a deployment loses `STRIPE_PRICE_PRO` — leaving the API key perfectly valid
+  # — gating the customer portal on `billing_enabled?` took away the only place in
+  # the product where somebody can cancel, update a card or read an invoice
+  # (Billing::StartPortalSession is deliberately the whole of it), while the money
+  # kept going out. Taking payment and removing the cancel button is not a state to
+  # arrive at by misconfiguration.
+  #
+  # The portal needs the API key and nothing else — no price, no webhook secret — so
+  # that is all this asks for. Selling stays behind `billing_enabled?`; managing what
+  # is already sold stays available.
+  def self.billing_manageable?
+    !self_hosted? && Rails.configuration.stripe[:secret_key].present?
+  end
+
   # Public signup. The hosted SaaS wants it on. A self-hosted instance exposed
   # to the internet usually does not, so it defaults off there and is opened
   # back up with ALLOW_SIGNUP=1.

@@ -31,9 +31,11 @@
     grid does the work a card border would otherwise do. -%>
 <div class="card mb-6">
   <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+    <%# The second tile is "Pageviews" except under an event filter, where the
+        metric itself changes to the matching events — see DashboardHelper#volume_label. -%>
     <% [
-         ["Unique visitors", metric_number(summary.visitors),  delta_tag(summary, :visitors)],
-         ["Pageviews",       metric_number(summary.pageviews), delta_tag(summary, :pageviews)],
+         ["Unique visitors",       metric_number(summary.visitors),  delta_tag(summary, :visitors)],
+         [volume_label(filters),   metric_number(summary.pageviews), delta_tag(summary, :pageviews)],
          ["Visits",          metric_number(summary.sessions),  delta_tag(summary, :sessions)],
          ["Bounce rate",     "#{summary.bounce_rate}%",        delta_tag(summary, :bounce_rate, lower_is_better: true)],
          ["Visit duration",  summary.formatted_duration,       delta_tag(summary, :avg_duration)]
@@ -58,12 +60,13 @@
         <span class="inline-block w-3 h-0.5 bg-signal" aria-hidden="true"></span>Visitors
       </span>
       <span class="flex items-center gap-2">
-        <span class="inline-block w-3 h-0.5 bg-petrol" aria-hidden="true"></span>Pageviews
+        <span class="inline-block w-3 h-0.5 bg-petrol" aria-hidden="true"></span><%= volume_label(filters) %>
       </span>
     </div>
   </div>
   <div class="card-body pt-6">
-    <%= timeseries_chart(report.timeseries, interval: report.period.interval) %>
+    <%= timeseries_chart(report.timeseries, interval: report.period.interval,
+                         volume_label: volume_label(filters)) %>
   </div>
 </div>
 

@@ -18,7 +18,12 @@ module Billing
     end
 
     def call
-      return Failure(:not_billable) unless @account.billable?
+      # `billing_manageable?`, NOT `billable?`. An instance that has lost its price id
+      # cannot sell, but Stripe is still charging everyone who already bought — and
+      # this is the only route in the product to cancelling or fixing a card. Gating
+      # it on the same predicate as selling took the cancel button away while the
+      # money kept going out.
+      return Failure(:not_billable) unless Tastatur.billing_manageable?
 
       # Keyed on the CUSTOMER, not the subscription, so someone who has cancelled
       # can still open the portal to read their invoices or resubscribe. An account

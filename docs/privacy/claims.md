@@ -149,7 +149,12 @@ say it is configurable per account, and say what enforces it.
 
 All of these are true, checkable in the source, and covered by specs:
 
-- Tastatur sets no cookies and reads none.
+- Tastatur sets no cookies on the sites it measures, and reads none there. Say it
+  with that qualifier. Our own dashboard sets up to three first-party cookies for
+  the account holder — a session, an optional "stay signed in", and an optional
+  "don't ask me for a code on this browser" — and the bare sentence "Tastatur sets
+  no cookies" invites somebody to find one of them and conclude the rest of this
+  list is marketing.
 - Nothing is written to the visitor's device: no localStorage, no sessionStorage,
   no IndexedDB, no cache abuse.
 - No fingerprinting: no canvas, WebGL, font, audio, plugin, battery or hardware

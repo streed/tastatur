@@ -105,12 +105,26 @@ relying on them.
 
 ## Email
 
-Only needed for confirmations, password resets and invitations.
+Needed for confirmations, password resets, invitations and two-factor sign-in codes.
 
 | Variable | Notes |
 |---|---|
 | `MAIL_FROM` | Envelope sender |
 | `RESEND_API_KEY` | Resend is wired in production; `letter_opener` is used in development |
+
+**If anyone on your instance switches on two-factor authentication, mail delivery
+stops being optional for them.** Their sign-in codes go to the address on their
+account, so a broken relay locks them out rather than merely inconveniencing them.
+
+There is a way back and it does not need a Rails console: any instance administrator
+can turn two-factor authentication off for somebody from **Admin → Users → that
+person → Turn off two-factor authentication**. It can only turn the feature off, never
+on, so an administrator cannot use it to redirect a customer's codes to an address
+they control. Keep at least two instance administrators for the same reason you keep
+two of anything that unlocks a door.
+
+The first-run wizard creates its user already confirmed and without two-factor, so a
+fresh install is always reachable before mail is configured.
 
 ## Observability
 
@@ -123,16 +137,24 @@ Only needed for confirmations, password resets and invitations.
 
 **Not read at all when `SELF_HOSTED=1`.** A self-hosted install has no plans, no
 event or site limits, no upgrade interface, and never contacts Stripe — every
-billing question asks `Tastatur.self_hosted?` first. You can leave this whole
+billing question asks `Tastatur.billing_enabled?` first. You can leave this whole
 section blank.
 
-On the hosted service all four are required, and `required_env.rb` logs an error at
-boot for any that is missing.
+**And billing stays off until these are set, even without `SELF_HOSTED=1`.** An
+instance that cannot take a payment does not enforce a plan limit either, because a
+limit nobody can lift is a dead end rather than a business model. It switches itself
+on the moment the variables are present. `required_env.rb` logs
+`BILLING IS DISABLED` at boot with the missing names, so the safe state is never a
+silent one.
+
+On the hosted service the three the application actually uses are required, and
+`required_env.rb` logs an error at boot for any of those that is missing.
+`STRIPE_PUBLISHABLE_KEY` is not checked, because nothing reads it — see the table.
 
 | Variable | Default | Notes |
 |---|---|---|
 | `STRIPE_SECRET_KEY` | unset | `sk_live_…`. Checkout and the billing portal raise without it |
-| `STRIPE_PUBLISHABLE_KEY` | unset | `pk_live_…`. Not currently used in any page — payment happens on Stripe's hosted Checkout, so no card form is rendered here — but kept because that is the pair every deployment expects to set |
+| `STRIPE_PUBLISHABLE_KEY` | unset | `pk_live_…`. **Nothing reads it**, and there is no boot warning for it: payment happens on Stripe's hosted Checkout, so this application renders no card form and loads no Stripe.js. It is kept because it is half of the pair every deployment expects to set, and because an embedded payment form would need it |
 | `STRIPE_WEBHOOK_SECRET` | unset | `whsec_…`, from the webhook endpoint you create at `https://APP_HOST/billing/stripe/webhook`. **The one whose absence fails invisibly**: the endpoint refuses every delivery, so a subscription is paid for and never applied — Stripe shows the charge, the customer stays on the free plan, and nothing raises |
 | `STRIPE_PRICE_PRO` | unset | `price_…`, the recurring monthly price for the Pro plan. Without it the plan cannot be bought |
 

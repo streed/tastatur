@@ -18,11 +18,31 @@ Stripe.open_timeout = 1
 Stripe.read_timeout = 1
 
 RSpec.configure do |config|
-  # A signing secret that specs can build real signature headers against, so
-  # webhook specs exercise Stripe::Webhook.construct_event for real rather than
-  # stubbing the one function whose correctness matters most.
+  # THE SUITE RUNS WITH BILLING CONFIGURED, and that is deliberate.
+  #
+  # `Tastatur.billing_enabled?` is false until Stripe is set up, and when it is false
+  # plan limits are not enforced at all. If the default here were the unconfigured
+  # state, every limit spec in the suite would pass by measuring nothing — the same
+  # silent-divergence trap as a factory whose default plan differs from production's.
+  #
+  # Established here rather than in .env.test because that file is gitignored: a
+  # suite whose correctness depended on it would be correct on this machine and
+  # vacuous in CI. spec/requests/billing_unconfigured_spec.rb covers the other state
+  # explicitly.
+  #
+  # The signing secret is real, so webhook specs exercise
+  # Stripe::Webhook.construct_event rather than stubbing the one function whose
+  # correctness matters most.
   config.before do
-    Rails.configuration.stripe = Rails.configuration.stripe.merge(webhook_secret: StripeWebhookHelpers::SECRET)
+    Rails.configuration.stripe = Rails.configuration.stripe.merge(
+      secret_key: "sk_test_suite",
+      webhook_secret: StripeWebhookHelpers::SECRET
+    )
+    # `blank?`, not `||=`. An empty string is truthy in Ruby, so `||=` would leave
+    # `STRIPE_PRICE_PRO=` in place — and `Plan#stripe_price_id` calls `.presence`, so
+    # that reads as unset and quietly disables billing for the whole run. Every
+    # limit spec would then pass by measuring nothing.
+    ENV["STRIPE_PRICE_PRO"] = "price_suite_default" if ENV["STRIPE_PRICE_PRO"].blank?
   end
 end
 

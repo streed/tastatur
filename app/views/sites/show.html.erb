@@ -24,6 +24,15 @@
       </div>
       <%= link_to "Funnels", site_funnels_path(@site), class: "btn btn-sm" %>
       <%= link_to "Goals", site_goals_path(@site), class: "btn btn-sm" %>
+      <%# Sharing was reachable only from the bottom of the settings form, in the
+          slot the delete-style action goes in, so getting a read-only link out to
+          a client meant three screens and a scroll. Sharing what is on screen is
+          a thought you have while looking at it, which is here. -%>
+      <% if policy(SharedLink.new(site: @site)).index? %>
+        <%= link_to "Share", site_shared_links_path(@site), class: "btn btn-sm",
+                    data: { analytics_event: "Share Links Opened",
+                            analytics_props: { source: "dashboard_header" } } %>
+      <% end %>
       <%# Which of the two routes to the snippet was taken: the header button on a
           working site is somebody re-installing or checking, the empty-state
           button below is somebody still trying to get their first event in. %>

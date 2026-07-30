@@ -10,6 +10,9 @@ export default class extends Controller {
 
   connect() {
     this.labels = JSON.parse(this.tooltipTarget.dataset.labels || "[]")
+    // "pageviews" normally, "events" when the dashboard is filtered to a
+    // custom event and the series carries matching events instead.
+    this.volumeLabel = this.tooltipTarget.dataset.volumeLabel || "pageviews"
     this.bandTargets.forEach((band) => {
       band.addEventListener("mouseenter", this.show)
       band.addEventListener("mousemove", this.move)
@@ -38,7 +41,7 @@ export default class extends Controller {
       <p class="flex items-center gap-2 num">
         <span class="inline-block w-2.5 h-0.5 bg-petrol"></span>
         <span class="font-semibold">${Number(pageviews).toLocaleString()}</span>
-        <span class="text-muted">pageviews</span>
+        <span class="text-muted">${this.volumeLabel}</span>
       </p>`
 
     this.tooltipTarget.classList.remove("hidden")

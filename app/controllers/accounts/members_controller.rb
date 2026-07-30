@@ -69,6 +69,10 @@ module Accounts
     # than bouncing to a flash message that loses what was typed.
     def render_account_with_errors
       @memberships = policy_scope(Membership).includes(:user).order(:role, :created_at)
+      # The account page renders the two-factor card too, so re-rendering it from
+      # here has to supply everything that page reads. A missing ivar would be a
+      # NoMethodError on nil reachable only by mistyping an email address.
+      @trusted_devices = current_user.visible_trusted_devices
       render "accounts/show", status: :unprocessable_entity
     end
   end

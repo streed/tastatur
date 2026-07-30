@@ -19,13 +19,54 @@
       <%# No "Add a site" button when it cannot succeed. The link goes where the
           limit can actually be changed, or nowhere at all on a plan that is
           already the largest. -%>
-      <% if current_account.can_upgrade? %>
+      <%# Only to somebody who can act on it: billing is owner-only, so pointing an
+          admin at the plan screen is pointing them at a redirect. %>
+      <% if current_account.can_upgrade? && policy(current_account).manage_billing? %>
         <%= link_to "Add more sites", billing_path, class: "btn btn-primary" %>
       <% end %>
-    <% else %>
+    <% elsif policy(Site).create? %>
+      <%# Site creation is admin-and-up, so a member or a viewer was previously
+          offered a button that could only redirect them back with "you do not have
+          access to that". Every link added here is gated on being able to act on
+          it — capacity AND permission. -%>
       <%= link_to "Add a site", new_site_path, class: "btn btn-primary" %>
     <% end %>
   </div>
+
+  <%# The one refusal that is not about permissions or capacity, so it is stated
+      here rather than left to a flash on a form the person cannot open. Note it
+      renders whether or not they have sites: an address can become unconfirmed
+      later, and the sentence is just as true then. -%>
+  <% unless current_user.confirmed? %>
+    <div class="notice border-signal text-ink mb-6" role="status">
+      <p class="font-semibold mb-1">Confirm your email address to add a site.</p>
+      <p class="text-sm">
+        We sent a link to <strong><%= current_user.email %></strong> when you signed up. A site
+        starts accepting traffic from somebody else's website the moment it exists, which is not
+        something to set up against an address nobody has proved they can read.
+      </p>
+      <p class="mt-3">
+        <%= link_to "Send the confirmation email again", new_user_confirmation_path,
+                    class: "btn btn-sm" %>
+      </p>
+    </div>
+  <% end %>
+
+  <% if @sites.empty? %>
+    <%# Reached only when the redirect to the form was declined — see
+        SitesController#index. Somebody landing on an empty list needs to know
+        which of the two reasons applies to them. -%>
+    <div class="card card-body text-center py-12">
+      <p class="text-sm text-ink-2">
+        <% if current_user.confirmed? %>
+          No sites here yet. Adding one is an admin's job on this account — ask an owner or an
+          admin, and it will appear here.
+        <% else %>
+          No sites here yet. Confirm your email address above and you can add the first one.
+        <% end %>
+      </p>
+    </div>
+  <% else %>
 
   <div class="card">
     <% @sites.each do |site| %>
@@ -44,4 +85,5 @@
       <% end %>
     <% end %>
   </div>
+  <% end %>
 </div>

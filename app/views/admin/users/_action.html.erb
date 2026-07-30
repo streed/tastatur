@@ -4,6 +4,10 @@
     control. "Confirm" greyed out with no explanation is indistinguishable from a
     broken page. -%>
 <% disabled_note = local_assigns[:disabled_note] %>
+<%# POST unless told otherwise. The two-factor action is a DELETE because it only
+    ever removes — see Admin::UserPolicy#disable_two_factor?. -%>
+<% method = local_assigns.fetch(:method, :post) %>
+<% confirm = local_assigns[:confirm] %>
 <div class="flex items-start justify-between gap-4 px-5 py-4 border-b border-rule last:border-b-0">
   <div>
     <p class="text-sm font-medium"><%= label %></p>
@@ -13,7 +17,8 @@
     <% if disabled %>
       <span class="label"><%= disabled_note %></span>
     <% else %>
-      <%= button_to button, path, class: "btn btn-sm" %>
+      <%= button_to button, path, method: method, class: "btn btn-sm",
+                    form: confirm ? { data: { turbo_confirm: confirm } } : {} %>
     <% end %>
   </div>
 </div>
