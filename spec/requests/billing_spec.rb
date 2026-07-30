@@ -61,17 +61,17 @@ RSpec.describe "Billing", type: :request do
     before { sign_in owner }
 
     it "reports the month's usage against the plan" do
-      Billing::UsageMeter.record(account.id, count: 42_000)
+      Billing::UsageMeter.record(account.id, count: 210_000)
 
       get "/billing"
 
-      expect(response.body).to include("42,000")
-      expect(response.body).to include("100,000")
+      expect(response.body).to include("210,000")
+      expect(response.body).to include("500,000")
       expect(response.body).to include("42% used")
     end
 
     it "says how many events were refused once the allowance is gone" do
-      Billing::UsageMeter.record(account.id, count: 118_402)
+      Billing::UsageMeter.record(account.id, count: 518_402)
 
       get "/billing"
 

@@ -5,7 +5,7 @@ module Billing
   # is that no card number ever touches this application or its logs, which keeps
   # the PCI obligation at SAQ-A and means the payment page is maintained by
   # somebody whose full-time job it is. The cost is a redirect off-site, which for
-  # a $40/month B2B subscription is not a conversion problem worth taking payment
+  # a $30/month B2B subscription is not a conversion problem worth taking payment
   # data for. It also means there is nothing for a Content Security Policy to
   # allow — see config/initializers/content_security_policy.rb.
   class StartCheckout < ApplicationService

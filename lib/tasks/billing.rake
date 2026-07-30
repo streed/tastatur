@@ -3,7 +3,7 @@
 # THE FAILURE THIS EXISTS TO CATCH: the price is edited in the Stripe dashboard —
 # a currency switch, a promotional amount, a new price id pasted into the wrong
 # environment — and nothing in this application notices. The pricing page keeps
-# publishing $40, customers keep being charged something else, and the first report
+# publishing $30, customers keep being charged something else, and the first report
 # comes from a customer reading their card statement.
 #
 # It is a task rather than a boot check on purpose. `assets:precompile` boots the

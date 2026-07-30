@@ -115,4 +115,31 @@
   <% end %>
 </div>
 
+<%# --- Custom event properties ---------------------------------------------
+    Only present when the dashboard is scoped to one custom event, because a
+    property means nothing detached from the event that carried it — see
+    Analytics::Dashboard#properties. `report.properties` is therefore empty on
+    the ordinary dashboard and on every public shared dashboard, so this whole
+    section costs nothing there.
+
+    Given its own heading rather than being appended to the grid above: these
+    rows are the customer's own data at a finer grain than anything else on the
+    page, and the eight panels above are about the audience while these are
+    about what the audience did. -%>
+<% if report.properties.present? %>
+  <div class="mt-6">
+    <div class="flex items-baseline gap-3 mb-4">
+      <h2 class="text-sm font-semibold">Properties</h2>
+      <%# Names the event, so the panels below cannot be read as site-wide. %>
+      <p class="label">sent with <%= report.filters["event"] || "these events" %></p>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-6">
+      <% report.properties.each do |panel| %>
+        <%= render "sites/breakdown", site: site, panel: panel, drillable: drillable %>
+      <% end %>
+    </div>
+  </div>
+<% end %>
+
 <% end %>

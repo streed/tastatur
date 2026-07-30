@@ -135,7 +135,7 @@ class Account < ApplicationRecord
   # The expiry exists because a mid-month downgrade would otherwise be retroactive:
   # the meter counts every event received in the calendar month, so an account that
   # recorded three million events on Pro and then cancelled would be measured
-  # against Free's 100,000 and refused everything for the rest of the month.
+  # against Free's 500,000 and refused everything for the rest of the month.
   # Billing::GrandfatherAllowance handles that by writing an override of
   # "already used + the new allowance", expiring at the end of the month.
   #

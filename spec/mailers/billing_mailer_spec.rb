@@ -7,15 +7,15 @@ RSpec.describe BillingMailer do
   before { create(:membership, account: account, user: owner, role: "owner") }
 
   describe "the warning at 80%" do
-    before { Billing::UsageMeter.record(account.id, count: 82_000) }
+    before { Billing::UsageMeter.record(account.id, count: 410_000) }
 
     subject(:mail) { described_class.usage_threshold(account, owner, "approaching") }
 
     it "says how far through the allowance the account is" do
       expect(mail.to).to eq([owner.email])
       expect(mail.subject).to eq("Acme is at 82% of its monthly events")
-      expect(mail.body.encoded).to include("82,000")
-      expect(mail.body.encoded).to include("100,000")
+      expect(mail.body.encoded).to include("410,000")
+      expect(mail.body.encoded).to include("500,000")
       expect(mail.body.encoded).to include("Nothing has been dropped")
     end
 
@@ -26,7 +26,7 @@ RSpec.describe BillingMailer do
   end
 
   describe "the message once the allowance is gone" do
-    before { Billing::UsageMeter.record(account.id, count: 118_402) }
+    before { Billing::UsageMeter.record(account.id, count: 518_402) }
 
     subject(:mail) { described_class.usage_threshold(account, owner, "exceeded") }
 
@@ -62,7 +62,7 @@ RSpec.describe BillingMailer do
   # serialised. Enqueuing for real is what proves that, and it is the only path
   # anything uses.
   it "can be delivered later, which is how it is always sent" do
-    Billing::UsageMeter.record(account.id, count: 90_000)
+    Billing::UsageMeter.record(account.id, count: 450_000)
 
     expect { described_class.usage_threshold(account, owner, "approaching").deliver_later }
       .to have_enqueued_mail(described_class, :usage_threshold)

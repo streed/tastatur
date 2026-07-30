@@ -120,6 +120,17 @@
         </div>
 
         <p class="text-[14px] text-ink-2 leading-relaxed">
+          <strong class="text-ink">Where they show up.</strong> Custom events get their own panel on
+          the dashboard. Click one and the whole dashboard scopes to it, with a card per property
+          key listing its top values &mdash; click one of those to narrow further. Properties are
+          only shown against a chosen event, because <code>plan=pro</code> on a signup and
+          <code>plan=pro</code> on a cancellation are not the same fact and a pooled total of the
+          two means nothing. Property rows are held to the same
+          <%= link_to "k-anonymity threshold", privacy_path, class: "underline hover:text-ink" %>
+          as every other breakdown.
+        </p>
+
+        <p class="text-[14px] text-ink-2 leading-relaxed">
           If you call <code>tastatur()</code> from code that may run before the deferred script has
           loaded, add this stub first. It queues calls and replays them once the script is ready.
         </p>

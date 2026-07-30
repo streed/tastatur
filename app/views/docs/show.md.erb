@@ -65,6 +65,14 @@ tastatur('event', 'Signup', { props: { plan: 'pro', source: 'pricing-page' } })
   contents you control, and nothing in Tastatur can tell that
   `{ email: "…" }` should not have been sent.
 
+**Where they show up.** Custom events get their own panel on the dashboard.
+Click one and the whole dashboard scopes to it, with a card per property key
+listing its top values — click one of those to narrow further. Properties are
+only shown against a chosen event, because `plan=pro` on a signup and
+`plan=pro` on a cancellation are not the same fact and a pooled total of the
+two means nothing. Property rows are held to the same k-anonymity threshold as
+every other breakdown.
+
 If you call `tastatur()` from code that may run before the deferred script has
 loaded, add this stub first. It queues calls and replays them once the script
 is ready.

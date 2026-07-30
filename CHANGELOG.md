@@ -25,6 +25,13 @@ Two rules specific to this project:
 - Funnels with per-step conversion and drop-off, steps addable and removable in the
   form rather than a fixed number of rows.
 - Goals and conversion tracking, for both pageview paths and custom events.
+- Custom event properties are now readable. `tastatur('event', 'Signup', { props:
+  { plan: 'pro' } })` has been accepted, validated and stored since the beginning
+  and displayed by nothing, so following the documented call produced data no
+  screen could show. Scoping the dashboard to a custom event now renders a card
+  per property key with its top values, and a value can be filtered on
+  (`?props[plan]=pro`). Shown only against a chosen event, because the same
+  property on two different events is not one fact.
 - Public shareable dashboards, with an optional password and an expiry.
 - Team accounts with invitations and roles, enforced through Pundit policies.
 - Self-hosting mode: billing and plan limits switched off, a first-run setup wizard,
@@ -93,6 +100,19 @@ Two rules specific to this project:
 
 ### Privacy
 
+- Custom event property values are now displayed, and are subject to the same
+  k-anonymity threshold and complementary suppression as every other breakdown row.
+  This is the first breakdown in the application whose row values are chosen entirely
+  by the customer rather than derived from a request, so a single row can be a single
+  person by construction rather than by coincidence — which is why the suppression was
+  moved into `Analytics::Suppression` and shared, instead of reimplemented alongside
+  the new query. Property panels are not rendered on public shared dashboards, which
+  are deliberately unfiltered.
+- Tastatur's own self-measurement records that somebody filtered by a property, never
+  which property. A property key is the customer's own schema — `plan`, but equally
+  `user_id` or `email_domain` — and putting it in our analytics database is the thing
+  the rest of this list exists to prevent. Same rule that already keeps breakdown row
+  values out of those events; `spec/requests/event_properties_spec.rb` pins it.
 - The dashboard sets a third first-party cookie when somebody uses two-factor
   authentication and asks not to be challenged on a particular browser: a random
   value, valid for thirty days, matching a row they can delete at any time. Like the

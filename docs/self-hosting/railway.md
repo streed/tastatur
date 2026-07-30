@@ -180,7 +180,7 @@ For the hosted service, four variables plus three things in the Stripe dashboard
 In Stripe:
 
 1. One product with a **recurring monthly** price matching `Billing::Plan::PRO`
-   (currently $40). Copy its price id into `STRIPE_PRICE_PRO`.
+   (currently $30). Copy its price id into `STRIPE_PRICE_PRO`.
 2. A webhook endpoint at `https://YOUR_DOMAIN/billing/stripe/webhook`, subscribed to
    exactly the events in `Billing::ApplyStripeEvent::HANDLED`:
    `checkout.session.completed`, `customer.subscription.created`,

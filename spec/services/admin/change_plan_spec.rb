@@ -40,7 +40,7 @@ RSpec.describe Admin::ChangePlan do
     expect(result).to be_success
     account.reload
     expect(account.plan).to eq("free")
-    expect(account.event_limit).to eq(3_100_000)
+    expect(account.event_limit).to eq(3_500_000)
     expect(account.event_limit_override_until).to eq(Billing::UsageMeter.period_bounds.last)
   end
 

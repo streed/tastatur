@@ -249,37 +249,12 @@ module Analytics
       SQL
     end
 
-    # Rows seen by fewer than k distinct visitors are withheld.
-    #
-    # The argument: a breakdown row is a statement that "someone who did X also
-    # did Y". When only two people in Liechtenstein visited a niche page, that
-    # row plus a rough visit time is enough for someone with outside knowledge
-    # to work out who. At k=25 the row describes a crowd rather than a person.
-    #
-    # COMPLEMENTARY SUPPRESSION. Hiding the small rows is not sufficient on its
-    # own. If exactly one row falls below the threshold, then
-    #
-    #     that row's value = reported total − sum of the visible rows
-    #
-    # and the suppression has protected nothing. The standard fix from
-    # statistical disclosure control is to suppress a second row as well — the
-    # smallest surviving one — so the withheld total covers at least two rows
-    # and cannot be attributed to either. It costs one row of usefulness and is
-    # the difference between suppression that works and suppression that only
-    # looks like it does.
+    # k-anonymity, including complementary suppression, lives in
+    # Analytics::Suppression so that this panel and the custom-event property
+    # panels cannot drift apart. See that file for the reasoning; it is the
+    # whole argument for why breakdowns are a service rather than a scope.
     def partition(rows)
-      threshold = @scope.k_threshold
-      return [rows, []] if threshold.zero?
-
-      kept, withheld = rows.partition { |row| row["visitors"].to_i >= threshold }
-
-      if withheld.one? && kept.any?
-        smallest = kept.min_by { |row| row["visitors"].to_i }
-        kept -= [smallest]
-        withheld += [smallest]
-      end
-
-      [kept, withheld]
+      Suppression.partition(rows, threshold: @scope.k_threshold)
     end
 
     def to_row(row, total)

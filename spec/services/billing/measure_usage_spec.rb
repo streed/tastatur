@@ -7,7 +7,7 @@ RSpec.describe Billing::MeasureUsage do
     snapshot = described_class.call(account: account, at: Time.utc(2026, 7, 15)).value!
 
     expect(snapshot.plan).to eq(Billing::Plan.free)
-    expect(snapshot.event_limit).to eq(100_000)
+    expect(snapshot.event_limit).to eq(500_000)
     expect(snapshot.site_limit).to eq(1)
     expect(snapshot.period_start).to eq(Time.utc(2026, 7, 1))
     expect(snapshot.period_end).to eq(Time.utc(2026, 8, 1))

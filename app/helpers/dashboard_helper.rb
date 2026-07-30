@@ -33,6 +33,19 @@ module DashboardHelper
     dashboard_url_for(site, filters: @filters.without(dimension))
   end
 
+  # What we record about a filter interaction in our OWN analytics.
+  #
+  # For the sixteen fixed dimensions this is just the key — "page", "source" —
+  # which is our vocabulary and says nothing about the site being looked at. A
+  # custom event property key is not: the customer chose it, and `user_id`,
+  # `workspace` or `email_domain` are all as likely to arrive as `plan`. The
+  # whole argument for this product is that we do not put a customer's own
+  # schema in an analytics database, so every property collapses to the constant
+  # "property" — enough to learn that the panels get used, and nothing else.
+  def analytics_dimension(key)
+    Analytics::Filters.property?(key) ? "property" : key.to_s
+  end
+
   def metric_number(value)
     return number_with_delimiter(value) if value < 100_000
 

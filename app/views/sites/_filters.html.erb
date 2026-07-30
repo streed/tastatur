@@ -8,10 +8,13 @@
         <span class="font-semibold"><%= key == "country" ? country_name(value) : value %></span>
         <%# The dimension, never `value`, which is beside it on screen and is a
             path or a country belonging to this site's visitors. %>
+        <%# `analytics_dimension`, not `key`: for a custom event property the key
+            is "props:" plus a name the customer invented, which is their schema
+            and not ours to record. See DashboardHelper#analytics_dimension. %>
         <%= link_to "×", remove_filter_url(site, key), class: "chip-x",
                     "aria-label": "Remove #{filters.label_for(key)} filter",
                     data: { analytics_event: "Filter Removed",
-                            analytics_props: { dimension: key } } %>
+                            analytics_props: { dimension: analytics_dimension(key) } } %>
       </span>
     <% end %>
 
