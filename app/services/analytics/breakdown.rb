@@ -56,14 +56,22 @@ module Analytics
       end
     end
 
-    # `entry_page` is the one dimension that is not simply a column: it means "path,
-    # for the first event of a visit". Expressed as a conditional column so it can
-    # take part in the same GROUPING SETS pass; rows where the event is not an entry
-    # collapse into a NULL group, which is dropped below.
-    def self.select_expression(dimension)
-      return "CASE WHEN is_entry THEN path END" if dimension == "entry_page"
+    # Two dimensions are not simply a column, and both are expressed the same way:
+    # as a CASE that yields NULL for the rows they do not describe, so they can ride
+    # along in the same GROUPING SETS pass. The NULL bucket each one collects is
+    # dropped in `result_from`.
+    #
+    #   entry_page  "path, for the first event of a visit"
+    #   event       "the name, for events that are not pageviews" — without the
+    #               exclusion the panel is one enormous `pageview` row and nothing
+    #               else, which is every row on the site and tells you nothing.
+    CONDITIONAL = {
+      "entry_page" => "CASE WHEN is_entry THEN path END",
+      "event" => "CASE WHEN event_name <> 'pageview' THEN event_name END"
+    }.freeze
 
-      Filters::DIMENSIONS.fetch(dimension)
+    def self.select_expression(dimension)
+      CONDITIONAL[dimension] || Filters::DIMENSIONS.fetch(dimension)
     end
 
     def self.grouped_rows(scope, dimensions)
@@ -123,10 +131,11 @@ module Analytics
     # Shared by the single-dimension and batch paths, so both apply exactly the same
     # suppression to exactly the same row shape.
     def result_from(rows)
-      # The batch query groups entry_page over `CASE WHEN is_entry THEN path END`,
-      # which collects every non-entry event into one NULL bucket. That bucket is not
-      # an entry page; it is the absence of one.
-      rows = rows.reject { |row| row["value"].nil? } if @dimension == "entry_page"
+      # A conditional dimension collects everything it does not describe into a
+      # single NULL bucket — every non-entry event for entry_page, every pageview
+      # for event. That bucket is not a value, it is the absence of one, and left in
+      # it would be both the largest row in the panel and meaningless.
+      rows = rows.reject { |row| row["value"].nil? } if CONDITIONAL.key?(@dimension)
 
       total = rows.sum { |row| row["visitors"].to_i }
       kept, withheld = partition(rows)
@@ -144,9 +153,12 @@ module Analytics
     def fetch(column)
       where, binds = @scope.raw_conditions
 
-      # entry_page asks about the first page of a session, which is a filter on
-      # the row rather than a different column.
+      # The single-dimension path expresses the conditional dimensions as a WHERE
+      # rather than the CASE the batch path needs, because with one grouping there
+      # is no NULL bucket to keep the row count aligned. Same rows either way, and
+      # breakdown_batch_spec asserts exactly that, dimension by dimension.
       where += " AND is_entry" if @dimension == "entry_page"
+      where += " AND event_name <> 'pageview'" if @dimension == "event"
 
       # Ordering by visitors then pageviews keeps the ranking stable when two
       # rows tie on visitors, so a table does not reshuffle between refreshes.

@@ -1,5 +1,30 @@
 <% summary = report.summary
-   drillable = local_assigns.fetch(:drillable, true) %>
+   drillable = local_assigns.fetch(:drillable, true)
+   filters = local_assigns[:filters] %>
+
+<%# The turbo-frame lives INSIDE this partial, not around it.
+
+    Turbo replaces a frame with the matching <turbo-frame> element found in the
+    RESPONSE. sites#show answers a frame request by rendering this partial alone,
+    so while the frame was wrapped around the render in show.html.erb the frame
+    response contained no frame at all — and every breakdown row click, the one
+    interaction this frame exists to serve, answered 200 and rendered
+    "Content Missing". A full page load looked perfect, which is why it survived.
+    Same lesson as installations/_status.html.erb; the frame belongs with the
+    thing that gets re-rendered.
+
+    `turbo_action: advance` because the filter state is carried entirely in the
+    URL (see DashboardHelper) and that is the whole reason a filtered dashboard is
+    shareable and survives the back button. A frame navigation does not touch the
+    URL bar by default, which would have quietly cost all three. -%>
+<%= turbo_frame_tag "dashboard", data: { turbo_action: "advance" } do %>
+
+<%# The applied-filter chips render INSIDE the frame, because drilling into a row
+    is what creates a filter and the chips are the only way to see or remove one.
+    Left outside, the panels would filter and nothing on screen would say so. -%>
+<% if drillable && filters %>
+  <%= render "sites/filters", site: site, filters: filters %>
+<% end %>
 
 <%# --- Stat row -------------------------------------------------------------
     A strict five-column grid separated by hairlines rather than boxes: the
@@ -86,3 +111,5 @@
     <%= render "sites/breakdown", site: site, panel: panel, drillable: drillable %>
   <% end %>
 </div>
+
+<% end %>
