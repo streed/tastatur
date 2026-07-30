@@ -78,6 +78,29 @@ Rails.application.routes.draw do
   get "dashboard", to: "pages#dashboard"
   root to: "pages#home"
 
+  # --- Instance administration ----------------------------------------------
+  # The `admin` flag on User: an operator of this installation, which is a
+  # different thing from being an admin OF an account. See Admin::BasePolicy.
+  namespace :admin do
+    root to: "dashboard#show"
+
+    # Members are addressed by public_id, not by id — /admin/users/4 would tell
+    # anyone who saw it roughly how many customers exist. See PubliclyIdentified.
+    resources :users, only: %i[index show] do
+      member do
+        post   :confirm
+        post   :unlock
+        post   :resend_confirmation
+        post   :send_password_reset
+        post   :grant_admin
+        delete :revoke_admin
+      end
+    end
+
+    # Listed, never opened. Admin::SitePolicy has no show action on purpose.
+    resources :sites, only: %i[index]
+  end
+
   require "sidekiq/web"
   require "sidekiq/cron/web"
   authenticate :user, ->(u) { u.respond_to?(:admin?) && u.admin? } do

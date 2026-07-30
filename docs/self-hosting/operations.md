@@ -260,3 +260,53 @@ If a site was deleted and you expect space back, note that
 `Sites::Delete` issues a `DELETE` on the events table rather than dropping
 chunks — chunks hold every site's rows, so they cannot be dropped per-tenant.
 The space returns after autovacuum.
+
+## Administrators, and what they can and cannot see
+
+`admin` on a user is the **instance** operator flag. It is deliberately not the
+same thing as being an admin *of* an account — that is a membership role, set
+per-account from the team screen, and it confers nothing over the instance.
+
+```bash
+bin/rails tastatur:admin:list
+bin/rails 'tastatur:admin:grant[you@example.com]'
+bin/rails 'tastatur:admin:revoke[them@example.com]'
+```
+
+Or declaratively, which is what a deployment should prefer: set `ADMIN_EMAILS`
+to a comma-separated list and run `tastatur:admin:sync` from your deploy step
+(the Railway config already does). It is idempotent and **only ever grants**.
+Revoking from an env var would mean a typo, or a variable that failed to load,
+silently locking every administrator out of the console you would go to in order
+to fix it. Somebody listed who has not signed up yet is picked up by a later run.
+
+Neither the console nor the rake task will remove the **last** administrator, and
+nobody can remove their own flag. An instance with zero administrators can only be
+recovered from a shell on the server.
+
+### What /admin shows
+
+Instance operations: user and account counts, signups, event volume, which sites
+are still waiting for their first event, queue depths, and whether the salt,
+GeoIP database and write buffer are healthy. Support actions on a person —
+confirm an address, unlock an account, resend a confirmation, send a password
+reset.
+
+### What it deliberately does not
+
+- **No customer measurement data.** Sites are listed, never opened.
+  `Admin::SitePolicy#show?` returns `false`, so a link into someone's dashboard
+  cannot be added by accident. What a site measured belongs to that customer's
+  audience, and `/dpa` commits to not using it for our own purposes — a support
+  console rendering somebody's top pages would make that a sentence needing
+  qualification.
+- **No impersonation, and no setting a password.** Either would hand an operator
+  every dashboard on the instance. The reset action emails a token to the address
+  on file, so the person who can use it is the person who owns the mailbox.
+- **No sign-in IP.** Devise's trackable does store it, and
+  `docs/privacy/claims.md` is explicit that it exists so a *customer* can notice a
+  sign-in that was not theirs. That is a reason for them to see it, not a reason
+  for an operator to browse it.
+
+Administrative actions are written to the log with the administrator's address,
+so "who unlocked this account" has an answer that does not rely on memory.

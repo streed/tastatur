@@ -57,6 +57,16 @@
                 <%= link_to "Plan", billing_path, class: "btn btn-quiet btn-sm" %>
               <% end %>
               <%= link_to "Docs", docs_path, class: "btn btn-quiet btn-sm" %>
+              <%# Instance administrators only, and shown to nobody else — the flag
+                  is a property of the person, not of the account they are acting
+                  as, so it does not go through `policy`. Marked with the signal
+                  dot because these screens reach across every account and a link
+                  that looks like the others is one whose reach is easy to forget. %>
+              <% if current_user.admin? %>
+                <%= link_to admin_root_path, class: "btn btn-quiet btn-sm" do %>
+                  Admin<span class="w-1.5 h-1.5 bg-signal inline-block ml-1.5 align-middle" aria-hidden="true"></span>
+                <% end %>
+              <% end %>
             </nav>
           <% end %>
         </div>

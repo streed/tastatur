@@ -1,0 +1,171 @@
+<% content_for :title, "#{@user.email} · Admin" %>
+
+<div class="shell max-w-4xl">
+  <%= render "admin/nav" %>
+
+  <div class="flex flex-wrap items-end justify-between gap-4 mb-6">
+    <div class="min-w-0">
+      <h2 class="text-xl font-semibold truncate"><%= @user.email %></h2>
+      <p class="label mt-2">
+        <%= @user.name.presence || "no name" %>
+        <span class="mx-2">·</span>joined <%= @user.created_at.to_date.to_fs(:long) %>
+      </p>
+    </div>
+    <div class="flex items-center gap-2">
+      <% unless @user.confirmed? %><span class="chip"><span class="chip-key">unconfirmed</span></span><% end %>
+      <% if @user.locked? %><span class="chip"><span class="chip-key">locked</span></span><% end %>
+      <% if @user.admin? %><span class="chip"><span class="chip-key">instance admin</span></span><% end %>
+    </div>
+  </div>
+
+  <%# --- Status ---------------------------------------------------------------
+      Sign-in COUNT and TIME, never the address. Devise's trackable does record
+      current_sign_in_ip, and docs/privacy/claims.md is explicit that this is the
+      one IP the product stores and that it exists so a customer can notice a
+      sign-in that was not theirs. That is a reason for THEM to see it, not a
+      reason for an operator to browse it, so it is not rendered here. -%>
+  <div class="card mb-6">
+    <div class="card-head"><h2 class="text-sm font-semibold">Status</h2></div>
+    <div class="grid sm:grid-cols-2">
+      <% [
+           ["Email confirmed", @user.confirmed? ? @user.confirmed_at.to_fs(:long) : "not confirmed"],
+           ["Locked", @user.locked? ? "since #{@user.locked_at.to_fs(:long)}" : "no"],
+           ["Sign-ins", metric_number(@user.sign_in_count.to_i)],
+           ["Last seen", @user.last_sign_in_at ? "#{time_ago_in_words(@user.last_sign_in_at)} ago" : "never signed in"],
+           ["Failed attempts", metric_number(@user.failed_attempts.to_i)],
+           ["Identifier", @user.public_id]
+         ].each_with_index do |(label, value), index| %>
+          <div class="px-5 py-4 border-b border-rule <%= "sm:border-l sm:border-rule" if index.odd? %>">
+            <p class="label"><%= label %></p>
+            <p class="text-sm mt-1.5 break-all"><%= value %></p>
+          </div>
+      <% end %>
+    </div>
+  </div>
+
+  <%# --- Support actions ------------------------------------------------------
+      Everything here is something this person could do themselves if they were
+      not locked out, unconfirmed, or unable to receive our mail.
+
+      There is deliberately no "sign in as" and no "set password". Either would
+      hand an operator every dashboard on the instance, which is exactly what the
+      rest of this codebase is arranged to prevent. The reset below sends a token
+      to the address on file, so the person who can use it is the person who owns
+      the mailbox. -%>
+  <div class="card mb-6">
+    <div class="card-head"><h2 class="text-sm font-semibold">Help this person</h2></div>
+    <div>
+      <%= render "admin/users/action",
+                 label: "Confirm email address",
+                 blurb: "Marks the address confirmed without them clicking the link. For a confirmation mail that bounced or was filtered.",
+                 button: "Confirm",
+                 path: confirm_admin_user_path(@user),
+                 disabled: @user.confirmed?,
+                 disabled_note: "Already confirmed." %>
+
+      <%= render "admin/users/action",
+                 label: "Resend confirmation email",
+                 blurb: "Sends the confirmation link again, to the same address.",
+                 button: "Resend",
+                 path: resend_confirmation_admin_user_path(@user),
+                 disabled: @user.confirmed?,
+                 disabled_note: "Already confirmed." %>
+
+      <%= render "admin/users/action",
+                 label: "Unlock account",
+                 blurb: "Devise locks after repeated failed sign-ins. The alternative is telling a customer to come back later.",
+                 button: "Unlock",
+                 path: unlock_admin_user_path(@user),
+                 disabled: !@user.locked?,
+                 disabled_note: "Not locked." %>
+
+      <%= render "admin/users/action",
+                 label: "Send a password reset",
+                 blurb: "Emails a reset link to the address on file. It does not set a password — nobody here can choose theirs.",
+                 button: "Send reset",
+                 path: send_password_reset_admin_user_path(@user),
+                 disabled: false %>
+    </div>
+  </div>
+
+  <%# --- Accounts and sites ---------------------------------------------------
+      What they own, and whether it is collecting. NOT what it measured: there is
+      no link from here into anybody's dashboard, and Admin::SitePolicy#show? is
+      false so one could not be added by accident. -%>
+  <div class="card mb-6">
+    <div class="card-head">
+      <h2 class="text-sm font-semibold">Accounts</h2>
+      <span class="label"><%= pluralize(@accounts.size, "account") %></span>
+    </div>
+    <% if @accounts.any? %>
+      <div>
+        <% @accounts.each do |account| %>
+          <div class="px-5 py-4 border-b border-rule last:border-b-0">
+            <div class="flex items-center justify-between gap-4">
+              <p class="font-medium"><%= account.name %></p>
+              <span class="label">
+                <%= account.plan %>
+                <span class="mx-2">·</span><%= @user.role_in(account) || "—" %>
+              </span>
+            </div>
+
+            <% if account.sites.any? %>
+              <div class="mt-3 space-y-1.5">
+                <% account.sites.each do |site| %>
+                  <div class="flex items-center justify-between gap-4 text-[12px]">
+                    <span class="text-ink-2 truncate"><%= site.domain %></span>
+                    <span class="<%= site.receiving_data? ? "text-muted" : "text-negative font-semibold" %> shrink-0">
+                      <%= site.receiving_data? ? "collecting" : "no data yet" %>
+                    </span>
+                  </div>
+                <% end %>
+              </div>
+            <% else %>
+              <p class="text-[12px] text-muted mt-2">No sites.</p>
+            <% end %>
+          </div>
+        <% end %>
+      </div>
+    <% else %>
+      <p class="px-5 py-8 text-center text-sm text-muted">
+        No accounts. Their only account was deleted, which is worth knowing: it is
+        the state that makes the application redirect them away from site creation.
+      </p>
+    <% end %>
+  </div>
+
+  <%# --- Instance admin -------------------------------------------------------- %>
+  <div class="card">
+    <div class="card-head"><h2 class="text-sm font-semibold">Instance administrator</h2></div>
+    <div class="px-5 py-4">
+      <p class="text-[12px] text-muted leading-relaxed max-w-xl mb-4">
+        An operator of this installation — every screen under /admin and the Sidekiq
+        console. Not the same thing as being an admin <em>of</em> an account, which is
+        set per-account from the team screen.
+      </p>
+
+      <% if @user.admin? %>
+        <% if policy([:admin, @user]).revoke_admin? %>
+          <%= button_to "Revoke instance admin", revoke_admin_admin_user_path(@user),
+                        method: :delete, class: "btn btn-quiet",
+                        form: { data: { turbo_confirm: "Remove instance administrator access from #{@user.email}?" } } %>
+        <% else %>
+          <%# Both refusals are deliberate and are explained rather than being a
+              greyed-out button with no reason. See Admin::UserPolicy#revoke_admin?. -%>
+          <p class="text-sm text-ink-2">
+            <% if @user == current_user %>
+              You cannot remove your own administrator access.
+            <% else %>
+              This is the only administrator. Promote somebody else first — an
+              instance with none can only be recovered from a shell on the server.
+            <% end %>
+          </p>
+        <% end %>
+      <% else %>
+        <%= button_to "Make instance admin", grant_admin_admin_user_path(@user),
+                      class: "btn",
+                      form: { data: { turbo_confirm: "Give #{@user.email} administrator access to this whole instance?" } } %>
+      <% end %>
+    </div>
+  </div>
+</div>

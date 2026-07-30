@@ -1,0 +1,70 @@
+<% content_for :title, "Sites · Admin" %>
+
+<div class="shell">
+  <%= render "admin/nav" %>
+
+  <%= form_with url: admin_sites_path, method: :get, class: "card card-body mb-6" do |f| %>
+    <div class="flex flex-wrap items-end gap-3">
+      <div class="flex-1 min-w-64">
+        <%= f.field :q, "Find a site", value: @query,
+                    hint: "Domain, or the site token from the snippet they pasted.",
+                    autofocus: @query.blank? %>
+      </div>
+      <div class="flex items-center gap-3 pb-0.5">
+        <%= f.submit "Search", class: "btn btn-primary" %>
+        <%= link_to "Clear", admin_sites_path, class: "btn btn-quiet" if @query.present? %>
+      </div>
+    </div>
+  <% end %>
+
+  <%# Listed, never opened. There is no link from here into a dashboard and
+      Admin::SitePolicy#show? is false, so one cannot be added by accident. What a
+      site measured belongs to that customer's audience, and /dpa says as much in
+      a sentence we would otherwise have to qualify. -%>
+  <div class="card">
+    <div class="card-head">
+      <h2 class="text-sm font-semibold">
+        <%= @query.present? ? "Matching \"#{@query}\"" : "All sites" %>
+      </h2>
+      <span class="label"><%= pluralize(@sites.size, "site") %></span>
+    </div>
+
+    <% if @sites.any? %>
+      <div>
+        <% @sites.each do |site| %>
+          <div class="flex items-center justify-between gap-4 px-5 py-4 border-b border-rule last:border-b-0">
+            <div class="min-w-0">
+              <p class="font-medium truncate"><%= site.domain %></p>
+              <p class="label mt-1">
+                <%= site.account.name %>
+                <span class="mx-2">·</span>
+                <span class="font-mono"><%= site.public_token %></span>
+                <span class="mx-2">·</span>
+                added <%= site.created_at.to_date.to_fs(:long) %>
+              </p>
+            </div>
+            <div class="text-right shrink-0">
+              <% if site.receiving_data? %>
+                <p class="text-[12px] text-muted">
+                  collecting since<br><%= site.first_event_at.to_date.to_fs(:long) %>
+                </p>
+              <% else %>
+                <span class="chip"><span class="chip-key">no data yet</span></span>
+              <% end %>
+            </div>
+          </div>
+        <% end %>
+      </div>
+
+      <% if @sites.size >= 100 %>
+        <p class="px-5 py-3 text-[12px] text-muted border-t border-rule">
+          Showing the first 100. Narrow the search to see the rest.
+        </p>
+      <% end %>
+    <% else %>
+      <p class="px-5 py-10 text-center text-sm text-muted">
+        <%= @query.present? ? "No site matches \"#{@query}\"." : "No sites yet." %>
+      </p>
+    <% end %>
+  </div>
+</div>

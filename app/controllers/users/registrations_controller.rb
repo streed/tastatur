@@ -9,7 +9,13 @@ module Users
     # architectural rules in CLAUDE.md.
     def create
       super do |user|
-        Onboarding::ProvisionAccount.call(user: user) if user.persisted?
+        next unless user.persisted?
+
+        Onboarding::ProvisionAccount.call(user: user)
+        # Enqueued rather than sent inline, and after the account exists so the
+        # notification can name it. A mail server having a bad minute must not be
+        # able to fail a signup that has already succeeded.
+        NotifyAdminsOfSignupJob.perform_later(user.id)
       end
     end
 
