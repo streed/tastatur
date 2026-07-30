@@ -5,9 +5,9 @@ application by a wide margin: it runs once per pageview on every measured site.
 
 ## The tracker
 
-`public/t.js`. Served unminified and unbundled, deliberately — a privacy tool
-should be readable by the people it makes claims to. 7,663 bytes raw, 3,190
-gzipped, 2,508 brotli.
+`lib/tracker/t.js`. Served unminified and unbundled, deliberately — a privacy tool
+should be readable by the people it makes claims to. 7,649 bytes raw, 3,180
+gzipped, 2,501 brotli.
 
 ```html
 <script defer data-site="YOUR_SITE_KEY" src="https://your-tastatur/t.js"></script>

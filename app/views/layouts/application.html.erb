@@ -48,8 +48,12 @@
               <%= link_to "Sites", sites_path, class: "btn btn-quiet btn-sm" %>
               <%= link_to "Account", account_path, class: "btn btn-quiet btn-sm" %>
               <%# Hidden when self-hosted: an operator running this on their own
-                  hardware should never see a plan screen, let alone a paywall. %>
-              <% unless Tastatur.self_hosted? %>
+                  hardware should never see a plan screen, let alone a paywall. Also
+                  hidden from anyone who cannot open it — billing is owner-only, so
+                  offering an admin or a viewer a link that can only redirect them
+                  back with "you do not have access" is a dead end. Same reasoning as
+                  the "Add a site" button in sites/index. %>
+              <% if !Tastatur.self_hosted? && policy(current_account).manage_billing? %>
                 <%= link_to "Plan", billing_path, class: "btn btn-quiet btn-sm" %>
               <% end %>
               <%= link_to "Docs", docs_path, class: "btn btn-quiet btn-sm" %>
@@ -100,7 +104,15 @@
     <footer class="border-t border-rule mt-16">
       <div class="shell py-6 flex flex-wrap items-center justify-between gap-4 text-[12px] text-muted">
         <span>
-          Tastatur <%= Tastatur.version %> · cookieless analytics · AGPL-3.0<br class="sm:hidden">
+          <%# AGPL-3.0 is a LINK, not a label, and that matters more here than it
+              usually would. Section 13 obliges an operator who lets people use this
+              over a network to offer them the corresponding source, and the tracker
+              banner — the one pointer that reaches every visitor of every measured
+              site — now names tastatur.dev rather than the repository. So this is
+              where source discovery has to actually happen. -%>
+          Tastatur <%= Tastatur.version %> · cookieless analytics ·
+          <%= link_to "AGPL-3.0", Tastatur.maintainer[:source],
+                      class: "hover:text-ink underline", rel: "noopener" %><br class="sm:hidden">
           <span class="sm:before:content-['·'] sm:before:mx-2">Built by
             <%= link_to Tastatur.maintainer[:name], Tastatur.maintainer[:url],
                         class: "hover:text-ink underline", rel: "noopener" %></span>
