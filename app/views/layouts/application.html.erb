@@ -19,9 +19,22 @@
     <link rel="apple-touch-icon" href="/icon.png">
     <%= stylesheet_link_tag :app, "data-turbo-track": "reload" %>
     <%= javascript_importmap_tags %>
+    <%= render "layouts/tracker" %>
   </head>
 
-  <body class="min-h-screen flex flex-col">
+  <%# One analytics controller for the whole application, listening from the
+      body rather than from each control. Delegating means an element annotated
+      with data-analytics-event reports itself wherever it is, including inside a
+      Turbo Frame that was swapped in after this element connected.
+
+      The same element also carries a step the server had to observe on the
+      browser's behalf — a sign-in that was actually accepted — because nothing
+      the visitor does on the page that follows it says so. Empty on every other
+      request. See SelfMeasurement. -%>
+  <body class="min-h-screen flex flex-col"
+        data-controller="analytics"
+        data-action="click->analytics#track turbo:submit-end->analytics#track"
+        <%= tag.attributes(SelfMeasurement.take(session)) %>>
     <header class="border-b border-rule bg-surface">
       <div class="shell flex items-center justify-between h-14">
         <div class="flex items-center gap-8">
@@ -34,6 +47,11 @@
             <nav class="hidden sm:flex items-center gap-1">
               <%= link_to "Sites", sites_path, class: "btn btn-quiet btn-sm" %>
               <%= link_to "Account", account_path, class: "btn btn-quiet btn-sm" %>
+              <%# Hidden when self-hosted: an operator running this on their own
+                  hardware should never see a plan screen, let alone a paywall. %>
+              <% unless Tastatur.self_hosted? %>
+                <%= link_to "Plan", billing_path, class: "btn btn-quiet btn-sm" %>
+              <% end %>
               <%= link_to "Docs", docs_path, class: "btn btn-quiet btn-sm" %>
             </nav>
           <% end %>
@@ -41,6 +59,9 @@
 
         <div class="flex items-center gap-3">
           <% unless user_signed_in? %>
+            <% unless Tastatur.self_hosted? %>
+              <%= link_to "Pricing", pricing_path, class: "btn btn-quiet btn-sm" %>
+            <% end %>
             <%= link_to "Docs", docs_path, class: "btn btn-quiet btn-sm" %>
           <% end %>
           <% if user_signed_in? %>
@@ -71,6 +92,11 @@
       <%= yield %>
     </main>
 
+    <%# The login-cookie disclosure, shown only where members of the public can
+        acquire one. See the partial for why it is conditional and why it is a
+        statement rather than a consent gate. %>
+    <div class="shell"><%= render "shared/cookie_notice" %></div>
+
     <footer class="border-t border-rule mt-16">
       <div class="shell py-6 flex flex-wrap items-center justify-between gap-4 text-[12px] text-muted">
         <span>
@@ -81,6 +107,9 @@
         </span>
         <nav class="flex gap-5">
           <%= link_to "About", about_path, class: "hover:text-ink" %>
+          <% unless Tastatur.self_hosted? %>
+            <%= link_to "Pricing", pricing_path, class: "hover:text-ink" %>
+          <% end %>
           <%= link_to "Docs", docs_path, class: "hover:text-ink" %>
           <%= link_to "Privacy", privacy_path, class: "hover:text-ink" %>
           <%= link_to "Your data", data_request_path, class: "hover:text-ink" %>

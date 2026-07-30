@@ -22,6 +22,23 @@ RSpec.describe "Installation screen", type: :request do
       expect(response.body).to include(%(turbo-frame id="install_status"))
     end
 
+    # A snippet installed on an account that has already spent its monthly events
+    # receives nothing, and a screen that polls "waiting for your first pageview"
+    # forever is the most expensive thing to leave unexplained here: the obvious
+    # conclusion is that the product does not work. So it says what is happening,
+    # and it stops polling — there is nothing coming until the allowance resets.
+    it "explains a full allowance instead of waiting for something that cannot arrive" do
+      account.update!(event_limit_override: 10)
+      Billing::UsageMeter.record(account.id, count: 50)
+
+      get "/sites/#{site.to_param}/installation"
+
+      expect(response.body).to include("Nothing is being recorded right now")
+      expect(response.body).to include("Review plan")
+      expect(response.body).not_to include("Waiting for your first pageview")
+      expect(response.body).not_to include('data-controller="poll"')
+    end
+
     # THE REGRESSION THIS FILE EXISTS FOR.
     #
     # Turbo replaces a frame with the matching <turbo-frame> element from the

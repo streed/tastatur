@@ -28,6 +28,22 @@ Rails.application.routes.draw do
     resources :members, only: %i[index create update destroy], module: :accounts
   end
 
+  # --- Billing --------------------------------------------------------------
+  # All four routes exist on a self-hosted install too, and all four refuse to
+  # render there (see BillingController#ensure_billing_enabled). Defining them
+  # conditionally would mean `billing_path` raising NoMethodError inside a view
+  # whose guard someone forgot — a missing guard should show an operator a
+  # redirect, not a 500.
+  get  "billing", to: "billing#show", as: :billing
+  post "billing/checkout", to: "billing#checkout", as: :billing_checkout
+  post "billing/portal", to: "billing#portal", as: :billing_portal
+
+  # Stripe's callback. On its own line and in its own comment block for the same
+  # reason the public shared dashboards below are not nested: an endpoint that is
+  # unauthenticated and exempt from CSRF should be visible as such in the routing
+  # table rather than hidden inside an authenticated resource.
+  post "billing/stripe/webhook", to: "billing/stripe_webhooks#create", as: :stripe_webhook
+
   # --- Public shared dashboards --------------------------------------------
   # Deliberately NOT nested under /sites: these are reached by unguessable slug
   # with no session, and keeping them on their own path makes it obvious in the
@@ -35,9 +51,18 @@ Rails.application.routes.draw do
   get  "share/:slug", to: "shared_dashboards#show", as: :shared_dashboard
   post "share/:slug/unlock", to: "shared_dashboards#unlock", as: :unlock_shared_dashboard
 
+  # --- The tracking script --------------------------------------------------
+  #
+  # Served by the application rather than from public/, so its cache header is
+  # right on every deployment instead of only the one that happens to have Caddy
+  # in front. The path is embedded in customer pages and cannot change.
+  # See TrackerController for the year-long-cache bug this replaced.
+  get "t.js", to: "tracker#show", as: :tracker
+
   # --- Documentation --------------------------------------------------------
   get "docs", to: "docs#show"
   get "about", to: "pages#about"
+  get "pricing", to: "pricing#show"
 
   # --- Compliance -----------------------------------------------------------
   get "privacy", to: "compliance#privacy"

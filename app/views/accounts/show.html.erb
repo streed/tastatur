@@ -5,7 +5,7 @@
     <div class="mt-5">
       <h1 class="text-2xl font-semibold"><%= @account.name %></h1>
       <p class="label mt-2">
-        <%= @account.plan.humanize %><span class="mx-2">·</span>
+        <%= @account.billing_plan.name %><span class="mx-2">·</span>
         <%= pluralize(@account.sites.count, "site") %><span class="mx-2">·</span>
         <%= pluralize(@memberships.size, "member") %>
       </p>
@@ -50,8 +50,13 @@
 
     <% if policy(@account).manage_members? %>
       <div class="card-body border-t border-rule bg-surface-2">
+        <%# Neither the address nor the role goes with this. The address is a
+            person's, and the role would be the one this form happens to open on
+            rather than the one that was chosen. That an account grew is the
+            finding; who joined it is not ours to record. -%>
         <%= form_with model: @invitation, url: account_members_path,
-                      scope: :invitation, class: "space-y-5" do |f| %>
+                      scope: :invitation, class: "space-y-5",
+                      data: { analytics_event: "Member Invited" } do |f| %>
           <%= f.error_summary %>
 
           <div class="grid sm:grid-cols-3 gap-4">

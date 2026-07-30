@@ -3,8 +3,14 @@
 <%= render layout: "devise/shared/auth_card",
            locals: { title: "Reset your password",
                      subtitle: "We will email you a link to set a new one." } do %>
+  <%# Counts the request, not the address. Devise is in paranoid mode, so this
+      screen answers identically whether or not an account exists — and so does
+      this event, which is the point: an analytics record that only appeared for
+      real customers would turn the report into the membership oracle the
+      paranoid setting exists to close. %>
   <%= form_for(resource, as: resource_name, url: password_path(resource_name),
-               html: { method: :post, class: "card card-body space-y-5" }) do |f| %>
+               html: { method: :post, class: "card card-body space-y-5",
+                       data: { analytics_event: "Password Reset Requested" } }) do |f| %>
     <%= f.error_summary %>
     <%= f.field :email, "Email", as: :email_field, autofocus: true, autocomplete: "email" %>
     <div class="pt-1">

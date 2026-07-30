@@ -57,22 +57,33 @@
         <span class="label">Last 7 days</span>
       </div>
       <div class="card-body">
-        <%# `to_i` on every read: counts_for now reports only the reasons that
-            actually occurred, so a reason that has never fired is absent rather
-            than zero. %>
-        <div class="flex gap-8 mb-4">
-          <div>
-            <p class="label">Wrong hostname</p>
-            <p class="figure text-[24px] mt-1.5"><%= number_with_delimiter(rejections[:hostname_mismatch].to_i) %></p>
-          </div>
-          <div>
-            <p class="label">Wrong origin</p>
-            <p class="figure text-[24px] mt-1.5"><%= number_with_delimiter(rejections[:origin_mismatch].to_i) %></p>
-          </div>
+        <%# ITERATE WHAT HAPPENED, DO NOT NAME THE REASONS.
+
+            RejectionCounter.counts_for discovers reasons rather than reading a
+            list, precisely because an earlier version iterated a hardcoded pair
+            and so counted contract failures into Redis that nothing ever read
+            back out. This block used to make the same mistake one layer up: it
+            named hostname_mismatch and origin_mismatch and bucketed invalid_*,
+            so a reason added anywhere else — `plan_limit`, when an account runs
+            past its monthly allowance — made this whole card appear showing two
+            zeroes and no explanation of what was actually refused.
+
+            Labels live in DashboardHelper::REJECTION_REASONS and fall back to a
+            humanised key, so the next reason after that one displays with no
+            change here. -%>
+        <% malformed = rejections.select { |reason, _| reason.to_s.start_with?("invalid_") }
+           named = rejections.except(*malformed.keys).sort_by { |_, count| -count } %>
+
+        <div class="flex flex-wrap gap-8 mb-4">
+          <% named.each do |reason, count| %>
+            <div>
+              <p class="label"><%= rejection_reason_label(reason) %></p>
+              <p class="figure text-[24px] mt-1.5"><%= number_with_delimiter(count) %></p>
+            </div>
+          <% end %>
           <%# Payloads the validation contract refused. These used to be dropped in
               total silence — the endpoint answered 202 and nothing recorded it
               anywhere — so a broken integration looked exactly like no traffic. %>
-          <% malformed = rejections.select { |reason, _| reason.to_s.start_with?("invalid_") } %>
           <% if malformed.any? %>
             <div>
               <p class="label">Malformed</p>
@@ -80,6 +91,19 @@
             </div>
           <% end %>
         </div>
+
+        <% named.each do |reason, _| %>
+          <% note = rejection_reason_note(reason) %>
+          <% if note %>
+            <p class="text-[13px] text-ink-2 mb-4">
+              <span class="font-medium text-ink"><%= rejection_reason_label(reason) %>.</span>
+              <%= note %>
+              <% if reason.to_s == "plan_limit" && !Tastatur.self_hosted? %>
+                <%= link_to "Review your plan", billing_path, class: "underline hover:text-signal" %>.
+              <% end %>
+            </p>
+          <% end %>
+        <% end %>
 
         <% if malformed.any? %>
           <p class="label mb-2">Fields rejected</p>

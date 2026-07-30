@@ -13,9 +13,14 @@
     <div class="flex gap-3">
       <div class="segmented">
         <% %w[7d 30d 90d].each do |key| %>
+          <%# Same event as the dashboard's own period control, told apart by
+              `view`: a funnel is read over a different span than a traffic
+              report, and one number for both would hide that. %>
           <%= link_to Analytics::Period::PRESETS[key].sub("Last ", ""),
                       site_funnel_path(@site, @funnel, period: key),
-                      class: "segment", "aria-current": (@period.key == key).to_s %>
+                      class: "segment", "aria-current": (@period.key == key).to_s,
+                      data: { analytics_event: "Period Changed",
+                              analytics_props: { period: key, view: "funnel" } } %>
         <% end %>
       </div>
       <%= link_to "Edit", edit_site_funnel_path(@site, @funnel), class: "btn btn-sm" %>

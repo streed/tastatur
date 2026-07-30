@@ -24,14 +24,21 @@
       </div>
       <%= link_to "Funnels", site_funnels_path(@site), class: "btn btn-sm" %>
       <%= link_to "Goals", site_goals_path(@site), class: "btn btn-sm" %>
-      <%= link_to "Install", site_installation_path(@site), class: "btn btn-sm" %>
+      <%# Which of the two routes to the snippet was taken: the header button on a
+          working site is somebody re-installing or checking, the empty-state
+          button below is somebody still trying to get their first event in. %>
+      <%= link_to "Install", site_installation_path(@site), class: "btn btn-sm",
+                  data: { analytics_event: "Install Snippet Viewed",
+                          analytics_props: { source: "header" } } %>
     </div>
   </div>
 
   <% unless @site.receiving_data? %>
     <div class="notice mb-6 flex items-center justify-between gap-4">
       <span>No data yet — this site has never received an event.</span>
-      <%= link_to "Show me the snippet", site_installation_path(@site), class: "btn btn-primary btn-sm" %>
+      <%= link_to "Show me the snippet", site_installation_path(@site), class: "btn btn-primary btn-sm",
+                  data: { analytics_event: "Install Snippet Viewed",
+                          analytics_props: { source: "empty_state" } } %>
     </div>
   <% end %>
 

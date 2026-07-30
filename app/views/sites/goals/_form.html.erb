@@ -1,6 +1,15 @@
+<%# Only the creating half of this shared form reports itself; editing one is a
+    smaller thing and would be counted under the same name, which would make the
+    number mean neither.
+
+    Nothing from the fields goes with it. `match_value` is a path or an event
+    name on the customer's site, and `name` is whatever they chose to call it —
+    both are theirs, and neither belongs in our analytics to satisfy a curiosity
+    about which kind of goal is more popular. -%>
 <%= form_with model: [@site, @goal],
               url: @goal.persisted? ? site_goal_path(@site, @goal) : site_goals_path(@site),
-              class: "card card-body space-y-6" do |f| %>
+              class: "card card-body space-y-6",
+              data: { analytics_event: ("Goal Created" unless @goal.persisted?) } do |f| %>
   <%= f.error_summary %>
 
   <%= f.field :name, "Name", placeholder: "Signup completed", autofocus: true %>

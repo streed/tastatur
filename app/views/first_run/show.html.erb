@@ -10,7 +10,15 @@
     </p>
   </div>
 
-  <%= form_with url: first_run_path, class: "space-y-6" do %>
+  <%# The self-hosted arm of the same funnel, and the only step it has: one
+      submission creates the owner, the first site and the session together. It
+      fires only on success, so a rejected domain does not read as an install.
+      Nearly always unobservable in practice — a fresh install has no site key to
+      report to — but the screen is reachable in any configuration, and an event
+      that exists everywhere is cheaper than one that has to be remembered
+      later. %>
+  <%= form_with url: first_run_path, class: "space-y-6",
+                data: { analytics_event: "First Run Completed" } do %>
     <% if @user.errors.any? || @site.errors.any? %>
       <div class="notice border-signal text-ink" role="alert">
         <p class="font-semibold mb-1">This could not be saved:</p>

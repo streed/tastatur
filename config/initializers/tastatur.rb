@@ -41,6 +41,18 @@ module Tastatur
     ENV.fetch("INGEST_URL") { "#{base_url}/api/event" }
   end
 
+  # The site key this instance reports ITS OWN usage to, if any.
+  #
+  # Unset by default, and that default is the point. A self-hosted install must
+  # never report its operator's dashboard usage anywhere, least of all to us —
+  # an analytics tool that measures the people running it has picked the wrong
+  # side of its own argument. The hosted service sets this to the key of the
+  # tastatur.dev site in its own account, so Tastatur is measured by Tastatur
+  # under exactly the privacy rules it sells.
+  def self.self_measurement_token
+    ENV["SELF_MEASUREMENT_SITE_TOKEN"].presence
+  end
+
   def self.base_url
     host = ENV.fetch("APP_HOST", "localhost:3000")
     scheme = host.start_with?("localhost", "127.0.0.1") ? "http" : "https"

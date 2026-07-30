@@ -14,7 +14,7 @@
 
   <% if result.any? %>
     <div>
-      <% result.rows.each do |row| %>
+      <% result.rows.each_with_index do |row, index| %>
         <% width = max.zero? ? 0 : ((row.visitors.to_f / max) * 100).round(1) %>
 
         <%# The bar is a background wash scaled to the row's share of the largest
@@ -33,9 +33,19 @@
           <span class="num font-medium shrink-0"><%= metric_number(row.visitors) %></span>
         <% end %>
 
+        <%# Drilling in is how a filter gets applied, so it reports the dimension
+            and the rank of the row within its panel — enough to learn that people
+            filter by page far more than by screen size, and that they take the
+            first row rather than reading down. `row.value` is emphatically NOT
+            sent: it is one of the customer's own paths, referrers or countries,
+            and the whole argument for this product is that we do not put such
+            things in an analytics database. The public dashboards take the
+            branch below and are never instrumented at all. -%>
         <% if drillable %>
           <%= link_to drill_down_url(site, dimension, row.value), class: "bar-row",
-                      title: "Filter by #{row.label}" do %><%= bar %><% end %>
+                      title: "Filter by #{row.label}",
+                      data: { analytics_event: "Filter Applied",
+                              analytics_props: { dimension: dimension, position: index + 1 } } do %><%= bar %><% end %>
         <% else %>
           <div class="bar-row"><%= bar %></div>
         <% end %>
