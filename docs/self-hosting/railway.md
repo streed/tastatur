@@ -40,6 +40,34 @@ If that returns no rows, you deployed plain Postgres. Stop and redeploy the
 correct template; migrating later means dumping and restoring, which
 [has its own procedure](operations.md#restoring-is-not-just-pg_restore).
 
+### If you deploy the image directly instead of a template
+
+Perfectly reasonable — it pins the version you tested against. Add a service from
+the Docker image `timescale/timescaledb:latest-pg17`, set `POSTGRES_USER`,
+`POSTGRES_PASSWORD` and `POSTGRES_DB`, attach a volume at
+`/var/lib/postgresql/data`, and then set one more variable that is not obvious:
+
+```
+PGDATA=/var/lib/postgresql/data/pgdata
+```
+
+**Without it the database never initialises.** A Railway volume is a mount point and
+arrives containing a `lost+found` directory, so `initdb` refuses:
+
+```
+initdb: error: directory "/var/lib/postgresql/data" exists but is not empty
+initdb: detail: It contains a lost+found directory, perhaps due to it being a mount point.
+initdb: hint: Using a mount point directly as the data directory is not recommended.
+           Create a subdirectory under the mount point.
+```
+
+Postgres then crash-loops while Railway reports the *deployment* as successful,
+because the container is running. The symptom you actually see is the app service
+timing out its health check with a connection error to the database. Railway's own
+managed Redis template solves the same problem the other way, with
+`rm -rf $RAILWAY_VOLUME_MOUNT_PATH/lost+found/` in its start command; the `PGDATA`
+subdirectory is the cleaner fix and is what `initdb` itself recommends.
+
 ## 2. Redis (persistent)
 
 A standard Railway Redis. This holds the ingest buffer, the cache and the Sidekiq
@@ -71,12 +99,37 @@ warning at boot and the unlinkability claim on your privacy page stops being tru
 ## 4. The app service
 
 Point a new service at this repository. `railway.toml` is committed, so the build
-method, start command and health check are already configured. Railway injects
-`PORT`; `bin/docker-entrypoint` bridges it to Thruster's `HTTP_PORT`, so there is
-nothing to set for the app to bind correctly.
+method, start command and health check are already configured.
 
 The image bakes in the country database at build time, so geolocation works with
 no volume and no post-deploy step.
+
+### Railway does not run the Docker ENTRYPOINT
+
+This is the single thing most likely to cost you an afternoon, because it produces
+two failures that look unrelated and neither error message mentions the cause.
+
+When a service has a custom start command, Railway runs it directly instead of
+through the image's `ENTRYPOINT`. `bin/docker-entrypoint` therefore never executes,
+and it is doing two jobs:
+
+| What the entrypoint does | What happens on Railway | How it presents |
+|---|---|---|
+| Bridges `PORT` to Thruster's `HTTP_PORT` | Never runs, so Thruster stays on `:80` | Health check fails against a port nothing is listening on. Logs show a clean, healthy boot |
+| Runs `db:prepare` before the server | Never runs, so the database has no schema | `/up` returns 503 because its database check fails, the deploy is torn down, and the edge answers `Application not found` |
+
+Both are already handled for you in the committed configuration:
+
+- `railway.toml` sets `preDeployCommand = "bin/rails db:prepare"`, which is the
+  better mechanism anyway — it runs once per deployment before traffic shifts,
+  rather than once per replica at boot.
+- Set `HTTP_PORT` explicitly as a variable. Thruster reads it directly, so nothing
+  has to bridge anything. `HTTP_PORT=8080` is fine; any port works as long as it is
+  the one Railway routes to.
+
+If you ever see the app boot cleanly in the logs and still fail its health check,
+check which port Thruster reported (`Server started ... http=":80"`) against what
+Railway is probing. That mismatch is this bug.
 
 ### Variables
 
@@ -89,6 +142,7 @@ without editing anything:
 | `REDIS_URL` | `${{Redis.REDIS_URL}}` |
 | `REDIS_PRIVACY_URL` | `${{Redis-Privacy.REDIS_URL}}` |
 | `SECRET_KEY_BASE` | generate with `openssl rand -hex 64` |
+| `HTTP_PORT` | `8080`. Thruster reads this directly. Required because Railway skips the entrypoint that would otherwise bridge `PORT` — see above |
 | `APP_HOST` | your public domain, e.g. `analytics.example.com` |
 | `RAILS_ENV` | `production` |
 | `RAILS_LOG_TO_STDOUT` | `1` |
@@ -129,6 +183,19 @@ service on the same repository:
 - **Start command:** `bundle exec sidekiq`. No queue flags: `config/sidekiq.yml`
   lists the four queues and their priority order, and passing `-q` on the command
   line would silently override it.
+- **Config-as-code file:** set it to `railway.worker.toml`. In Railway this is
+  Settings → Config-as-code on the worker service.
+
+  **This one is not optional and the failure is quiet.** Both services build from
+  the same repository, and `railway.toml` — which Railway picks up by default —
+  declares `startCommand = "./bin/thrust ./bin/rails server"`. Config as code
+  overrides per-service settings, so without pointing the worker at its own file
+  it comes up as a *second web server*: Sidekiq running nowhere, cron firing into
+  an empty room, and buffered events never reaching PostgreSQL. Both services show
+  green. What you observe is a dashboard that works and numbers that never move,
+  which is about the hardest symptom to trace back to its cause.
+
+  `railway.worker.toml` is committed alongside `railway.toml` for exactly this.
 - **No health check.** It serves no HTTP and Railway would fail the deploy waiting
   for a port that never opens.
 - **Same variables as the app**, Railway shared variables being the tidy way, plus
