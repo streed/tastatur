@@ -21,7 +21,16 @@ class DocsController < ApplicationController
   # to finish installing it to read how it works.
   always_reachable
 
-  def show; end
+  # HTML for people; markdown for machine readers, reached with
+  # `Accept: text/markdown` or as /docs.md. Same content, same filled-in site
+  # key, none of the layout — an agent reading the docs to write an integration
+  # should not have to dig the snippets out of the page chrome.
+  def show
+    respond_to do |format|
+      format.html
+      format.md
+    end
+  end
 
   private
 

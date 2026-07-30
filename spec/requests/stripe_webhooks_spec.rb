@@ -103,6 +103,29 @@ RSpec.describe "Stripe webhooks", type: :request do
       expect(response).to have_http_status(:ok)
     end
 
+    # THE ONE THAT WOULD HAVE DISABLED THE ENDPOINT.
+    #
+    # The contract requires data.object.id, and several real Stripe objects have
+    # none — a Balance has no id field at all, an upcoming invoice sends null. Since
+    # the type is now checked first, those answer 200 instead of 400. Validating
+    # first meant answering "failed delivery" to genuine Stripe traffic, which is
+    # guaranteed with `stripe listen` (it forwards every type) and one dashboard
+    # click away on a live endpoint — and enough of them disables the endpoint for
+    # every customer on the instance.
+    it "answers 200 for an unhandled event whose object has no id at all" do
+      deliver(stripe_event_payload(type: "balance.available",
+                                   object: { object: "balance", available: [{ amount: 100 }] }))
+
+      expect(response).to have_http_status(:ok)
+    end
+
+    it "answers 200 for an unhandled event whose object id is null" do
+      deliver(stripe_event_payload(type: "invoice.upcoming",
+                                   object: { id: nil, object: "invoice", customer: "cus_1" }))
+
+      expect(response).to have_http_status(:ok)
+    end
+
     # Retrying will never make an account we do not have exist, and repeated
     # failures would cost us every other customer's webhooks.
     it "answers 200 for an event that matches no account" do
@@ -128,9 +151,11 @@ RSpec.describe "Stripe webhooks", type: :request do
     end
   end
 
-  # 503, not 400: the fault is ours, and a retry once the secret is set will
-  # succeed. That turns a misconfigured deploy into a short gap rather than lost
-  # subscription events.
+  # 503, not 400 and not 404: the fault is ours and a retry once the secret is set
+  # will succeed. That turns a misconfigured deploy into a short gap rather than lost
+  # subscription events — which is why this is checked BEFORE the general
+  # billing-enabled gate, since that gate is also false without a signing secret and
+  # would answer 404, discarding both the diagnosis and the retry.
   describe "when the signing secret is missing" do
     it "answers 503 and applies nothing" do
       payload = subscription_event

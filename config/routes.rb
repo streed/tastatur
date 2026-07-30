@@ -11,8 +11,37 @@ Rails.application.routes.draw do
   end
 
   # Custom registrations controller so a new user is given an account to own at
-  # signup, and so signup can be closed on a self-hosted instance.
-  devise_for :users, controllers: { registrations: "users/registrations" }
+  # signup, and so signup can be closed on a self-hosted instance. Custom
+  # sessions controller so a password can be accepted without the sign-in being
+  # finished — see Users::SessionsController and the two-factor routes below.
+  devise_for :users, controllers: {
+    registrations: "users/registrations",
+    sessions: "users/sessions"
+  }
+
+  # --- Two-factor authentication --------------------------------------------
+  # The challenge is deliberately NOT under /users with Devise's own routes. It
+  # is reached with no session at all, holding only a short-lived pending marker,
+  # and a path that looks like part of Devise invites the assumption that Devise
+  # is enforcing something here. It is not; TwoFactor::PendingSignIn is.
+  get    "two-factor",        to: "two_factor/challenges#show",    as: :two_factor_challenge
+  post   "two-factor",        to: "two_factor/challenges#create"
+  post   "two-factor/resend", to: "two_factor/challenges#resend",  as: :resend_two_factor_challenge
+  delete "two-factor",        to: "two_factor/challenges#destroy", as: :cancel_two_factor_challenge
+
+  # Turning it on and off, and forgetting devices. Authenticated, unlike the
+  # three above, and rendered inside the account page rather than on screens of
+  # their own.
+  resource :two_factor_setting, only: %i[create destroy],
+                                path: "settings/two-factor",
+                                controller: "two_factor/settings"
+
+  resources :trusted_devices, only: %i[destroy],
+                              path: "settings/trusted-devices",
+                              param: :public_id,
+                              controller: "two_factor/trusted_devices" do
+    delete :all, on: :collection, action: :destroy_all
+  end
 
   # --- Application ----------------------------------------------------------
   resources :sites, param: :public_token do
@@ -64,6 +93,17 @@ Rails.application.routes.draw do
   get "about", to: "pages#about"
   get "pricing", to: "pricing#show"
 
+  # The llms.txt convention (https://llmstxt.org): a markdown index at a
+  # well-known path telling an AI agent what is here and where the
+  # markdown-native pages live. `format: false` keeps ".txt" as a literal part
+  # of the path instead of letting Rails read it as a format; the default then
+  # pins the response to markdown regardless of the Accept header. /index.md is
+  # the marketing page's directly fetchable markdown URL — the root route has no
+  # format segment, and an index that says "send this Accept header" is a worse
+  # index than a link.
+  get "llms.txt", to: "pages#llms", as: :llms, format: false, defaults: { format: :md }
+  get "index.md", to: "pages#home", as: :markdown_root, format: false, defaults: { format: :md }
+
   # --- Compliance -----------------------------------------------------------
   get "privacy", to: "compliance#privacy"
   get "data-request", to: "compliance#data_request", as: :data_request
@@ -94,6 +134,10 @@ Rails.application.routes.draw do
         post   :send_password_reset
         post   :grant_admin
         delete :revoke_admin
+        # Off only. There is no matching route to turn it on — see
+        # Admin::UserPolicy#disable_two_factor? for why that asymmetry is the
+        # whole point.
+        delete :two_factor, action: :disable_two_factor
       end
     end
 

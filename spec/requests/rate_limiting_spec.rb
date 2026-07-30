@@ -65,6 +65,30 @@ RSpec.describe "Rate limiting", :throttled, type: :request do
       end
       expect(response).to have_http_status(:too_many_requests)
     end
+
+    # A throttle whose path does not match the route it means to guard fails
+    # silently: nothing raises, nothing logs, and the endpoint is simply
+    # unprotected. Both of these are typed by hand in the initializer and neither
+    # is exercised anywhere else, which makes them exactly the kind of thing to
+    # pin.
+    #
+    # TwoFactor::VerifyChallenge already destroys a code after five wrong
+    # guesses; this is what stops somebody buying a fresh code every five guesses
+    # and grinding a six-digit keyspace indefinitely.
+    it "throttles guesses at a two-factor code" do
+      16.times { post "/two-factor", params: { two_factor_challenge: { code: "000000" } } }
+
+      expect(response).to have_http_status(:too_many_requests)
+    end
+
+    # The resend button sends mail to an address the caller named, so without a
+    # limit it is a free way to make this instance deliver mail at whatever rate
+    # a script likes — which burns the sending domain's reputation.
+    it "throttles requests for a new two-factor code" do
+      6.times { post "/two-factor/resend" }
+
+      expect(response).to have_http_status(:too_many_requests)
+    end
   end
 
   # The whole point of hashing: a stock configuration writes every visitor's IP

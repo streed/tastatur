@@ -39,6 +39,16 @@ module DashboardHelper
     number_to_human(value, units: { thousand: "K", million: "M" }, format: "%n%u", precision: 3)
   end
 
+  # What the volume tile and series are called. Under an event filter the
+  # numbers ARE the matching events (see Analytics::Scope#volume_expression) —
+  # a dashboard scoped to `event=Signup` contains no pageviews to count, and
+  # labelling the events "Pageviews" would misreport them as badly as the zero
+  # it replaces. Nil-safe because the public shared dashboard renders the same
+  # partial with no filters at all.
+  def volume_label(filters)
+    filters&.event_scoped? ? "Events" : "Pageviews"
+  end
+
   # Renders the "vs previous period" delta. Returns nil when there is nothing
   # honest to compare against — a jump from zero has no meaningful percentage.
   def delta_tag(metrics, metric, lower_is_better: false)

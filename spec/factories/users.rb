@@ -20,6 +20,13 @@ FactoryBot.define do
       admin { true }
     end
 
+    # Opted into the emailed second factor. Off by default, matching the product:
+    # every existing request spec signs in without a challenge because that is
+    # what almost every user experiences.
+    trait :with_two_factor do
+      two_factor_enabled { true }
+    end
+
     # A user who already owns an account, for the common case where a spec needs
     # somewhere to hang a site.
     trait :with_account do

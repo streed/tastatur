@@ -29,12 +29,38 @@ module Billing
     include Dry::Monads[:result]
 
     def create
-      # Nothing to bill on a self-hosted install, so there is nothing here. 404
-      # rather than 403: the endpoint genuinely does not exist in that deployment.
+      # THREE GUARDS, IN THIS ORDER, and the order is what makes each status honest.
+      #
+      # A self-hosted install has no billing at all, so the endpoint does not exist:
+      # 404, and nothing is logged, because that is the correct configuration.
       return head :not_found if Tastatur.self_hosted?
+
+      # A hosted deployment with no signing secret is OUR mistake, and a transient
+      # one: a retry after the secret is set will succeed. 503 rather than 404 says
+      # exactly that to Stripe, and the log names the variable. Checked before the
+      # general gate below because that gate also fails on a missing secret, and a
+      # 404 there would throw away both the diagnosis and the retry.
       return refuse_unconfigured if webhook_secret.blank?
 
+      # Anything else unconfigured — no API key, no price to sell — means billing is
+      # off, so there is nothing to receive. Every service downstream would refuse
+      # the event anyway, so accepting deliveries would only write receipts for work
+      # that cannot happen.
+      return head :not_found unless Tastatur.billing_enabled?
+
       event = Stripe::Webhook.construct_event(request.raw_post, signature_header, webhook_secret)
+
+      # THE TYPE IS CHECKED BEFORE THE SHAPE, and the order matters.
+      #
+      # The contract requires `data.object.id`, and several real Stripe objects do
+      # not have one — a Balance has no id field at all, and an upcoming invoice
+      # sends null. Validating first meant answering 400 to genuine Stripe traffic,
+      # which Stripe counts as a failed delivery and eventually disables the endpoint
+      # over. That is guaranteed with `stripe listen`, which forwards every type, and
+      # one dashboard click away on a live endpoint.
+      #
+      # An event we do not handle needs no shape at all: 200, do not send it again.
+      return head :ok unless Billing::ApplyStripeEvent::HANDLED.include?(event[:type].to_s)
 
       validated = StripeEventContract.new.call(event.to_hash)
       if validated.failure?

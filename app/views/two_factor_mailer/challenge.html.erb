@@ -1,0 +1,34 @@
+<% content_for :subject, "Your sign-in code" %>
+<% content_for :preheader, "#{@code} — valid for #{@expires_in_minutes} minutes." %>
+
+<h1 style="margin:0 0 16px; font-size:21px; font-weight:600; letter-spacing:-0.4px; line-height:1.2; color:#16150f;">
+  Your sign-in code
+</h1>
+
+<p style="margin:0 0 20px; color:#57564e;">
+  Somebody entered the right password for this account and is being asked for a
+  second factor. Type this code into the screen that is waiting for it.
+</p>
+
+<%# Not a button, and not a link. See TwoFactorMailer for why this email
+    deliberately contains nothing to click. Letter-spacing and a monospace stack
+    so 0 and O, and 1 and l, are distinguishable when read off a phone. -%>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 24px;">
+  <tr>
+    <td style="background-color:#f2f1ec; border:1px solid #e3e1d8; padding:18px 26px;">
+      <span style="font-family:'SF Mono',Menlo,Consolas,monospace; font-size:32px; font-weight:600;
+                   letter-spacing:8px; color:#16150f;"><%= @code %></span>
+    </td>
+  </tr>
+</table>
+
+<p style="margin:0 0 20px; color:#57564e;">
+  It expires in <%= @expires_in_minutes %> minutes, and asking for another code
+  cancels this one.
+</p>
+
+<p style="margin:0; padding-top:20px; border-top:1px solid #e3e1d8; font-size:13px; color:#8c8a80;">
+  If this was not you, somebody knows your password. They cannot get in without
+  this code, but you should change it — and nobody at Tastatur will ever ask you
+  for the code above.
+</p>

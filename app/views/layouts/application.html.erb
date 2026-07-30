@@ -47,13 +47,15 @@
             <nav class="hidden sm:flex items-center gap-1">
               <%= link_to "Sites", sites_path, class: "btn btn-quiet btn-sm" %>
               <%= link_to "Account", account_path, class: "btn btn-quiet btn-sm" %>
-              <%# Hidden when self-hosted: an operator running this on their own
-                  hardware should never see a plan screen, let alone a paywall. Also
-                  hidden from anyone who cannot open it — billing is owner-only, so
-                  offering an admin or a viewer a link that can only redirect them
-                  back with "you do not have access" is a dead end. Same reasoning as
-                  the "Add a site" button in sites/index. %>
-              <% if !Tastatur.self_hosted? && policy(current_account).manage_billing? %>
+              <%# Hidden unless billing is switched on AND configured: an operator
+                  running this on their own hardware should never see a plan screen,
+                  and neither should anyone on a deployment that cannot take a
+                  payment. Also hidden from anyone who cannot open it — billing is
+                  owner-only, so offering an admin or a viewer a link that can only
+                  redirect them back with "you do not have access" is a dead end.
+                  Same reasoning as the "Add a site" button in sites/index. %>
+              <% if (Tastatur.billing_enabled? || current_account.billing_manageable?) &&
+                    policy(current_account).manage_billing? %>
                 <%= link_to "Plan", billing_path, class: "btn btn-quiet btn-sm" %>
               <% end %>
               <%= link_to "Docs", docs_path, class: "btn btn-quiet btn-sm" %>
@@ -73,7 +75,7 @@
 
         <div class="flex items-center gap-3">
           <% unless user_signed_in? %>
-            <% unless Tastatur.self_hosted? %>
+            <% if Tastatur.billing_enabled? %>
               <%= link_to "Pricing", pricing_path, class: "btn btn-quiet btn-sm" %>
             <% end %>
             <%= link_to "Docs", docs_path, class: "btn btn-quiet btn-sm" %>
@@ -129,7 +131,7 @@
         </span>
         <nav class="flex gap-5">
           <%= link_to "About", about_path, class: "hover:text-ink" %>
-          <% unless Tastatur.self_hosted? %>
+          <% if Tastatur.billing_enabled? %>
             <%= link_to "Pricing", pricing_path, class: "hover:text-ink" %>
           <% end %>
           <%= link_to "Docs", docs_path, class: "hover:text-ink" %>

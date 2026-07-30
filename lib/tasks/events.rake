@@ -1,3 +1,30 @@
+# Crediting the monthly allowance back is arithmetic, not a task, so it lives in a
+# module rather than as a bare `def` in this file — a top-level `def` in a .rake
+# file, including inside a `namespace` block, defines a private method on Object.
+module TastaturEventPurge
+  module_function
+
+  # How many of the events about to be deleted fall inside the CURRENT calendar
+  # month, which is the only counter still being enforced.
+  #
+  # Counted before the DELETE, because afterwards there is nothing left to count and
+  # the total is no help: a purge window can span months, and crediting the whole of
+  # it would hand back allowance for a month whose counter is not the one refusing
+  # today's traffic.
+  def current_month_count(where_sql, binds)
+    month_start, month_end = Billing::UsageMeter.period_bounds
+    overlap_from = [binds[1], month_start].max
+    overlap_to = [binds[2], month_end].min
+    return 0 if overlap_from >= overlap_to
+
+    ActiveRecord::Base.connection.select_value(
+      ActiveRecord::Base.sanitize_sql_array(
+        ["SELECT COUNT(*) FROM events WHERE #{where_sql}", binds[0], overlap_from, overlap_to, *binds[3..]]
+      )
+    ).to_i
+  end
+end
+
 namespace :tastatur do
   namespace :events do
     desc "Delete events for a site in a time window (SITE=token FROM=iso TO=iso [PATH=/x] [DRY_RUN=1])"
@@ -44,6 +71,10 @@ namespace :tastatur do
         next
       end
 
+      # Counted first: after the DELETE there is nothing left to count, and the
+      # allowance can only be credited for the month whose counter is in force.
+      creditable = TastaturEventPurge.current_month_count(sql, binds)
+
       deleted = ActiveRecord::Base.connection.exec_delete(
         ActiveRecord::Base.sanitize_sql_array(["DELETE FROM events WHERE #{sql}", *binds]),
         "PurgeEvents"
@@ -57,6 +88,25 @@ namespace :tastatur do
       print "Reconciling aggregates... "
       Analytics::ReconcileAggregates.call(from: from, to: to)
       puts "done."
+
+      # And give the allowance back, or this stops being an undo.
+      #
+      # Fabricated events consume the account's monthly allowance exactly like real
+      # ones — the quota gate cannot tell them apart, which is the whole reason this
+      # task exists. Deleting the rows without crediting the meter would leave the
+      # victim's month spent and their genuine traffic refused until the 1st, so the
+      # documented remedy would fix the reports and not the damage.
+      #
+      # Only the part of the purge inside the current month can be credited: the
+      # meter is per calendar month and an older month's counter has already expired
+      # or is no longer the one being enforced.
+      if creditable.positive? && site.account.billable?
+        Billing::UsageMeter.credit(site.account_id, count: creditable)
+        Billing::EventQuota.forget(site.account_id)
+        puts "Credited #{creditable} events back to #{site.account.name}'s monthly allowance " \
+             "(now #{Billing::UsageMeter.used(site.account_id)})."
+      end
+
       puts "\nReports for this window now reflect the purge."
     end
 

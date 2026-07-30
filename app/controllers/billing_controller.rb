@@ -5,8 +5,11 @@
 # Billing::StartCheckout and Billing::StartPortalSession for why the payment and
 # cancellation flows deliberately do not live in this application.
 class BillingController < ApplicationController
-  before_action :ensure_billing_enabled
+  # `set_account` first: the gate below has to ask whether THIS account has a
+  # subscription to manage, which it cannot do before the account is loaded.
   before_action :set_account
+  before_action :ensure_billing_reachable
+  before_action :ensure_can_sell, only: %i[checkout]
 
   def show
     authorize @account, :manage_billing?
@@ -21,7 +24,11 @@ class BillingController < ApplicationController
     # matters — this just removes the gap the customer can see.
     sync_after_checkout if params[:checkout] == "success"
 
-    @usage = Billing::MeasureUsage.call(account: @account).value!
+    # False when the screen is open only so an existing subscriber can manage or
+    # cancel. The view then renders the portal and nothing else: no allowance, no
+    # upgrade, no prices this instance could not charge.
+    @can_sell = Tastatur.billing_enabled?
+    @usage = Billing::MeasureUsage.call(account: @account).value! if @can_sell
   end
 
   def checkout
@@ -68,17 +75,40 @@ class BillingController < ApplicationController
 
   private
 
-  # A self-hosted operator must never meet a paywall in software they are running
-  # themselves. The routes exist in every deployment so `billing_path` cannot raise
-  # inside a view whose guard someone forgot; this is what makes them inert.
-  def ensure_billing_enabled
-    return unless Tastatur.self_hosted?
+  # TWO GATES, because there are two different things this screen does.
+  #
+  # SELLING is gated on `billing_enabled?`: a self-hosted operator must never meet a
+  # paywall in software they are running themselves, and a deployment with no Stripe
+  # keys has nothing to offer but a button that cannot work.
+  #
+  # MANAGING an existing subscription is not. Stripe keeps charging whatever our
+  # configuration holds, so an instance that has lost its price id must still let a
+  # subscriber cancel or fix a card — gating both on one predicate meant taking the
+  # money and removing the cancel button. So the screen stays reachable, read-only,
+  # for anyone who has a Stripe customer.
+  #
+  # The routes exist in every deployment so `billing_path` cannot raise inside a view
+  # whose guard someone forgot; these are what make them inert when they should be.
+  def ensure_billing_reachable
+    return if Tastatur.billing_enabled? || @account.billing_manageable?
 
     # No record to authorize and no account to authorize it against — the feature
     # itself does not exist here. Stated because CLAUDE.md requires a reason
     # whenever Pundit verification is skipped.
     skip_authorization
     redirect_to sites_path
+  end
+
+  # Reached only when the screen is open read-only, i.e. somebody has a subscription
+  # to manage on an instance that cannot sell. Posting the form directly is the only
+  # way here, since the view renders no upgrade button in that state.
+  def ensure_can_sell
+    return if Tastatur.billing_enabled?
+
+    skip_authorization
+    redirect_to billing_path,
+                alert: "New subscriptions are not available on this instance. Your existing " \
+                       "subscription is unaffected and can still be managed."
   end
 
   def set_account

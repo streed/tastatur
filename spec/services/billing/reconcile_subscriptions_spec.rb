@@ -14,7 +14,7 @@ RSpec.describe Billing::ReconcileSubscriptions do
     end
   end
 
-  it "visits only the accounts that have a subscription" do
+  it "visits every account with a Stripe customer, and no others" do
     stub_sync
 
     report = described_class.call.value!
@@ -22,6 +22,38 @@ RSpec.describe Billing::ReconcileSubscriptions do
     expect(report.checked).to eq(1)
     expect(Billing::SyncSubscription).to have_received(:call).once
       .with(hash_including(account: subscribed))
+  end
+
+  # THE FAILURE THE OLD SCOPE COULD NOT SEE.
+  #
+  # It swept `where.not(stripe_subscription_id: nil)`, and that column is written
+  # only by a successful sync — so the only accounts the backstop could reach were
+  # the ones whose webhooks had already arrived. An account whose every delivery was
+  # refused (a rotated signing secret, an endpoint Stripe disabled) has a customer id
+  # from checkout and no subscription id, and stayed on the free plan while being
+  # billed monthly, with nothing raising anywhere.
+  it "recovers an account that paid but whose subscription was never recorded" do
+    orphan = create(:account, plan: "free", stripe_customer_id: "cus_paid", stripe_subscription_id: nil)
+    stub_sync { |account| account.update!(plan: "pro", stripe_subscription_id: "sub_found") if account == orphan }
+    allow(Rails.logger).to receive(:warn)
+
+    described_class.call
+
+    expect(Billing::SyncSubscription).to have_received(:call).with(hash_including(account: orphan))
+    expect(orphan.reload.plan).to eq("pro")
+  end
+
+  # Normal for a good number of rows now the sweep is keyed on the customer: somebody
+  # who started checkout and abandoned it, or cancelled long ago. Counting those as
+  # failures would make the report cry wolf every night.
+  it "does not count a customer with no subscription as a failure" do
+    create(:account, stripe_customer_id: "cus_abandoned", stripe_subscription_id: nil)
+    allow(Billing::SyncSubscription).to receive(:call).and_return(Dry::Monads::Failure(:no_subscription))
+
+    report = described_class.call.value!
+
+    expect(report.checked).to eq(2)
+    expect(report.failed).to eq(0)
   end
 
   # THE FAILURE THIS JOB EXISTS FOR.

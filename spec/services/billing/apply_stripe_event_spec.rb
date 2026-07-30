@@ -70,7 +70,34 @@ RSpec.describe Billing::ApplyStripeEvent do
       ))
     end
 
-    it "gives up quietly on an invoice for an account with no subscription" do
+    # A blank id is passed through rather than short-circuited, so the sync asks
+    # Stripe what the customer is actually on. THE FAILURE THAT MOTIVATES IT: an
+    # account whose earlier webhooks were all refused has no subscription on file,
+    # and the one later delivery that could rescue it used to return here without
+    # ever looking.
+    it "lets an invoice self-heal an account whose subscription was never recorded" do
+      subscription = Stripe::Subscription.construct_from(
+        id: "sub_discovered", object: "subscription", status: "active", customer: "cus_1",
+        cancel_at_period_end: false,
+        items: { object: "list", data: [{ id: "si_1", object: "subscription_item",
+                                          price: { id: "price_pro", object: "price" } }] }
+      )
+      allow(Stripe::Subscription).to receive(:list)
+        .and_return(Stripe::ListObject.construct_from(object: "list", data: [subscription.to_hash]))
+      allow(Stripe::Subscription).to receive(:retrieve).with("sub_discovered").and_return(subscription)
+
+      expect(described_class.call(event: event(
+        type: "invoice.paid",
+        object: { id: "in_1", object: "invoice", customer: "cus_1" }
+      ))).to be_success
+
+      expect(account.reload.stripe_subscription_id).to eq("sub_discovered")
+    end
+
+    it "gives up quietly when Stripe has no subscription for the customer either" do
+      allow(Stripe::Subscription).to receive(:list)
+        .and_return(Stripe::ListObject.construct_from(object: "list", data: []))
+
       result = described_class.call(event: event(
         type: "invoice.paid",
         object: { id: "in_1", object: "invoice", customer: "cus_1" }

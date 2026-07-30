@@ -7,6 +7,10 @@ class AccountsController < ApplicationController
     # Rendered by the invite form. A form object rather than bare params so it
     # can use the shared form builder and report its own validation errors.
     @invitation = MemberInvitation.new
+    # Read off the user, not through a policy scope: a trusted device belongs to
+    # the person rather than to the account being viewed, so there is no tenant
+    # question to ask and switching accounts must not change the list.
+    @trusted_devices = current_user.visible_trusted_devices
   end
 
   def edit

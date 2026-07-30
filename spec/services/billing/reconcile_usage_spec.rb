@@ -117,6 +117,69 @@ RSpec.describe Billing::ReconcileUsage do
     expect { described_class.call(notify: false) }.not_to have_enqueued_mail(BillingMailer, :usage_threshold)
   end
 
+  # An exception used to propagate out of find_each, so a single bad account left
+  # every account after it in the batch unrepaired and unwarned for that hour —
+  # silently, and in the same order every time.
+  it "keeps going when one account cannot be reconciled" do
+    account.update!(site_limit_override: 5)
+    other = create(:account, plan: "free")
+    other_site = create(:site, account: other, domain: "other.example.com")
+    create_event(site, at: 1.hour.ago)
+    create_event(other_site, at: 1.hour.ago)
+
+    call_count = 0
+    allow(Billing::UsageMeter).to receive(:repair).and_wrap_original do |original, *args, **kwargs|
+      call_count += 1
+      raise Redis::CannotConnectError, "down" if call_count == 1
+
+      original.call(*args, **kwargs)
+    end
+
+    report = described_class.call(notify: false).value!
+
+    expect(report.accounts_checked).to eq(2)
+    expect(report.accounts_failed).to eq(1)
+    expect(report.accounts_repaired).to eq(1), "the second account was still reconciled"
+  end
+
+  # A downgrade's grant is sized from the meter ("what you have used, plus the new
+  # allowance"). If the meter was behind when the grant was made — Redis flushed, or
+  # billing switched off for part of the month — the repair below would raise the
+  # counter to the true stored total while the ceiling stayed put, putting the customer
+  # instantly over a limit they were just promised the whole of.
+  describe "an account with a grandfathered allowance" do
+    before do
+      3.times { |i| create_event(site, visitor: "v#{i}", at: (i + 1).hours.ago) }
+      account.update!(event_limit_override: 100, event_limit_override_until: 10.days.from_now)
+    end
+
+    it "moves the ceiling with the counter" do
+      expect { described_class.call(notify: false) }
+        .to change { account.reload.event_limit_override }.from(100).to(103)
+    end
+
+    it "leaves a support grant with no expiry alone" do
+      account.update!(event_limit_override_until: nil)
+
+      expect { described_class.call(notify: false) }
+        .not_to change { account.reload.event_limit_override }
+    end
+
+    it "leaves an expired grant alone" do
+      account.update_columns(event_limit_override_until: 1.day.ago)
+
+      expect { described_class.call(notify: false) }
+        .not_to change { account.reload.event_limit_override }
+    end
+
+    it "does nothing when the counter did not need repairing" do
+      Billing::UsageMeter.record(account.id, count: 50)
+
+      expect { described_class.call(notify: false) }
+        .not_to change { account.reload.event_limit_override }
+    end
+  end
+
   describe "on a self-hosted install" do
     before { allow(Tastatur).to receive(:self_hosted?).and_return(true) }
 

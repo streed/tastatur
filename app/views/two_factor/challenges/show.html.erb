@@ -1,0 +1,57 @@
+<% content_for :title, "Enter your code · Tastatur" %>
+
+<%# The same chrome as every Devise screen, because to the person signing in this
+    IS a sign-in screen — it happens not to be one of Devise's. -%>
+<%= render layout: "devise/shared/auth_card",
+           locals: { title: "Enter your code",
+                     subtitle: "We sent a #{TwoFactor::IssueChallenge::CODE_LENGTH}-digit code to your email address.",
+                     links: false } do %>
+  <% unless @code_outstanding %>
+    <%# Reachable by burning every attempt within seconds of a code being sent:
+        the code is gone and the resend interval has not elapsed. Saying so beats
+        showing a box in which nothing can possibly be correct. -%>
+    <div class="notice border-signal text-ink mb-5" role="alert">
+      There is no code waiting at the moment. Ask for a new one below.
+    </div>
+  <% end %>
+
+  <%= form_with model: @challenge, scope: :two_factor_challenge, url: two_factor_challenge_path,
+                class: "card card-body space-y-5" do |f| %>
+    <%= f.error_summary %>
+
+    <%# inputmode/autocomplete are what make this bearable on a phone: the numeric
+        keypad opens, and iOS and Android offer the code straight from the
+        notification instead of making somebody switch apps to read it. -%>
+    <%= f.field :code, "Six-digit code",
+                autofocus: true, autocomplete: "one-time-code", inputmode: "numeric",
+                pattern: "[0-9]*", maxlength: TwoFactor::IssueChallenge::CODE_LENGTH,
+                spellcheck: "false",
+                hint: "It expires #{TwoFactor::IssueChallenge::CODE_TTL.inspect} after it was sent." %>
+
+    <%= f.check_box_field :trust_device, "Don't ask on this browser for #{TrustedDevice::TRUST_DURATION.inspect}",
+                          hint: "Leave this unticked on a shared or borrowed computer." %>
+
+    <div class="pt-1">
+      <%= f.submit "Sign in", class: "btn btn-primary w-full justify-center",
+                   data: { analytics_event: "Two Factor Submitted" } %>
+    </div>
+  <% end %>
+
+  <div class="card card-body mt-5 flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <p class="text-sm font-medium">Nothing arrived?</p>
+      <p class="text-[12px] text-muted mt-1">
+        A new code cancels the old one. Check spam before asking for a third.
+      </p>
+    </div>
+    <div class="flex items-center gap-2 shrink-0">
+      <%= button_to "Send a new code", resend_two_factor_challenge_path, class: "btn btn-sm",
+                    data: { analytics_event: "Two Factor Code Resent" } %>
+      <%# Abandons the half-finished sign-in rather than leaving somebody stuck on
+          a screen with no way back — the header's sign-out button is not rendered
+          here, because nobody is signed in. -%>
+      <%= button_to "Not you?", cancel_two_factor_challenge_path, method: :delete,
+                    class: "btn btn-quiet btn-sm" %>
+    </div>
+  </div>
+<% end %>

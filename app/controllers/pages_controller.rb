@@ -1,21 +1,32 @@
 class PagesController < ApplicationController
-  skip_before_action :authenticate_user!, only: %i[home about]
+  skip_before_action :authenticate_user!, only: %i[home about llms]
   # The landing page is genuinely public and touches no records, so there is
   # nothing to authorize. Noted explicitly because CLAUDE.md requires a stated
   # reason whenever Pundit verification is skipped.
   skip_after_action :verify_authorized
 
-  # /about is public information and stays readable before first-run setup, like
-  # the other informational pages. The root path deliberately does NOT: on a
-  # fresh self-hosted install, sending the operator to the setup wizard is the
-  # helpful thing to do.
-  always_reachable only: %i[about]
+  # /about and /llms.txt are public information and stay readable before
+  # first-run setup, like the other informational pages. The root path
+  # deliberately does NOT: on a fresh self-hosted install, sending the operator
+  # to the setup wizard is the helpful thing to do.
+  always_reachable only: %i[about llms]
 
   def about; end
 
+  # The llms.txt index for AI agents. Its format is pinned to markdown by the
+  # route, so there is nothing to negotiate here; the template is what matters.
+  def llms; end
+
   def home
     # A signed-in visitor almost never wants the marketing page.
-    redirect_to sites_path if user_signed_in?
+    return redirect_to sites_path if user_signed_in?
+
+    # HTML for people; markdown for machine readers that ask with
+    # `Accept: text/markdown`. Same content, none of the layout.
+    respond_to do |format|
+      format.html
+      format.md
+    end
   end
 
   # `/dashboard` exists because the starter template and Devise's default

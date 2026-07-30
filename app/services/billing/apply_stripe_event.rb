@@ -47,7 +47,7 @@ module Billing
     end
 
     def call
-      return Failure(:not_billable) if Tastatur.self_hosted?
+      return Failure(:not_billable) unless Tastatur.billing_enabled?
       return Failure(unhandled: @type) unless HANDLED.include?(@type)
 
       account = locate_account
@@ -86,10 +86,13 @@ module Billing
         account.update!(stripe_customer_id: customer_id) if customer_id.present? && account.stripe_customer_id.blank?
       end
 
-      subscription_id = subscription_id_for(account)
-      return Failure(:no_subscription) if subscription_id.blank?
-
-      SyncSubscription.call(account: account, subscription_id: subscription_id)
+      # A blank id is passed straight through rather than short-circuited, because
+      # that is what makes an event self-healing: SyncSubscription then asks Stripe
+      # what the customer is actually on. An account whose earlier webhooks were all
+      # refused has no subscription on file, and a later `invoice.paid` used to
+      # return here without ever looking — so the one delivery that could have
+      # rescued it did nothing.
+      SyncSubscription.call(account: account, subscription_id: subscription_id_for(account))
     end
 
     def subscription_id_for(account)

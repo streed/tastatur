@@ -147,7 +147,7 @@ without editing anything:
 | `RAILS_ENV` | `production` |
 | `RAILS_LOG_TO_STDOUT` | `1` |
 | `RAILS_MAX_THREADS` | `5` (see the pool note below) |
-| `SELF_HOSTED` | `1` unless you are running the billed hosted service |
+| `SELF_HOSTED` | `1` for your own instance. `0` (or unset) runs the billed hosted service — see [Billing](#billing-only-if-self_hosted-is-not-1) below, and set the Stripe variables too |
 | `ALLOW_SIGNUP` | `0` to keep an internet-exposed instance invite-only |
 | `MAIL_FROM` | `no-reply@yourdomain.com` |
 | `RESEND_API_KEY` | from Resend. Leave it unset and email is written to the log instead of sent, so confirmation links appear there in plain text — usable for a first boot, wrong to leave that way |
@@ -156,6 +156,45 @@ without editing anything:
 
 Substitute the actual service names Railway assigned; the references above assume
 `TimescaleDB`, `Redis` and `Redis-Privacy`.
+
+### Billing, only if `SELF_HOSTED` is not `1`
+
+Skip this entirely for your own instance. With `SELF_HOSTED=1` there are no plans,
+no event or site limits, no upgrade interface, and Stripe is never contacted.
+
+Leaving them unset on a deployment where `SELF_HOSTED` is not `1` is also safe: billing
+stays off until all three of the variables it reads are present, so nobody is capped by
+a limit they cannot pay to lift. The boot log says `BILLING IS DISABLED` and names what
+is missing. Setting `SELF_HOSTED=1` is still better, because then it is deliberate
+rather than merely harmless.
+
+For the hosted service, four variables plus three things in the Stripe dashboard:
+
+| Variable | Value |
+|---|---|
+| `STRIPE_SECRET_KEY` | `sk_live_…` |
+| `STRIPE_PUBLISHABLE_KEY` | `pk_live_…`. Nothing reads it today — payment happens on Stripe's hosted Checkout, so this app renders no card form — but it is half of the pair every deployment expects to set |
+| `STRIPE_WEBHOOK_SECRET` | `whsec_…`, from the endpoint you create below |
+| `STRIPE_PRICE_PRO` | `price_…`, the recurring monthly price for the Pro plan |
+
+In Stripe:
+
+1. One product with a **recurring monthly** price matching `Billing::Plan::PRO`
+   (currently $40). Copy its price id into `STRIPE_PRICE_PRO`.
+2. A webhook endpoint at `https://YOUR_DOMAIN/billing/stripe/webhook`, subscribed to
+   exactly the events in `Billing::ApplyStripeEvent::HANDLED`:
+   `checkout.session.completed`, `customer.subscription.created`,
+   `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.paid`,
+   `invoice.payment_failed`. Copy its signing secret into `STRIPE_WEBHOOK_SECRET`.
+3. Enable the **customer portal** (Settings → Billing → Customer portal). It needs a
+   saved configuration before `BillingPortal::Session.create` will succeed, so
+   without it the "Billing portal" button returns an error rather than a page.
+
+**`STRIPE_WEBHOOK_SECRET` is the one whose absence fails invisibly.** Without it the
+webhook endpoint refuses every delivery with a 503, so a subscription is paid for and
+never applied: Stripe shows the charge, the customer stays on the free plan, and
+nothing raises. The app logs an error at boot for each missing variable it reads, and
+`bin/rails tastatur:billing:verify` checks them deliberately — see step 7.
 
 ### Leave these alone
 
@@ -229,6 +268,10 @@ What it runs:
 | `rotate_visitor_salt` | daily 04:07 | Stored data quietly stops being unlinkable. Nothing errors, and your privacy page becomes inaccurate |
 | `enforce_data_retention` | daily 03:23 | You hold data longer than you told people you would |
 | `flush_event_buffer` | every minute | Events sit in Redis instead of PostgreSQL. The ingest path also triggers a flush on buffer size, so a busy site still writes; a quiet one stops recording |
+| `reconcile_usage` | hourly at :13 | *Hosted only.* The monthly event counter enforcement reads drifts below reality, so published plan allowances quietly stop being the ones applied. Usage warning emails also stop |
+| `reconcile_subscriptions` | daily 04:41 | *Hosted only.* A webhook Stripe gave up delivering is never noticed, so an account stays on a plan nobody is paying for — or a paying account stays capped |
+
+The two billing jobs are no-ops when `SELF_HOSTED=1`; they return immediately.
 
 The first two are worth alerting on rather than retrying quietly.
 
@@ -277,6 +320,24 @@ On first visit you land on the first-run setup screen, which creates the owner
 account and your first site. It is reachable only while the database has no users,
 so it closes itself.
 
+If you are running the hosted service, check the billing wiring too:
+
+```bash
+railway run --service <app> bin/rails tastatur:billing:verify
+```
+
+It confirms the keys are present and that the live Stripe price still costs what
+`/pricing` publishes, in the same currency, recurring monthly. It exits non-zero when
+something is wrong, so it is worth putting in a deploy hook. On `SELF_HOSTED=1` it
+says there is nothing to verify and exits 0.
+
+Then send Stripe a real event — the CLI is the quickest way — and confirm the
+endpoint answers 200 rather than 400 or 503:
+
+```bash
+stripe trigger customer.subscription.updated --api-key sk_live_…
+```
+
 ## Things that differ from the VPS instructions
 
 | | VPS (`docker-compose.prod.yml`) | Railway |
@@ -287,7 +348,8 @@ so it closes itself.
 | Non-persistent Redis | a service with no volume | a service with no volume |
 | GeoIP | volume + download task | baked into the image |
 | Worker | a compose service | a second Railway service |
-| Migrations | entrypoint runs `db:prepare` | same |
+| Migrations | entrypoint runs `db:prepare` | `preDeployCommand`, because Railway wraps the start command in a shell and the entrypoint's check never fires |
+| Billing | usually off (`SELF_HOSTED=1`) | same, unless this *is* the hosted service |
 
 ## Trusted proxies
 

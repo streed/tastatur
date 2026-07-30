@@ -13,10 +13,10 @@ RSpec.describe Billing::SyncSubscription do
 
   # The shape stripe 19.3.1 actually receives. Period boundaries live on the
   # subscription ITEM, not the subscription.
-  def stripe_subscription(status: "active", items: nil, **attrs)
+  def stripe_subscription(status: "active", items: nil, id: "sub_1", **attrs)
     Stripe::Subscription.construct_from(
       {
-        id: "sub_1",
+        id: id,
         object: "subscription",
         status: status,
         customer: "cus_1",
@@ -153,6 +153,162 @@ RSpec.describe Billing::SyncSubscription do
       sync(stripe_subscription(customer: { id: "cus_expanded", object: "customer" }))
 
       expect(account.reload.stripe_customer_id).to eq("cus_expanded")
+    end
+  end
+
+  # THE RE-SUBSCRIBE BUG. `stripe_subscription_id` is written for cancelled
+  # subscriptions too, so falling back to the column first meant it was never blank
+  # for anyone who had ever subscribed — and the discovery below was dead code for
+  # exactly the customers who needed it. A customer who cancelled and re-subscribed
+  # had their OLD, cancelled subscription re-read on returning from Checkout and was
+  # written back to `free` seconds after a successful charge.
+  describe "an account re-subscribing after a cancellation" do
+    let(:cancelled) { stripe_subscription(status: "canceled", id: "sub_old") }
+    let(:fresh) { stripe_subscription(status: "active", id: "sub_new") }
+
+    before do
+      account.update!(plan: "free", subscription_status: "canceled", stripe_subscription_id: "sub_old")
+
+      allow(Stripe::Subscription).to receive(:list)
+        .with({ customer: "cus_1", status: "all", limit: 1 })
+        .and_return(Stripe::ListObject.construct_from(object: "list", data: [fresh.to_hash]))
+      allow(Stripe::Subscription).to receive(:retrieve).with("sub_new").and_return(fresh)
+      allow(Stripe::Subscription).to receive(:retrieve).with("sub_old").and_return(cancelled)
+    end
+
+    it "asks Stripe what the customer is on now instead of re-reading the old id" do
+      expect(described_class.call(account: account)).to be_success
+
+      expect(account.reload.plan).to eq("pro")
+      expect(account.stripe_subscription_id).to eq("sub_new")
+    end
+  end
+
+  # A late or retried event about a subscription the account has already moved off.
+  # Stripe emits the old subscription's `deleted` at its period end and retries for
+  # three days, so it can land after the new one is live — and both carry the same
+  # account metadata, so it is attributed correctly and then applied, taking a paying
+  # customer down to free. The nightly reconciliation would then re-confirm that
+  # forever.
+  describe "an event about a superseded subscription" do
+    before do
+      account.update!(plan: "pro", subscription_status: "active", stripe_subscription_id: "sub_new")
+    end
+
+    it "is ignored rather than downgrading a paying account" do
+      cancelled = stripe_subscription(status: "canceled", id: "sub_old")
+      allow(Stripe::Subscription).to receive(:retrieve).with("sub_old").and_return(cancelled)
+
+      result = described_class.call(account: account, subscription_id: "sub_old")
+
+      expect(result).to eq(Dry::Monads::Failure(:superseded))
+      expect(account.reload.plan).to eq("pro")
+      expect(account.stripe_subscription_id).to eq("sub_new")
+    end
+
+    it "still accepts an event about the subscription the account is actually on" do
+      cancelled = stripe_subscription(status: "canceled", id: "sub_new")
+      allow(Stripe::Subscription).to receive(:retrieve).with("sub_new").and_return(cancelled)
+
+      expect(described_class.call(account: account, subscription_id: "sub_new")).to be_success
+      expect(account.reload.plan).to eq("free")
+    end
+
+    it "still accepts a different subscription that DOES entitle, which is a re-subscribe" do
+      account.update!(plan: "free", subscription_status: "canceled", stripe_subscription_id: "sub_old")
+      fresh = stripe_subscription(status: "active", id: "sub_new")
+      allow(Stripe::Subscription).to receive(:retrieve).with("sub_new").and_return(fresh)
+
+      expect(described_class.call(account: account, subscription_id: "sub_new")).to be_success
+      expect(account.reload.plan).to eq("pro")
+    end
+  end
+
+  # A downgrade must not retroactively spend the month. The meter counts the whole
+  # calendar month, so a Pro account that recorded three million events and then
+  # cancels on the 20th would be measured against Free's 100,000 and refused
+  # everything until the 1st — while /pricing promises that cancelling leaves every
+  # site collecting, and that Free includes 100,000 events a month.
+  describe "a mid-month downgrade" do
+    before do
+      account.update!(plan: "pro", subscription_status: "active", stripe_subscription_id: "sub_1")
+      Billing::UsageMeter.record(account.id, count: 3_000_000)
+    end
+
+    it "grants the new plan's full allowance for the rest of the month" do
+      cancelled = stripe_subscription(status: "canceled")
+      allow(Stripe::Subscription).to receive(:retrieve).with("sub_1").and_return(cancelled)
+
+      described_class.call(account: account, subscription_id: "sub_1")
+      account.reload
+
+      expect(account.plan).to eq("free")
+      expect(account.event_limit).to eq(3_100_000)
+      expect(account.event_limit_override_until).to eq(Billing::UsageMeter.period_bounds.last)
+
+      Billing::EventQuota.clear!
+      expect(Billing::EventQuota.allow?(account.id)).to be(true),
+             "collection must continue after a downgrade, not stop until the 1st"
+    end
+
+    it "lets the grandfathering expire so next month is the plan's own number" do
+      cancelled = stripe_subscription(status: "canceled")
+      allow(Stripe::Subscription).to receive(:retrieve).with("sub_1").and_return(cancelled)
+      described_class.call(account: account, subscription_id: "sub_1")
+
+      account.reload.update_column(:event_limit_override_until, 1.second.ago)
+
+      expect(account.reload.event_limit).to eq(100_000)
+    end
+
+    it "does not grandfather an account that was under the new allowance anyway" do
+      Billing::UsageMeter.reset!(account.id)
+      Billing::UsageMeter.record(account.id, count: 40)
+      cancelled = stripe_subscription(status: "canceled")
+      allow(Stripe::Subscription).to receive(:retrieve).with("sub_1").and_return(cancelled)
+
+      described_class.call(account: account, subscription_id: "sub_1")
+
+      expect(account.reload.event_limit_override).to be_nil
+      expect(account.event_limit).to eq(100_000)
+    end
+
+    # Applying it on every sync would ratchet: the nightly reconciliation would
+    # re-read a larger "used" and raise the ceiling again, so the cap would recede
+    # forever.
+    it "does not raise the ceiling again on a later sync of the same plan" do
+      cancelled = stripe_subscription(status: "canceled")
+      allow(Stripe::Subscription).to receive(:retrieve).with("sub_1").and_return(cancelled)
+      described_class.call(account: account, subscription_id: "sub_1")
+      granted = account.reload.event_limit_override
+
+      Billing::UsageMeter.record(account.id, count: 50_000)
+      described_class.call(account: account, subscription_id: "sub_1")
+
+      expect(account.reload.event_limit_override).to eq(granted)
+    end
+
+    # An override of 3,100,000 left over from a downgrade would otherwise sit below
+    # Pro's ten million and quietly become the real limit.
+    it "is cleared again by an upgrade" do
+      account.update!(plan: "free", event_limit_override: 3_100_000,
+                      event_limit_override_until: 10.days.from_now)
+
+      allow(Stripe::Subscription).to receive(:retrieve).with("sub_1").and_return(stripe_subscription)
+      described_class.call(account: account, subscription_id: "sub_1")
+
+      expect(account.reload.plan).to eq("pro")
+      expect(account.event_limit_override).to be_nil
+      expect(account.event_limit).to eq(10_000_000)
+    end
+
+    it "leaves a support-granted override without an expiry alone" do
+      account.update!(plan: "free", event_limit_override: 500_000, event_limit_override_until: nil)
+
+      allow(Stripe::Subscription).to receive(:retrieve).with("sub_1").and_return(stripe_subscription)
+      described_class.call(account: account, subscription_id: "sub_1")
+
+      expect(account.reload.event_limit_override).to eq(500_000)
     end
   end
 

@@ -66,12 +66,13 @@
 <% end %>
 
 <p style="margin:0; padding-top:20px; border-top:1px solid #e3e1d8; font-size:13px; color:#8c8a80;">
-  Bot traffic and events refused for coming from a hostname that is not yours are
-  never counted against this allowance — only events we actually store.
+  Bot traffic and events claiming a hostname that is not yours are never counted
+  against this allowance. Events refused for being over it are, which is how the
+  figure above and the number not recorded add up.
   <% if @usage.events_used_last_month.positive? %>
     Last month you used
     <%= number_with_delimiter(@usage.events_used_last_month) %>.
   <% end %>
-  You are receiving this because you are an owner or admin of
-  <%= @account.name %>.
+  You are receiving this because you own <%= @account.name %>, which is the role
+  that can change its plan.
 </p>

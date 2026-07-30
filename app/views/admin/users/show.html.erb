@@ -33,6 +33,7 @@
            ["Sign-ins", metric_number(@user.sign_in_count.to_i)],
            ["Last seen", @user.last_sign_in_at ? "#{time_ago_in_words(@user.last_sign_in_at)} ago" : "never signed in"],
            ["Failed attempts", metric_number(@user.failed_attempts.to_i)],
+           ["Two-factor", @user.two_factor_enabled? ? "on, by email" : "off"],
            ["Identifier", @user.public_id]
          ].each_with_index do |(label, value), index| %>
           <div class="px-5 py-4 border-b border-rule <%= "sm:border-l sm:border-rule" if index.odd? %>">
@@ -85,6 +86,20 @@
                  button: "Send reset",
                  path: send_password_reset_admin_user_path(@user),
                  disabled: false %>
+
+      <%# Off only. There is no button to turn it ON, and no route behind one: an
+          operator who could enable somebody's second factor could aim the codes
+          at a mailbox they control, which is a takeover with extra steps. See
+          Admin::UsersController#disable_two_factor. -%>
+      <%= render "admin/users/action",
+                 label: "Turn off two-factor authentication",
+                 blurb: "For somebody locked out because the mailbox their codes go to no longer works. Forgets their trusted devices too. They can turn it back on themselves once they are in.",
+                 button: "Turn off",
+                 method: :delete,
+                 confirm: "Turn off two-factor authentication for #{@user.email}? Only do this if you have established who you are talking to.",
+                 path: two_factor_admin_user_path(@user),
+                 disabled: !@user.two_factor_enabled?,
+                 disabled_note: "Not in use." %>
     </div>
   </div>
 

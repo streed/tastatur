@@ -30,19 +30,34 @@ Rails.application.config.after_initialize do
   # install has no plans and no Stripe, so warning about a missing Stripe key there
   # would be telling an operator to fix something that is correct.
   #
-  # STRIPE_WEBHOOK_SECRET earns its place here rather than being discovered later:
-  # without it the webhook endpoint refuses every delivery, so subscriptions are
-  # bought and then never applied. That failure is invisible from the outside —
-  # Stripe shows the charge, the customer stays on the free plan, and nothing in
-  # this application raises.
+  # These are reported as errors and are NOT fatal, because a missing one no longer
+  # leaves the app half-working: `Tastatur.billing_enabled?` is false until they are
+  # all present, so billing switches itself off entirely — no plan limits, no upgrade
+  # interface, no webhook endpoint. That is the safe state rather than the correct
+  # one, which is why it is still logged at error level with the consequence spelled
+  # out. STRIPE_WEBHOOK_SECRET gets the longest note because its absence is the one
+  # that would otherwise be invisible from the outside.
   unless Tastatur.self_hosted?
-    missing.merge!(
-      {
-        "STRIPE_SECRET_KEY" => "checkout and the billing portal will raise when used",
-        "STRIPE_WEBHOOK_SECRET" => "subscription changes will be refused, so paying customers stay on the free plan",
-        "STRIPE_PRICE_PRO" => "the Pro plan cannot be bought"
-      }.reject { |key, _| ENV[key].present? }
-    )
+    stripe_missing = {
+      "STRIPE_SECRET_KEY" => "nothing can be created at Stripe",
+      "STRIPE_WEBHOOK_SECRET" => "every delivery would be refused, so a subscription would be paid for " \
+                                 "and never applied — Stripe shows the charge and the customer stays on free",
+      "STRIPE_PRICE_PRO" => "there would be nothing to sell"
+    }.reject { |key, _| ENV[key].present? }
+
+    if stripe_missing.any?
+      Rails.logger.error(
+        "[tastatur] BILLING IS DISABLED: #{stripe_missing.keys.join(', ')} not set. " \
+        "Plan limits are NOT being enforced, the upgrade interface is hidden and no new subscription " \
+        "can be bought. Anyone who ALREADY subscribed is still being charged by Stripe and can still " \
+        "cancel through the billing portal, which needs only STRIPE_SECRET_KEY. This is the safe state " \
+        "for a half-configured instance — but if this is the hosted service, it is not the state you " \
+        "want. Set SELF_HOSTED=1 to make it deliberate, or run `bin/rails tastatur:billing:verify`. " \
+        "See docs/architecture/billing.md"
+      )
+    end
+
+    missing.merge!(stripe_missing)
   end
 
   missing.each do |key, consequence|

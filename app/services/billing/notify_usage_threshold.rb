@@ -21,10 +21,18 @@ module Billing
     # re-sent by a job running on the 1st with a stale clock.
     NOTICE_TTL = 62.days
 
-    # Billing is an owner-and-admin concern. Members and viewers read the numbers;
-    # they cannot change the plan, so telling them the plan is nearly full is
-    # noise they cannot act on.
-    NOTIFIED_ROLES = %w[owner admin].freeze
+    # OWNERS ONLY, because the email's whole point is a button that changes the plan
+    # and AccountPolicy#manage_billing? is owner-only.
+    #
+    # It used to include admins, on the reasoning that members and viewers cannot
+    # change the plan — which is true of admins too. The result was a mail whose
+    # primary action bounced them off /billing with "you do not have access to
+    # that". Either the email or the policy had to give; the policy is the one
+    # protecting a recurring charge, so it stays and the recipient list narrows.
+    #
+    # An admin is not left in the dark: the site settings screen shows refused
+    # events with an explanation, and so does the installation screen.
+    NOTIFIED_ROLES = %w[owner].freeze
 
     def initialize(account:, at: Time.current)
       @account = account
@@ -38,8 +46,19 @@ module Billing
       return Failure(:within_limits) if level.nil?
       return Failure(:already_notified) unless claim!(level)
 
-      recipients.each do |user|
-        BillingMailer.usage_threshold(@account, user, level).deliver_later
+      # The claim is released if enqueuing fails, for the same reason
+      # Billing::ApplyStripeEvent releases its receipt: the key means the warning was
+      # SENT, and holding it for a warning that was not sent suppresses it for the
+      # rest of the month. `deliver_later` writes to Redis and can raise, and the
+      # whole point of this email is that an account whose events stop being recorded
+      # is told rather than left to conclude the product is broken.
+      begin
+        recipients.each do |user|
+          BillingMailer.usage_threshold(@account, user, level).deliver_later
+        end
+      rescue StandardError
+        release!(level)
+        raise
       end
 
       Rails.logger.info("[tastatur] usage notice (#{level}) for account #{@account.id}")
@@ -64,9 +83,15 @@ module Billing
     # whole guarantee: two workers reconciling the same account concurrently both
     # see "exceeded", and exactly one of them gets true back.
     def claim!(level)
-      key = "tastatur:usage_notice:#{@account.id}:#{UsageMeter.period_key(@at)}:#{level}"
+      REDIS_POOL.with { |redis| redis.set(notice_key(level), 1, nx: true, ex: NOTICE_TTL.to_i) }
+    end
 
-      REDIS_POOL.with { |redis| redis.set(key, 1, nx: true, ex: NOTICE_TTL.to_i) }
+    def release!(level)
+      REDIS_POOL.with { |redis| redis.del(notice_key(level)) }
+    end
+
+    def notice_key(level)
+      "tastatur:usage_notice:#{@account.id}:#{UsageMeter.period_key(@at)}:#{level}"
     end
   end
 end

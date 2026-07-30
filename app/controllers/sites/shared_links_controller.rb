@@ -2,8 +2,11 @@ module Sites
   class SharedLinksController < ApplicationController
     before_action :set_site
 
+    # Newest first, because the one you just made is the one you are here to copy.
+    # Alphabetical put it wherever its label happened to sort, which on an account
+    # with a dozen client links meant hunting for it.
     def index
-      @shared_links = policy_scope(SharedLink).where(site: @site).order(:name)
+      @shared_links = policy_scope(SharedLink).where(site: @site).order(created_at: :desc)
       @shared_link = SharedLink.new
     end
 
@@ -12,7 +15,11 @@ module Sites
       authorize @shared_link
 
       if @shared_link.save
-        redirect_to site_shared_links_path(@site), notice: "Share link created."
+        # `created` only highlights the new row. The secret is the slug, which is
+        # not this, and the row it marks is one the viewer is already authorized
+        # to see.
+        redirect_to site_shared_links_path(@site, created: @shared_link.public_id),
+                    notice: "Share link created. Copy it below."
       else
         redirect_to site_shared_links_path(@site), alert: @shared_link.errors.full_messages.to_sentence
       end

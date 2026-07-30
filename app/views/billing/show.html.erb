@@ -5,14 +5,51 @@
     <div class="mt-5">
       <h1 class="text-2xl font-semibold">Plan</h1>
       <p class="label mt-2">
-        <%= @account.name %><span class="mx-2">·</span><%= @usage.plan.name %>
-        <% if @usage.plan.paid? %>
-          <span class="mx-2">·</span>$<%= @usage.plan.price_display %>/month
+        <%= @account.name %><span class="mx-2">·</span><%= @account.billing_plan.name %>
+        <% if @can_sell && @account.billing_plan.paid? %>
+          <span class="mx-2">·</span>$<%= @account.billing_plan.price_display %>/month
         <% end %>
       </p>
     </div>
     <%= link_to "Account", account_path, class: "btn btn-sm" %>
   </div>
+
+<%# BILLING IS OFF ON THIS INSTANCE, but this account has a subscription at Stripe.
+    Read-only: the one thing that must not disappear is the way out. Stripe keeps
+    charging whatever our configuration holds, so an instance that cannot sell must
+    still let somebody cancel or fix a card — and the portal needs only the API key.
+    Nothing about allowances is shown, because none are being enforced, and no prices,
+    because this instance could not charge them. -%>
+<% unless @can_sell %>
+  <div class="notice border-signal text-ink mb-6" role="status">
+    <p class="font-semibold mb-1">Billing is not configured on this instance.</p>
+    <p class="text-sm">
+      New subscriptions and plan changes are unavailable here, and no plan limits are
+      being applied. Your existing subscription is unaffected — Stripe is still billing
+      it, and you can cancel it, change your card or read your invoices in the billing
+      portal below.
+    </p>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><h2 class="text-sm font-semibold">Your subscription</h2></div>
+    <div class="card-body">
+      <% if @account.current_period_ends_at %>
+        <p class="text-sm text-ink-2 mb-5">
+          Last recorded as <%= @account.subscription_status || "active" %>, through
+          <%= @account.current_period_ends_at.to_date.to_fs(:long) %>. Stripe holds the
+          authoritative state; open the portal to see it.
+        </p>
+      <% end %>
+      <%= button_to "Billing portal", billing_portal_path, class: "btn btn-primary" %>
+      <p class="text-[12px] text-muted mt-5 leading-relaxed">
+        Cards, invoices, VAT details and cancellation are all handled by Stripe's
+        billing portal. No card number ever reaches Tastatur.
+      </p>
+    </div>
+  </div>
+</div>
+<% else %>
 
   <%# --- Anything wrong, first and in words. -------------------------------- -%>
   <% if @account.payment_problem? %>
@@ -95,8 +132,9 @@
       <% end %>
 
       <p class="text-[13px] text-muted mt-4 leading-relaxed">
-        Counted when an event is stored. Crawler traffic and events refused for
-        claiming a hostname that is not yours never reach the count.
+        Counted when an event reaches us, including any refused for being over the
+        allowance — so this figure and the refused count above add up. Crawler traffic
+        and events claiming a hostname that is not yours never reach the count at all.
         <% if @usage.events_used_last_month.positive? %>
           Last month: <%= number_with_delimiter(@usage.events_used_last_month) %>.
         <% end %>
@@ -177,3 +215,4 @@
     </div>
   </div>
 </div>
+<% end %>

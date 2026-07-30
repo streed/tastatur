@@ -69,6 +69,12 @@ module Analytics
     def empty? = @applied.empty?
     def [](key) = @applied[key.to_s]
 
+    # An event filter pins event_name in the WHERE clause, which flips what the
+    # volume metric has to mean — see Scope#volume_expression. Everything that
+    # branches on "is this dashboard scoped to one custom event" asks this,
+    # rather than inspecting the applied hash directly.
+    def event_scoped? = @applied.key?("event")
+
     def each(&) = @applied.each(&)
 
     def label_for(key) = HUMAN_LABELS[key.to_s] || key.to_s.humanize

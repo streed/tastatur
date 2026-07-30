@@ -7,6 +7,12 @@ module Admin
     def resend_confirmation? = superuser?
     def send_password_reset? = superuser?
 
+    # Off only, never on. See Admin::UsersController#disable_two_factor: an
+    # administrator who could enable somebody's second factor could point it at a
+    # mailbox they control, so there is deliberately no `enable_two_factor?` here
+    # and no route that would reach one.
+    def disable_two_factor? = superuser?
+
     # Granting is a superuser action; revoking is too, with one extra rule.
     def grant_admin? = superuser?
 

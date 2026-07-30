@@ -18,18 +18,28 @@ RSpec.describe Billing::NotifyUsageThreshold do
       Billing::UsageMeter.record(account.id, count: 90)
     end
 
-    # Billing is a decision only an owner or admin can act on. Telling a viewer the
-    # plan is nearly full is noise about something they cannot change.
+    # OWNERS ONLY. The email's primary action is a button that changes the plan, and
+    # AccountPolicy#manage_billing? is owner-only — so mailing an admin would be
+    # mailing them a link that bounces them off /billing with "you do not have access
+    # to that".
     #
     # Asserted through the delivered mail rather than the enqueued arguments, because
     # the arguments are serialised GlobalIDs and asserting on those tests ActiveJob
     # rather than who was written to.
-    it "tells owners and admins and nobody else" do
+    it "tells the owner and nobody else" do
       perform_enqueued_jobs do
         expect(described_class.call(account: account)).to be_success
       end
 
-      expect(ActionMailer::Base.deliveries.flat_map(&:to)).to contain_exactly(owner.email, admin.email)
+      expect(ActionMailer::Base.deliveries.flat_map(&:to)).to contain_exactly(owner.email)
+    end
+
+    it "reaches everyone who can act on it, and only them" do
+      expect(described_class::NOTIFIED_ROLES).to eq(%w[owner])
+
+      context = AuthorizationContext.new(user: admin, account: account)
+      expect(AccountPolicy.new(context, account).manage_billing?).to be(false),
+             "if an admin can manage billing, they belong in NOTIFIED_ROLES too"
     end
   end
 
@@ -59,6 +69,23 @@ RSpec.describe Billing::NotifyUsageThreshold do
       Billing::UsageMeter.record(account.id, count: 1_000_000)
 
       expect(described_class.call(account: account)).to eq(Dry::Monads::Failure(:within_limits))
+    end
+  end
+
+  # The claim means the warning was SENT. Holding it for one that was not suppresses
+  # the warning for the rest of the month — and the whole point of this email is that
+  # an account whose events stop being recorded is told, rather than left to conclude
+  # the product is broken. Same rule as Billing::ApplyStripeEvent's receipt.
+  describe "when the mail cannot be enqueued" do
+    before { Billing::UsageMeter.record(account.id, count: 500) }
+
+    it "releases the claim so the next run tries again" do
+      allow(BillingMailer).to receive(:usage_threshold).and_raise(Redis::CannotConnectError, "queue down")
+
+      expect { described_class.call(account: account) }.to raise_error(Redis::CannotConnectError)
+
+      allow(BillingMailer).to receive(:usage_threshold).and_call_original
+      expect(described_class.call(account: account)).to be_success
     end
   end
 

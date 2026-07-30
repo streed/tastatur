@@ -41,8 +41,7 @@
                             hint: "Recommended. Turning this off accepts events claiming any hostname, which means anyone with your site key can add traffic to your reports." %>
     </div>
 
-    <%= f.actions "Save settings", cancel_to: site_path(@site),
-                  destructive: link_to("Share links", site_shared_links_path(@site), class: "btn btn-quiet") %>
+    <%= f.actions "Save settings", cancel_to: site_path(@site) %>
   <% end %>
 
   <%# Rejections are shown, not hidden. A site owner whose app.example.com traffic
@@ -98,7 +97,11 @@
             <p class="text-[13px] text-ink-2 mb-4">
               <span class="font-medium text-ink"><%= rejection_reason_label(reason) %>.</span>
               <%= note %>
-              <% if reason.to_s == "plan_limit" && !Tastatur.self_hosted? %>
+              <%# Only to an owner: billing is owner-only, so this link is a dead end
+                  for anybody else. They still see the explanation, which is the part
+                  that matters here. -%>
+              <% if reason.to_s == "plan_limit" && Tastatur.billing_enabled? &&
+                    policy(current_account).manage_billing? %>
                 <%= link_to "Review your plan", billing_path, class: "underline hover:text-signal" %>.
               <% end %>
             </p>

@@ -84,28 +84,85 @@ RSpec.describe Billing::StartCheckout do
   end
 
   describe "refusals" do
-    # A second checkout for somebody already paying would create a SECOND
-    # subscription and bill them twice, and Stripe will happily do it. They are sent
-    # to the portal instead.
-    it "refuses to start a second subscription for a paying account" do
-      account.update!(plan: "pro", subscription_status: "active", stripe_subscription_id: "sub_1")
+    def stub_customer_subscriptions(*statuses)
+      data = statuses.each_with_index.map do |status, i|
+        { id: "sub_#{i}", object: "subscription", status: status }
+      end
+      allow(Stripe::Subscription).to receive(:list)
+        .and_return(Stripe::ListObject.construct_from(object: "list", data: data))
+    end
+
+    # ASKS STRIPE, NOT OUR COLUMNS, and that is the point.
+    #
+    # Checking `plan` and `subscription_status` was not enough, because those are
+    # only written by a successful sync — so the state where a second charge is most
+    # likely is precisely the state where they are stale: the customer has paid,
+    # every webhook was refused, and the account still reads free with no
+    # subscription id. A second checkout then creates a second subscription on the
+    # same Stripe customer and bills them twice.
+    it "refuses when Stripe already has a live subscription, whatever our columns say" do
+      account.update!(plan: "free", subscription_status: nil,
+                      stripe_subscription_id: nil, stripe_customer_id: "cus_1")
+      stub_customer_subscriptions("active")
 
       expect(start).to eq(Dry::Monads::Failure(:already_subscribed))
     end
 
-    it "lets a past_due account start again, since Stripe may have given up on the old card" do
-      account.update!(plan: "pro", subscription_status: "past_due", stripe_customer_id: "cus_1")
+    # `unpaid` does not entitle the customer to anything, but Stripe will still
+    # collect the outstanding invoice if they fix their card — so selling them a
+    # second subscription means they pay twice for one month.
+    %w[active trialing past_due unpaid incomplete].each do |status|
+      it "refuses while a #{status} subscription exists at Stripe" do
+        account.update!(stripe_customer_id: "cus_1")
+        stub_customer_subscriptions(status)
+
+        expect(start).to eq(Dry::Monads::Failure(:already_subscribed))
+      end
+    end
+
+    it "allows a customer whose only subscriptions are finished" do
+      account.update!(stripe_customer_id: "cus_1")
+      stub_customer_subscriptions("canceled", "incomplete_expired")
       allow(Stripe::Checkout::Session).to receive(:create).and_return(session)
 
       expect(start).to be_success
     end
 
-    # A deployment problem, and the message has to name the variable rather than
-    # blaming the customer's card.
-    it "names the missing environment variable when the price is not configured" do
+    it "does not ask Stripe at all for an account that has never been billed" do
+      expect(Stripe::Subscription).not_to receive(:list)
+      allow(Stripe::Customer).to receive(:create).and_return(customer)
+      allow(Stripe::Checkout::Session).to receive(:create).and_return(session)
+
+      expect(start).to be_success
+    end
+
+    # With one paid plan, an unset price means the instance cannot sell anything at
+    # all — so `Tastatur.billing_enabled?` is false and billing switches itself off
+    # rather than offering a button that fails. The customer never reaches checkout,
+    # and nothing enforces a limit they could not lift.
+    it "reports billing as off, not as a broken price, when the only paid plan has none" do
       ENV["STRIPE_PRICE_PRO"] = nil
 
-      expect(start).to eq(Dry::Monads::Failure(price_not_configured: "STRIPE_PRICE_PRO"))
+      expect(start).to eq(Dry::Monads::Failure(:not_billable))
+      expect(Tastatur.billing_enabled?).to be(false)
+    end
+
+    # The per-plan failure fires when SOME paid plan is sellable and the one being
+    # bought is not — which is why `billing_configured?` asks `any?` rather than
+    # `all?`: one plan missing a price must not take the whole billing system down.
+    # Constructed with a second purchasable plan, because there is only one today.
+    it "names the missing environment variable for a plan that has no price" do
+      team = Billing::Plan.new(key: "team", name: "Team", price_cents: 9_900, currency: "usd",
+                               monthly_event_limit: 50_000_000, site_limit: 100, purchasable: true)
+      allow(Billing::Plan).to receive(:purchasable_plans).and_return([Billing::Plan.pro, team])
+
+      expect(Tastatur.billing_enabled?).to be(true), "the Pro price is still set, so billing stays on"
+
+      result = described_class.call(account: account, plan: team,
+                                    success_url: "https://tastatur.test/billing",
+                                    cancel_url: "https://tastatur.test/billing")
+
+      expect(result).to eq(Dry::Monads::Failure(price_not_configured: "STRIPE_PRICE_TEAM"))
     end
 
     it "refuses on a self-hosted install" do
