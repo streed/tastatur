@@ -18,10 +18,24 @@ builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
 
 [deploy]
-# The default CMD already runs Thruster in front of Puma, and the entrypoint runs
-# db:prepare first. There is no schema file by design, so that builds from
-# migrations. Concurrent replicas are safe: migrations take an advisory lock.
 startCommand = "./bin/thrust ./bin/rails server"
+
+# Migrations run here, NOT from bin/docker-entrypoint.
+#
+# The entrypoint only runs db:prepare when the container's last two arguments are
+# exactly `./bin/rails server`. That holds for `docker compose`, which passes the
+# command as an argv list. Railway wraps the start command in a shell, so the
+# entrypoint actually receives ["/bin/sh", "-c", "./bin/thrust ./bin/rails server"]
+# — the condition sees "-c" and never fires.
+#
+# The result was a deployment that looked healthy in the logs (Thruster up, Puma
+# listening) and failed its health check, because /up checks the database and the
+# database had no schema. Railway then tore the deployment down and the edge
+# answered "Application not found", which points nowhere near the cause.
+#
+# preDeployCommand is the right mechanism regardless: it runs once before the new
+# deployment takes traffic, rather than once per replica at boot.
+preDeployCommand = "bin/rails db:prepare"
 
 # Railway waits for a 200 here before shifting traffic to a new deploy.
 #
