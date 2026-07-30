@@ -1,0 +1,32 @@
+# Railway configuration for the WORKER service.
+#
+# WHY A SECOND FILE. Both Railway services are built from this one repository, and
+# `railway.toml` declares a `startCommand` that runs Thruster and Puma. Config as
+# code overrides per-service dashboard settings, so without this the worker would
+# inherit that command and come up as a second web server — with Sidekiq running
+# nowhere, cron firing into an empty room, and buffered events never reaching
+# PostgreSQL. The failure looks like "the dashboard works but the numbers never
+# move", which is the hardest kind to attribute.
+#
+# Point the worker service at this file with `railwayConfigFile` (Settings →
+# Config-as-code, or the serviceInstanceUpdate mutation).
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+# No Thruster, no Puma. `config/sidekiq.yml` supplies the queue list and their
+# priority order, so no -q flags belong here: passing them would silently override
+# the file and is how a queue ends up unserved.
+startCommand = "bundle exec sidekiq"
+
+# Deliberately NO healthcheckPath. This service serves no HTTP, and Railway would
+# fail the deploy waiting for a port that never opens.
+
+# Analytics ingest is fire-and-forget from a beacon that cannot retry, so a restart
+# loop drops data rather than deferring it.
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+
+numReplicas = 1
