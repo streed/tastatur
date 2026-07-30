@@ -9,7 +9,6 @@ RSpec.describe "Compliance and legal pages", type: :request do
       "/privacy-policy" => "Privacy policy",
       "/terms" => "Terms and conditions",
       "/dpa" => "Data Processing Agreement",
-      "/data-request" => "What we hold about you",
       "/docs" => "Using Tastatur"
     }.each do |path, heading|
       it "serves #{path} with no session" do

@@ -41,7 +41,7 @@ RSpec.describe "First-run setup", type: :request do
 
   # Nothing about an unconfigured instance makes its privacy policy private.
   describe "public informational pages" do
-    %w[/privacy /privacy-policy /terms /dpa /data-request /docs /about].each do |path|
+    %w[/privacy /privacy-policy /terms /dpa /docs /about].each do |path|
       it "serves #{path} before setup" do
         get path
         expect(response).to have_http_status(:ok)

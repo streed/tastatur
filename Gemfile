@@ -104,6 +104,14 @@ gem "maxmind-db"
 # MIT. Data is maintained upstream rather than as a table we would let rot.
 gem "countries"
 
+# The Public Suffix List, used by Site to refuse a hostname that is a suffix
+# rather than a site — "co.uk", "github.io", "vercel.app". Ingest::HostnamePolicy
+# accepts everything beneath a configured hostname, so one of those entries turns
+# the policy off while the settings page still reports it as on. MIT. Addressable
+# pulls it in transitively, declared here for the same reason as concurrent-ruby
+# above: this is our own use of it, not a side effect of somebody's dependency graph.
+gem "public_suffix"
+
 group :development, :test do
   gem "rspec-rails"
   gem "factory_bot_rails"

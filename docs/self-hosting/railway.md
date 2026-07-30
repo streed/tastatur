@@ -265,13 +265,16 @@ What it runs:
 
 | Job | Schedule | Consequence if it stops |
 |---|---|---|
-| `rotate_visitor_salt` | daily 04:07 | Stored data quietly stops being unlinkable. Nothing errors, and your privacy page becomes inaccurate |
 | `enforce_data_retention` | daily 03:23 | You hold data longer than you told people you would |
 | `flush_event_buffer` | every minute | Events sit in Redis instead of PostgreSQL. The ingest path also triggers a flush on buffer size, so a busy site still writes; a quiet one stops recording |
 | `reconcile_usage` | hourly at :13 | *Hosted only.* The monthly event counter enforcement reads drifts below reality, so published plan allowances quietly stop being the ones applied. Usage warning emails also stop |
 | `reconcile_subscriptions` | daily 04:41 | *Hosted only.* A webhook Stripe gave up delivering is never noticed, so an account stays on a plan nobody is paying for — or a paying account stays capped |
 
 The two billing jobs are no-ops when `SELF_HOSTED=1`; they return immediately.
+
+Salt rotation is not in this table because it is not a job. Each site's salt is
+keyed by that site's local date and expires on its own TTL, so it rolls over at
+midnight in the site's timezone even if the cron service is down.
 
 The first two are worth alerting on rather than retrying quietly.
 

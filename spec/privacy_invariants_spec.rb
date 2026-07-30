@@ -23,24 +23,26 @@ RSpec.describe "Privacy invariants" do
   end
 
   describe "the raw client IP" do
-    # Only these two files may pull the IP off the request. Note what is *not*
-    # here: Ingest::Identifier, which never touches `request` at all and receives
-    # the address as an `ip:` argument. That is worth preserving — it means the
-    # code doing the sensitive work can be tested with a literal string and has no
+    # Only this file may pull the IP off the request. Note what is *not* here:
+    # Ingest::Identifier, which never touches `request` at all and receives the
+    # address as an `ip:` argument. That is worth preserving — it means the code
+    # doing the sensitive work can be tested with a literal string and has no
     # ambient access to a request it might log.
+    #
+    # ComplianceController was on this list until 2026-07-30, for the
+    # `/data-request` subject-access page. Deriving a caller's identifier from
+    # their live connection turned out to identify their *network* rather than
+    # them — the user-agent half of the HMAC is a header anyone can set — so the
+    # page was removed. See docs/privacy/data-requests.md.
     #
     # Adding to this list is a deliberate act, and the reviewer's question should
     # be "and where does it go next?"
     ALLOWED_TO_READ_IP = [
       # Reads it from the request and hands it straight to the identifier.
-      "app/controllers/api/events_controller.rb",
-      # The subject-access page. Derives the caller's own identifier from their
-      # live connection, which is how someone sees their own rows without having
-      # to prove an identity we deliberately cannot check.
-      "app/controllers/compliance_controller.rb"
+      "app/controllers/api/events_controller.rb"
     ].freeze
 
-    it "is read from the request only by the ingest endpoint and the subject-access page" do
+    it "is read from the request only by the ingest endpoint" do
       readers = source_files("app/**/*.rb", "app/**/*.erb", "lib/**/*.rb").select do |file|
         file.read.match?(/remote_ip|REMOTE_ADDR/)
       end.map { |file| file.relative_path_from(Rails.root).to_s }.sort
@@ -94,7 +96,7 @@ RSpec.describe "Privacy invariants" do
     end
 
     it "is written to the privacy Redis, not the persistent one" do
-      salt = Ingest::SaltStore.current
+      salt = Ingest::SaltStore.current(build_stubbed(:site))
 
       expect(salt).to be_present
       PRIVACY_REDIS_POOL.with { |redis| expect(redis.keys("tastatur:salt*")).not_to be_empty }

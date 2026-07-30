@@ -89,7 +89,7 @@ module Ingest
         return Failure(:plan_limit)
       end
 
-      identity = Identifier.new(site_id: site.id, ip: @ip, user_agent: @user_agent).call
+      identity = Identifier.new(site: site, ip: @ip, user_agent: @user_agent).call
       referrer = Referrer.new(@payload[:r], utm: utm_params(url), site_domain: site.domain)
 
       WriteBuffer.push(row(site, url, agent, identity, referrer))

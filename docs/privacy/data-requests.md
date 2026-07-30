@@ -21,32 +21,45 @@ and GDPR Art.11(1) covers exactly that: where a controller can demonstrate it is
 not in a position to identify a data subject, the rights in Arts.15–20 do not
 apply.
 
-Replying with only that citation reads as evasion, though, and Art.11(2)
-explicitly invites the subject to supply information that would let us find them.
-So `/data-request` does the search instead of arguing about it.
+Requests about a specific site go to that site's operator, who is the controller
+and who can erase the site's entire history immediately. That is the whole of the
+answer, and there is deliberately no self-service lookup beside it.
 
-### The live lookup
+### Why there is no self-service lookup
 
-The visitor loads `/data-request` from the same device and network they browse
-from. Tastatur recomputes the same HMAC the ingest path would compute, **from the
-live connection**, and shows every matching row across every site on the instance.
+There used to be one. `/data-request` recomputed the visitor HMAC from the live
+connection and listed every matching row, on the reasoning that the source address
+comes from a completed TCP handshake and so cannot be pointed at anyone else.
 
-Why this is safe:
+**That reasoning was wrong, and the page was removed on 2026-07-30.** The identity
+is `HMAC(salt, site_id ‖ ip ‖ user_agent)`, and only the address comes from the
+connection — the user-agent is a request header the caller sets to anything it
+likes. So the lookup was never keyed on something the caller had to prove; it was
+keyed on an address they shared with their whole network plus a string they could
+guess.
 
-- **It takes no user input.** The address comes from the TCP connection, not from
-  a form field, so the page cannot be pointed at anyone else.
-- **Source addresses cannot be meaningfully spoofed** over a completed TCP
-  handshake, so it is not an oracle against a third party.
-- **It writes nothing.** The address is used exactly as it is during ingest and
-  is not persisted.
-- **It requires no identity verification**, which would mean collecting more
-  personal data than we currently hold in order to hand back less.
+Both halves are weak in the same direction. Sharing a public IPv4 address is the
+normal case (household NAT, office, café, hotel, VPN exit, mobile CGNAT), and
+`Ingest::Identifier` masks IPv6 to the /64, which is the subnet rather than the
+device. Meanwhile user-agent strings have been *deliberately* reduced by browser
+vendors — Chrome freezes the minor version at `0.0.0` — so the candidate set is
+small enough to walk through by hand. Anyone on the same network could therefore
+retrieve up to 500 of a neighbour's rows: site domain, full path, timestamp,
+country, browser, OS and device type, across every site on the instance.
 
-It also *demonstrates* the retention claim instead of asserting it: a visitor who
-was measured last week sees an empty result, because the salt that produced their
-identifier has been destroyed. That is the policy working, visibly.
+Reproduced against the real endpoint before removal: same source address, victim's
+user-agent supplied by the attacker, victim's page views returned.
 
-Implementation: `app/services/compliance/lookup_own_data.rb`.
+No configuration of that design is safe. Dropping the user-agent from the lookup
+shows everyone on an address each other's rows, which is worse; keeping it leaves
+a guessable discriminator. On a shared address there is nothing unguessable
+separating two people, because the product deliberately holds no cookie or token
+that could serve as one — the same property that makes the data unlinkable in the
+first place is what makes a self-service lookup impossible to do safely.
+
+The retention claim consequently has to be *read* rather than demonstrated, which
+is a genuine loss. `docs/privacy/identity.md` is the technical account, and the
+salt handling in `app/lib/ingest/salt_store.rb` is the authority.
 
 ## Erasure
 

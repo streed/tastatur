@@ -163,15 +163,20 @@ The check reports exception **class names**, never messages, because a connectio
 error message can contain hostnames and credentials and this endpoint is usually
 public.
 
-### Two jobs worth alerting on
+### The job worth alerting on
 
-Both are in `config/schedule.yml` and both are load-bearing for the promises on
-your privacy page, not merely housekeeping:
+It is in `config/schedule.yml` and it is load-bearing for a promise on your
+privacy page, not merely housekeeping:
 
 | Job | If it stops |
 |---|---|
-| `rotate_visitor_salt` (daily 04:07) | Stored data quietly stops being unlinkable. Nothing breaks, nothing errors, and the privacy page becomes inaccurate |
 | `enforce_data_retention` (daily 03:23) | You hold data longer than you told people you would |
+
+Salt rotation is **not** on this list, and used to be. It is no longer a job at
+all: each site's salt is keyed by that site's local date and retires on its own
+TTL, so it rolls over at midnight in the site's timezone whether or not cron is
+healthy. That is deliberate — the old nightly job failing produced no error and no
+visible symptom, while the product quietly stopped being anonymous.
 
 The Sidekiq web UI at `/sidekiq` (admin users only) shows the cron schedule and
 last-run times.
@@ -191,7 +196,7 @@ severity.
 |---|---|---|
 | `within_5_seconds` | Confirmation, reset and invitation email | New signups conclude the product is broken |
 | `within_30_seconds` | The event-buffer flush, first-data email | Dashboards stop advancing while ingest keeps accepting. Redis memory climbs |
-| `within_5_minutes` | Salt rotation, post-erasure aggregate reconciliation | Privacy claims start slipping. Deleted data may still appear in reports |
+| `within_5_minutes` | Post-erasure aggregate reconciliation, usage reconciliation | Privacy claims start slipping. Deleted data may still appear in reports |
 | `within_1_hour` | Retention deletion | Nothing urgent, which is why it is last |
 
 They are served in the order listed, strictly: the worker empties

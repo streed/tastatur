@@ -130,7 +130,7 @@ RSpec.describe "Trusted proxies" do
 
       hashes = ["24.48.0.1", "24.48.0.2"].map do |visitor_ip|
         ip = resolve(remote_addr: "10.250.3.7", forwarded_for: "#{visitor_ip}, #{cloudflare}")
-        Ingest::Identifier.new(site_id: site.id, ip: ip, user_agent: "UA").call.visitor_hash
+        Ingest::Identifier.new(site: site, ip: ip, user_agent: "UA").call.visitor_hash
       end
 
       expect(hashes.uniq.size).to eq(2)
@@ -142,7 +142,7 @@ RSpec.describe "Trusted proxies" do
       site = create(:site)
 
       hashes = ["24.48.0.1", "24.48.0.2"].map do |_visitor_ip|
-        Ingest::Identifier.new(site_id: site.id, ip: cloudflare, user_agent: "UA").call.visitor_hash
+        Ingest::Identifier.new(site: site, ip: cloudflare, user_agent: "UA").call.visitor_hash
       end
 
       expect(hashes.uniq.size).to eq(1)

@@ -1,9 +1,16 @@
 # sidekiq-cron schedule.
 #
-# Two of these are load-bearing for the privacy guarantees rather than being
-# housekeeping: if salt rotation stops, stored data quietly stops being
-# unlinkable; if retention stops, we hold data longer than we told people we
-# would. Both are worth alerting on, not silently retrying.
+# One of these is load-bearing for the privacy guarantees rather than being
+# housekeeping: if retention enforcement stops, we hold data longer than we told
+# people we would. That is worth alerting on, not silently retrying.
+#
+# Salt rotation is deliberately NOT here. It used to be, at 04:07 server time,
+# which was both the wrong moment — a reporting day runs midnight to midnight in
+# the site's own timezone, so a fixed UTC rotation cut through the middle of it
+# and counted one visitor twice — and the wrong mechanism, since a job that
+# silently stopped left the product no longer anonymous with nothing raised.
+# Each site's salt is now keyed by its site-local date and retires on its own
+# TTL, so rotation is a property of the clock. See Ingest::SaltStore.
 
 flush_event_buffer:
   cron: "* * * * *"
@@ -15,23 +22,15 @@ flush_event_buffer:
     empty buffer and returns immediately. It exists for the quiet site whose
     buffer would otherwise sit unflushed between visits.
 
-rotate_visitor_salt:
-  cron: "7 4 * * *"
-  class: "RotateVisitorSaltJob"
-  queue: within_5_minutes
-  description: >
-    Replaces the visitor salt and destroys the one from two days ago. 04:07
-    rather than midnight: rotation splits any session in flight, and 04:00 is
-    the global traffic trough, while the odd minute avoids the thundering herd
-    of every cron job on the box firing at once.
-
 enforce_data_retention:
   cron: "23 3 * * *"
   class: "EnforceDataRetentionJob"
   queue: within_1_hour
   description: >
-    Deletes events past each account's retention window. Runs before salt
-    rotation so the two are never contending for the same chunks.
+    Deletes events past each account's retention window, then reconciles the
+    aggregates the deletion invalidated. 03:23 is near the global traffic trough,
+    and the odd minute avoids the thundering herd of every cron job on the box
+    firing at once.
 
 reconcile_usage:
   cron: "13 * * * *"
@@ -52,5 +51,5 @@ reconcile_subscriptions:
     Re-reads every known Stripe subscription and applies what it finds, and prunes
     webhook receipts older than 30 days. The backstop for webhooks Stripe gave up
     delivering, or that arrived while the endpoint was misconfigured — both of
-    which leave an account on the wrong plan with nothing raised. 04:41, after
-    salt rotation, so the two nightly sweeps do not overlap.
+    which leave an account on the wrong plan with nothing raised. 04:41, well
+    after retention enforcement, so the two nightly sweeps do not overlap.

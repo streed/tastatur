@@ -3,10 +3,15 @@ require "rails_helper"
 RSpec.describe Ingest::Identifier do
   let(:ua) { "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/131.0.0.0" }
 
-  before { Ingest::SaltStore.destroy_all! }
+  # Nothing here needs a row — the identifier reads `id` for the HMAC message and
+  # the session key, and `timezone` for the salt's rollover.
+  let(:site) { build_stubbed(:site, id: 1, timezone: "America/New_York") }
 
-  def identify(site_id: 1, ip: "203.0.113.10", user_agent: ua)
-    described_class.new(site_id: site_id, ip: ip, user_agent: user_agent).call
+  before { Ingest::SaltStore.destroy_all! }
+  after { travel_back }
+
+  def identify(target: site, ip: "203.0.113.10", user_agent: ua)
+    described_class.new(site: target, ip: ip, user_agent: user_agent).call
   end
 
   describe "the identifier itself" do
@@ -29,14 +34,16 @@ RSpec.describe Ingest::Identifier do
 
     # The point of mixing site_id into the message: one customer must not be
     # able to test a hash against their own traffic to learn whether a visitor
-    # had also been to another customer's site.
+    # had also been to another customer's site. Each site also draws its own
+    # salt, so the two hashes are unrelated twice over.
     it "is unlinkable across sites for the same person" do
-      expect(identify(site_id: 1).visitor_hex).not_to eq(identify(site_id: 2).visitor_hex)
+      expect(identify(target: build_stubbed(:site, id: 1)).visitor_hex)
+        .not_to eq(identify(target: build_stubbed(:site, id: 2)).visitor_hex)
     end
 
     it "uses HMAC rather than a salt-prefixed digest" do
-      salt = Ingest::SaltStore.current
-      expected = OpenSSL::HMAC.digest("SHA256", salt, "1\x00203.0.113.10\x00#{ua}")
+      salt = Ingest::SaltStore.current(site)
+      expected = OpenSSL::HMAC.digest("SHA256", salt, "#{site.id}\x00203.0.113.10\x00#{ua}")
                               .byteslice(0, 16)
       expect(identify.visitor_hash).to eq(expected)
     end
@@ -88,31 +95,58 @@ RSpec.describe Ingest::Identifier do
   end
 
   describe "salt rotation" do
+    # 23:59 and 00:01 in the site's own timezone, which is where the rollover now
+    # happens. In UTC these are 03:59 and 04:01 — the point being that the moment
+    # is a property of the site, not of the server.
+    def before_midnight = travel_to(Time.utc(2026, 6, 16, 3, 59))
+    def after_midnight  = travel_to(Time.utc(2026, 6, 16, 4, 1))
+
     # The two properties that have to hold simultaneously, and which naive
     # midnight rotation gets wrong: yesterday must become unlinkable, but a
     # visit in progress must not be cut in half or counted twice.
     it "makes the visitor hash unlinkable across the rotation" do
-      before_rotation = identify
-      Ingest::SaltStore.rotate!
-      expect(identify.visitor_hex).not_to eq(before_rotation.visitor_hex)
+      before_midnight
+      yesterday = identify
+
+      after_midnight
+      expect(identify.visitor_hex).not_to eq(yesterday.visitor_hex)
     end
 
     it "carries an in-flight session across the rotation" do
-      before_rotation = identify
-      Ingest::SaltStore.rotate!
-      after = identify
+      before_midnight
+      yesterday = identify
 
-      expect(after.session_hex).to eq(before_rotation.session_hex)
-      expect(after.entry?).to be(false), "a rotation must not look like a new visit"
+      after_midnight
+      today = identify
+
+      expect(today.session_hex).to eq(yesterday.session_hex)
+      expect(today.entry?).to be(false), "a rotation must not look like a new visit"
     end
 
-    it "destroys the salt from two rotations ago" do
-      first = Ingest::SaltStore.current
-      Ingest::SaltStore.rotate!
-      expect(Ingest::SaltStore.previous).to eq(first)
+    # The rollover follows the SITE's midnight. A site set to UTC and a site set
+    # to New York rotate eight hours apart in June, and each one's window matches
+    # the day its own dashboard reports on.
+    it "does not rotate a site whose local midnight has not arrived" do
+      utc_site = build_stubbed(:site, id: 2, timezone: "Etc/UTC")
 
-      Ingest::SaltStore.rotate!
-      expect(Ingest::SaltStore.previous).not_to eq(first)
+      before_midnight
+      before = identify(target: utc_site)
+
+      after_midnight
+      expect(identify(target: utc_site).visitor_hex).to eq(before.visitor_hex),
+                                                        "04:01 UTC is the middle of the UTC site's day"
+    end
+
+    it "leaves the salt from two days ago unreachable" do
+      travel_to(Time.utc(2026, 6, 15, 12))
+      two_days_ago = Ingest::SaltStore.current(site)
+
+      travel_to(Time.utc(2026, 6, 16, 12))
+      Ingest::SaltStore.current(site)
+
+      travel_to(Time.utc(2026, 6, 17, 12))
+      expect(Ingest::SaltStore.current(site)).not_to eq(two_days_ago)
+      expect(Ingest::SaltStore.previous(site)).not_to eq(two_days_ago)
     end
   end
 

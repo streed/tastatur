@@ -119,7 +119,7 @@ end
 |---|---|---|
 | `within_5_seconds` | Transactional mail | Somebody is on the signup screen waiting |
 | `within_30_seconds` | The measurement pipeline | Dashboards silently stop advancing |
-| `within_5_minutes` | Salt rotation, erasure reconciliation, usage reconciliation | A written privacy or plan claim starts slipping |
+| `within_5_minutes` | Erasure reconciliation, usage reconciliation | A written privacy or plan claim starts slipping |
 | `within_1_hour` | Nightly bulk work: retention, subscription reconciliation | Nothing, which is the point |
 
 Every queue you enqueue to must be listed in `config/sidekiq.yml`, which is what
@@ -344,7 +344,17 @@ and each has a spec.
   salt written to an AOF or RDB file is not destroyed; it sits in a backup next to
   the events it would de-anonymise.
 - **Never derive salts from a master key.** `HKDF(master, date)` makes every
-  historical salt regenerable forever, so nothing is ever actually destroyed.
+  historical salt regenerable forever, so nothing is ever actually destroyed. Note
+  that `Ingest::SaltStore` keying a salt by *date* is the opposite thing: the date
+  names the Redis key, while the value under it is `SecureRandom` and is never
+  recomputed.
+- **Each site's salt rotates at midnight in that site's own timezone**, and there
+  is no rotation job — the key carries the site-local date and the retired one dies
+  on its TTL. Both halves are load-bearing. A day on the dashboard is a day in
+  `site.timezone`, so the instance-wide 04:07 job this replaced rotated *inside*
+  the reporting day for every site not set to UTC, splitting one visitor into two
+  on the same report. And a cron entry that silently stops produces no error and no
+  symptom while the product ceases to be anonymous. Do not reintroduce either.
 - **Personal data is stripped from paths, not just query strings.** Customer sites
   put emails and tokens in path segments constantly.
 - **k-anonymity includes complementary suppression.** Hiding a single row protects
