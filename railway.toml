@@ -1,8 +1,13 @@
 # Railway configuration for the WEB service.
 #
 # Config-as-code overrides the dashboard, so this file is the source of truth for
-# anything it declares. Deploy the worker as a SECOND Railway service pointed at
-# the same repository with its own start command (see docs/self-hosting/railway.md).
+# anything it declares. That cuts both ways: the worker is a SECOND Railway service
+# built from this same repository, and it must NOT pick this file up, or it would
+# inherit the start command below and come up as another web server with Sidekiq
+# running nowhere.
+#
+# So the worker points at `railway.worker.toml` via its `railwayConfigFile` setting.
+# See that file and docs/self-hosting/railway.md.
 #
 # Ports: Railway injects PORT. bin/docker-entrypoint bridges it to Thruster's
 # HTTP_PORT, so nothing needs setting in the dashboard for the app to bind
