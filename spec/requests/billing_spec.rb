@@ -96,6 +96,26 @@ RSpec.describe "Billing", type: :request do
       expect(response.body).not_to include("Upgrade to Pro")
     end
 
+    # Every button here redirects off to Stripe, and Turbo follows a redirect with
+    # fetch(), which Stripe's CORS policy refuses. The customer sees a console error
+    # and a button that does nothing — no exception, no failed request in our logs,
+    # nothing to alert on. So the opt-out is pinned rather than left to a comment.
+    it "leaves for Stripe by navigation, not by fetch" do
+      account.update!(plan: "free", stripe_customer_id: "cus_1")
+
+      get "/billing"
+
+      forms = response.body.scan(%r{<form[^>]*action="(#{Regexp.union(billing_checkout_path,
+                                                                     billing_portal_path)})"[^>]*>})
+      expect(forms.length).to eq(2)
+
+      response.body.scan(/<form[^>]*>/).each do |form|
+        next unless form.include?(billing_checkout_path) || form.include?(billing_portal_path)
+
+        expect(form).to include('data-turbo="false"')
+      end
+    end
+
     it "says so when a card is failing, without pretending access has stopped" do
       account.update!(plan: "pro", subscription_status: "past_due",
                       stripe_customer_id: "cus_1", stripe_subscription_id: "sub_1")

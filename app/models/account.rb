@@ -136,7 +136,7 @@ class Account < ApplicationRecord
   # the meter counts every event received in the calendar month, so an account that
   # recorded three million events on Pro and then cancelled would be measured
   # against Free's 100,000 and refused everything for the rest of the month.
-  # Billing::SyncSubscription grandfathers that by writing an override of
+  # Billing::GrandfatherAllowance handles that by writing an override of
   # "already used + the new allowance", expiring at the end of the month.
   #
   # A support-granted override has no expiry and is therefore permanent until

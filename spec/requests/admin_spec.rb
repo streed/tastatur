@@ -189,6 +189,75 @@ RSpec.describe "Admin console", type: :request do
     end
   end
 
+  # The plan lever. The reasoning lives in Admin::ChangePlan and its spec; what
+  # is pinned here is the HTTP surface — who may pull it, and what the user page
+  # offers when the plan is and is not settable.
+  describe "changing an account's plan" do
+    let(:account) do
+      create(:account, plan: "free").tap do |acct|
+        create(:membership, account: acct, user: regular, role: "owner")
+      end
+    end
+
+    it "comps a plan from the user page" do
+      sign_in admin
+
+      patch plan_admin_account_path(account), params: { account: { plan: "pro" } }
+
+      expect(response).to redirect_to(admin_users_path)
+      expect(account.reload.plan).to eq("pro")
+    end
+
+    # `regular` OWNS this account, which is the strongest case: being an admin of
+    # an account must confer nothing over the instance, least of all a free plan.
+    it "refuses the account's own owner" do
+      sign_in regular
+
+      patch plan_admin_account_path(account), params: { account: { plan: "pro" } }
+
+      expect(response).to have_http_status(:redirect)
+      expect(account.reload.plan).to eq("free")
+    end
+
+    it "refuses when Stripe owns the plan, and says where to go instead" do
+      sign_in admin
+      account.update!(stripe_customer_id: "cus_1", stripe_subscription_id: "sub_1",
+                      subscription_status: "active", plan: "pro")
+
+      patch plan_admin_account_path(account), params: { account: { plan: "free" } }
+
+      expect(account.reload.plan).to eq("pro")
+      expect(flash[:alert]).to include("Stripe")
+    end
+
+    # `account` is referenced first on purpose: it is a lazy `let`, and the page
+    # under test has to render it.
+    it "offers the form on the user page when the plan is settable" do
+      account
+      sign_in admin
+
+      get admin_user_path(regular)
+
+      expect(response.body).to include(plan_admin_account_path(account))
+    end
+
+    it "explains instead of offering a form that would silently revert" do
+      sign_in admin
+      account.update!(stripe_customer_id: "cus_1", stripe_subscription_id: "sub_1",
+                      subscription_status: "active", plan: "pro")
+
+      get admin_user_path(regular)
+
+      expect(response.body).not_to include(plan_admin_account_path(account))
+      expect(response.body).to include("Stripe subscription")
+    end
+
+    it "routes accounts by public_id, not by id" do
+      expect(plan_admin_account_path(account)).to include(account.public_id)
+      expect(plan_admin_account_path(account)).not_to include("/admin/accounts/#{account.id}/")
+    end
+  end
+
   # The line this console must not cross. An operator can see that a site exists
   # and whether it is collecting; what it measured belongs to that customer's
   # audience, and /dpa says so without qualification.

@@ -57,7 +57,7 @@ class SitesController < ApplicationController
     @site = current_account.sites.new(site_params)
     authorize @site
 
-    if @site.save
+    if save_site
       redirect_to site_installation_path(@site), notice: "Site added. Install the snippet to start collecting."
     else
       render :new, status: :unprocessable_entity
@@ -70,8 +70,9 @@ class SitesController < ApplicationController
 
   def update
     authorize @site
+    @site.assign_attributes(site_params)
 
-    if @site.update(site_params)
+    if save_site
       redirect_to site_path(@site), notice: "Settings saved."
     else
       render :edit, status: :unprocessable_entity
@@ -87,6 +88,33 @@ class SitesController < ApplicationController
   end
 
   private
+
+  # `add_index :sites, %i[account_id domain], unique: true`, by its Rails-derived
+  # name. Matched against the driver's message because that is the only thing
+  # ActiveRecord surfaces about *which* constraint was violated.
+  DUPLICATE_DOMAIN_INDEX = "index_sites_on_account_id_and_domain".freeze
+
+  # The uniqueness validation SELECTs and the unique index enforces, and a second
+  # request fits between the two — a double-clicked submit button is enough. Left
+  # alone that race is a 500 and a Sentry alert for a situation the form already
+  # has a perfectly good message for, so it is turned back into the 422 the
+  # validation would have produced a millisecond earlier.
+  #
+  # `errors.add(:domain, :taken)` rather than a literal string: that is the same
+  # i18n key the uniqueness validator uses, so the two paths cannot drift apart
+  # and a customised message only has to be written once.
+  #
+  # Deliberately narrow. Only the domain index is translated; a collision on
+  # public_token means the 1.2e24-space generator in Site is broken, and that is
+  # a bug to raise rather than to report to a customer as a duplicate domain.
+  def save_site
+    @site.save
+  rescue ActiveRecord::RecordNotUnique => e
+    raise unless e.message.include?(DUPLICATE_DOMAIN_INDEX)
+
+    @site.errors.add(:domain, :taken)
+    false
+  end
 
   def require_confirmed_email
     return if current_user.confirmed?

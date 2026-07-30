@@ -1,0 +1,19 @@
+<%# sitemaps.org 0.9, which is the only schema any crawler reads. One <url> per
+    public page; Seo::BuildSitemap decides what is in the list and — the part
+    worth reading before editing this file — what is deliberately left out.
+
+    The XML declaration has to be the first byte of the response, so this
+    comment is closed with a trailing dash to swallow its own newline. Note that
+    an ERB comment ends at the first close tag inside it, so writing one out as
+    an example here would end this one and print the remainder. -%>
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<% @entries.each do |entry| %>
+  <url>
+    <loc><%= entry.loc %></loc>
+<% if entry.lastmod %>
+    <lastmod><%= entry.lastmod.iso8601 %></lastmod>
+<% end %>
+  </url>
+<% end %>
+</urlset>

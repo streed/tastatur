@@ -43,6 +43,12 @@ class BillingController < ApplicationController
       # `allow_other_host` because the destination is checkout.stripe.com. Rails
       # blocks cross-host redirects by default, which is the right default and the
       # exact case this exception exists for.
+      #
+      # It is only half of what this hand-off needs, though: the button that posts
+      # here must also opt out of Turbo, or the redirect is followed by fetch() and
+      # dies on Stripe's CORS policy before the browser ever navigates. Server-side
+      # there is nothing to detect it with — this request looks ordinary and the
+      # response is a perfectly good 302. See app/views/billing/show.html.erb.
       redirect_to url, allow_other_host: true
     in Failure(:already_subscribed)
       redirect_to billing_path, notice: "You are already on this plan."

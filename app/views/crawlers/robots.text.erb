@@ -1,0 +1,48 @@
+# robots.txt — https://www.robotstxt.org/robotstxt.html
+#
+# Served by the application rather than from public/, so the Sitemap line below
+# names the host this instance actually answers on. See CrawlersController.
+#
+# THERE IS DELIBERATELY NO `Disallow: /share/`, AND THAT IS NOT AN OVERSIGHT.
+#
+# A shared dashboard is protected by a 143-bit slug and nothing else, so it must
+# never turn up in a search result. The instinct is to block it here. Blocking
+# it here is what would put it there.
+#
+# A crawler refused /share/xyz never loads the page, so it never sees the
+# `<meta name="robots" content="noindex, nofollow, noarchive">` that page
+# carries (app/views/layouts/public_dashboard.html.erb) — and it therefore has
+# no instruction to drop a URL it learned about somewhere else: a leaked
+# referrer, a link pasted into a public issue, a screenshot. Google's documented
+# behaviour with such a URL is to list it with no snippet, which publishes the
+# one thing that was secret, the slug itself.
+#
+# Left crawlable, the noindex is read and obeyed and the URL is dropped from the
+# index outright. The cost is a crawler occasionally rendering a dashboard,
+# which is a database query rather than a disclosure — whoever fetched it
+# already had the slug.
+
+User-agent: *
+
+# Everything behind a session. A signed-out crawler is redirected to the sign-in
+# form by all of it, so none of it could be indexed anyway; listing it just
+# saves a stranger from spending their crawl budget finding that out one path at
+# a time.
+Disallow: /sites/
+Disallow: /account
+Disallow: /settings/
+Disallow: /billing
+Disallow: /dashboard
+Disallow: /users/
+Disallow: /two-factor
+Disallow: /admin/
+Disallow: /sidekiq
+Disallow: /setup
+
+# Endpoints, not pages. /api/event answers 202 to everything by design
+# (docs/architecture/ingest.md), which is exactly the shape of a URL a crawler
+# should be kept away from.
+Disallow: /api/
+Disallow: /up
+
+Sitemap: <%= sitemap_url %>
