@@ -71,6 +71,24 @@ module Ingest
         return Failure(policy.reason)
       end
 
+      # The account's monthly allowance, checked HERE and deliberately not earlier.
+      #
+      # Everything above this line is an event we were never going to store: a
+      # crawler, an unparseable URL, a hostname that is not the customer's. Billing
+      # a customer's quota for traffic we throw away would be indefensible, and
+      # would also make the number on their billing screen disagree with the number
+      # on their dashboard. Everything below this line does get stored, so this is
+      # the last honest place to count.
+      #
+      # The rejection is recorded rather than silent — see Ingest::RejectionCounter
+      # on why an invisible rejection is worse than none — and surfaces on the site
+      # settings screen as "Over plan limit". The response is still 202, like every
+      # other outcome here.
+      unless Billing::EventQuota.allow?(site.account_id)
+        RejectionCounter.record(site_id: site.id, reason: "plan_limit")
+        return Failure(:plan_limit)
+      end
+
       identity = Identifier.new(site_id: site.id, ip: @ip, user_agent: @user_agent).call
       referrer = Referrer.new(@payload[:r], utm: utm_params(url), site_domain: site.domain)
 

@@ -25,7 +25,7 @@
 
   <%# Live status. The partial supplies its own turbo-frame — see the note in it
       for why that matters. The frame polls itself until the first event lands. %>
-  <%= render "sites/installations/status", site: @site %>
+  <%= render "sites/installations/status", site: @site, usage: @usage %>
 
   <div class="card mt-6">
     <div class="card-head"><h2 class="text-sm font-semibold">Optional extras</h2></div>
@@ -71,6 +71,11 @@
 
   <div class="mt-8 flex gap-3">
     <%= link_to "Go to dashboard", site_path(@site), class: "btn" %>
-    <%= link_to "Site settings", edit_site_path(@site), class: "btn btn-quiet" %>
+    <%# The only link into settings anywhere in the application, which is itself
+        worth knowing: if this fires often, the screen is being looked for from
+        somewhere it cannot be reached. %>
+    <%= link_to "Site settings", edit_site_path(@site), class: "btn btn-quiet",
+                data: { analytics_event: "Site Settings Opened",
+                        analytics_props: { source: "install" } } %>
   </div>
 </div>

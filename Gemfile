@@ -64,6 +64,11 @@ gem "sidekiq"
 gem "sidekiq-cron"
 gem "redis", ">= 5.0"
 gem "connection_pool"
+
+# Used directly by Billing::EventQuota for a lock-free, thread-safe cache on the
+# ingest hot path. Rails depends on it transitively, but a hot path should not rest
+# on somebody else's dependency graph staying the way it is today.
+gem "concurrent-ruby"
 gem "rack-cors"
 gem "rack-attack"
 gem "pagy"

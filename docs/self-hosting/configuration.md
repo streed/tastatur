@@ -34,6 +34,7 @@ salt is written to disk, which is the one thing that must not happen — see
 | `ALLOW_SIGNUP` | `1` hosted, **`0` self-hosted** | Public registration. Off by default when self-hosted so an internet-exposed instance cannot be signed up to by strangers |
 | `TRACKER_URL` | `{APP_HOST}/t.js` | Override if you serve the script from a CDN or a proxied path |
 | `INGEST_URL` | `{APP_HOST}/api/event` | Override if events are proxied separately. The script normally derives this from its own `src`, so you rarely need it |
+| `SELF_MEASUREMENT_SITE_TOKEN` | unset | A site key **on this instance** to measure this instance's own dashboard with. Unset means no tracker is served on any page of the app, which is the right default for a self-hosted install: nothing measures you, and nothing is sent anywhere. The hosted service sets it to the key of its own site |
 
 ## Ingest tuning
 
@@ -120,13 +121,28 @@ Only needed for confirmations, password resets and invitations.
 
 ## Billing
 
-Only read when `SELF_HOSTED` is not `1`.
+**Not read at all when `SELF_HOSTED=1`.** A self-hosted install has no plans, no
+event or site limits, no upgrade interface, and never contacts Stripe — every
+billing question asks `Tastatur.self_hosted?` first. You can leave this whole
+section blank.
 
-| Variable |
-|---|
-| `STRIPE_PUBLISHABLE_KEY` |
-| `STRIPE_SECRET_KEY` |
-| `STRIPE_WEBHOOK_SECRET` |
+On the hosted service all four are required, and `required_env.rb` logs an error at
+boot for any that is missing.
+
+| Variable | Default | Notes |
+|---|---|---|
+| `STRIPE_SECRET_KEY` | unset | `sk_live_…`. Checkout and the billing portal raise without it |
+| `STRIPE_PUBLISHABLE_KEY` | unset | `pk_live_…`. Not currently used in any page — payment happens on Stripe's hosted Checkout, so no card form is rendered here — but kept because that is the pair every deployment expects to set |
+| `STRIPE_WEBHOOK_SECRET` | unset | `whsec_…`, from the webhook endpoint you create at `https://APP_HOST/billing/stripe/webhook`. **The one whose absence fails invisibly**: the endpoint refuses every delivery, so a subscription is paid for and never applied — Stripe shows the charge, the customer stays on the free plan, and nothing raises |
+| `STRIPE_PRICE_PRO` | unset | `price_…`, the recurring monthly price for the Pro plan. Without it the plan cannot be bought |
+
+Run `bin/rails tastatur:billing:verify` after setting these. It checks that the
+Stripe price still costs what `/pricing` publishes, in the same currency, recurring
+monthly — the failure being a price edited in the dashboard with nothing in the
+application noticing.
+
+The full design, including what happens when an account passes its monthly
+allowance, is in [../architecture/billing.md](../architecture/billing.md).
 
 ## Trusted proxies
 
@@ -158,6 +174,14 @@ runs the server:
 | Reporting timezone | Site settings | `Etc/UTC` |
 | Privacy threshold (`k`) | Site settings | `25` |
 | Raw event retention | Account settings | 12 months (max 25) |
+| Monthly event allowance | `accounts.event_limit_override` | unset — the plan decides |
+| Site allowance | `accounts.site_limit_override` | unset — the plan decides |
+
+The two `*_override` columns are a support lever for the hosted service, not a
+setting with an interface: they exist so one customer can be lifted over a cap
+without inventing a plan for them or editing a constant. Both are ignored entirely
+when `SELF_HOSTED=1`, so a value left in either column cannot throttle an instance
+you are running yourself.
 
 The privacy threshold can be set to `0` to disable row suppression. That is only
 offered because a site owner looking at their own low-traffic blog is not a

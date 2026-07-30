@@ -32,3 +32,25 @@ enforce_data_retention:
   description: >
     Deletes events past each account's retention window. Runs before salt
     rotation so the two are never contending for the same chunks.
+
+reconcile_usage:
+  cron: "13 * * * *"
+  class: "ReconcileUsageJob"
+  queue: within_5_minutes
+  description: >
+    Repairs each account's monthly event counter from the events_by_hour
+    aggregate, then warns anyone near or past their plan's allowance. Hourly
+    rather than nightly because the counter it repairs is what decides whether an
+    event is recorded: enforcement reads Redis, Redis loses counts, and every
+    count lost is quota given away with nothing to show it happened.
+
+reconcile_subscriptions:
+  cron: "41 4 * * *"
+  class: "ReconcileSubscriptionsJob"
+  queue: within_1_hour
+  description: >
+    Re-reads every known Stripe subscription and applies what it finds, and prunes
+    webhook receipts older than 30 days. The backstop for webhooks Stripe gave up
+    delivering, or that arrived while the endpoint was misconfigured — both of
+    which leave an account on the wrong plan with nothing raised. 04:41, after
+    salt rotation, so the two nightly sweeps do not overlap.

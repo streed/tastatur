@@ -134,6 +134,7 @@ and three continuous aggregates make the dashboard fast. Full detail in
 - [Performance](docs/architecture/performance.md) — where the dashboard actually spends its time, measured, including two optimisations that made it slower
 - [Ingest pipeline](docs/architecture/ingest.md) — the tracker, the endpoint, the write buffer, throughput
 - [Sessions and funnels](docs/architecture/funnels.md) — sessionisation without a cookie, and why the funnel query looks the way it does
+- [Plans and billing](docs/architecture/billing.md) — the two hosted plans, how the monthly event allowance is metered and enforced, and how Stripe is wired to it. **None of it exists on a self-hosted install**
 
 **Privacy and compliance**
 - [Visitor identity](docs/privacy/identity.md) — the salt, its rotation, and what "unlinkable" does and does not mean

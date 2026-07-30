@@ -1,0 +1,77 @@
+<% exceeded = @level == "exceeded" %>
+
+<% content_for :preheader, exceeded ?
+     "Events beyond your plan's monthly allowance are not being recorded." :
+     "#{@usage.percent_used}% of this month's events used." %>
+
+<h1 style="margin:0 0 16px; font-size:21px; font-weight:600; letter-spacing:-0.4px; line-height:1.2; color:#16150f;">
+  <% if exceeded %>
+    <%= @account.name %> is past its monthly events
+  <% else %>
+    <%= @account.name %> is at <%= @usage.percent_used %>% of its monthly events
+  <% end %>
+</h1>
+
+<p style="margin:0 0 20px; color:#57564e;">
+  <% if exceeded %>
+    Your <%= @usage.plan.name %> plan covers
+    <%= number_with_delimiter(@usage.event_limit) %> events a month, and
+    <%= number_with_delimiter(@usage.events_used) %> have arrived so far this month.
+    <strong style="color:#16150f;">Events beyond the allowance are not being recorded</strong>,
+    so your reports will read low until the allowance resets on
+    <%= @usage.period_end.to_date.to_fs(:long) %>.
+  <% else %>
+    <%= number_with_delimiter(@usage.events_used) %> of the
+    <%= number_with_delimiter(@usage.event_limit) %> events your
+    <%= @usage.plan.name %> plan covers have arrived this month, with
+    <%= pluralize(@usage.days_until_reset, "day") %> left before the allowance
+    resets. Nothing has been dropped.
+  <% end %>
+</p>
+
+<%# The one number that matters, stated the same way the billing screen states it,
+    so the email and the app cannot appear to disagree. -%>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+       style="margin:0 0 24px; border:1px solid #e3e1d8; background-color:#f8f7f3;">
+  <tr>
+    <td style="padding:16px; font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+      <div style="font-size:11px; font-weight:600; letter-spacing:1.6px; text-transform:uppercase; color:#8c8a80;">
+        <%= @usage.period_start.to_date.to_fs(:long) %> onwards
+      </div>
+      <div style="font-size:24px; font-weight:600; letter-spacing:-0.5px; color:#16150f; margin-top:6px;">
+        <%= number_with_delimiter(@usage.events_used) %>
+        <span style="font-size:15px; font-weight:400; color:#8c8a80;">
+          of <%= number_with_delimiter(@usage.event_limit) %>
+        </span>
+      </div>
+      <% if exceeded %>
+        <div style="font-size:13px; color:#c1440e; margin-top:6px;">
+          <%= number_with_delimiter(@usage.events_refused) %> not recorded
+        </div>
+      <% end %>
+    </td>
+  </tr>
+</table>
+
+<%= render "devise/mailer/button", url: @billing_url,
+           label: @usage.plan.paid? ? "Review your plan" : "Upgrade to Pro" %>
+
+<% unless @usage.plan.paid? %>
+  <p style="margin:0 0 20px; font-size:13px; color:#57564e;">
+    Pro is <%= number_to_currency(Billing::Plan.pro.price_cents / 100.0, precision: 0) %> a
+    month and covers <%= number_with_delimiter(Billing::Plan.pro.monthly_event_limit) %>
+    events across up to <%= Billing::Plan.pro.site_limit %> sites, with the same
+    unlimited teammates.
+  </p>
+<% end %>
+
+<p style="margin:0; padding-top:20px; border-top:1px solid #e3e1d8; font-size:13px; color:#8c8a80;">
+  Bot traffic and events refused for coming from a hostname that is not yours are
+  never counted against this allowance — only events we actually store.
+  <% if @usage.events_used_last_month.positive? %>
+    Last month you used
+    <%= number_with_delimiter(@usage.events_used_last_month) %>.
+  <% end %>
+  You are receiving this because you are an owner or admin of
+  <%= @account.name %>.
+</p>

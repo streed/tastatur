@@ -34,6 +34,26 @@ Two rules specific to this project:
   system deliberately cannot check.
 - An email on the first event a site receives, since the gap between installing the
   snippet and seeing anything is the point where people give up.
+- Two plans on the hosted service: Free (100,000 events a month, one site) and Pro
+  ($40 a month, 10,000,000 events, twenty sites). Teammates are unlimited on both —
+  per-seat pricing on an analytics tool means the person who most needs the numbers
+  is the person nobody wants to pay for. A self-hosted install has neither plans nor
+  limits and never touches Stripe.
+- Stripe hosted Checkout and the Stripe billing portal, so no card number reaches
+  this application and cancellation, invoices and VAT details are handled where they
+  are already handled properly. Webhooks are idempotent through a
+  `processed_webhook_events` receipt, and a nightly reconciliation re-reads every
+  subscription from Stripe so a webhook Stripe gave up delivering cannot leave an
+  account on the wrong plan.
+- Monthly event allowances, metered on the ingest path and reconciled hourly against
+  the `events_by_hour` aggregate. Events past the allowance are not recorded and
+  there is no overage charge; owners and admins are emailed at 80% and again if the
+  allowance runs out, and refused events are shown on the site's settings screen
+  rather than disappearing. Bot traffic and events claiming a hostname that is not
+  the customer's are dropped before metering, so no allowance is spent on
+  measurement nobody can read. See `docs/architecture/billing.md`.
+- Downgrading never deletes anything: an account that cancels Pro keeps all twenty
+  sites collecting and is simply unable to add a twenty-first.
 
 ### Privacy
 

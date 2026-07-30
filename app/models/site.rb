@@ -19,6 +19,19 @@ class Site < ApplicationRecord
   validates :k_anonymity_threshold, numericality: { in: 0..10_000 }
   validate  :timezone_is_recognised
 
+  # `on: :create` ONLY, and that is not a detail.
+  #
+  # An account can legitimately hold more sites than its plan allows: cancelling
+  # Pro drops you to Free with all twenty sites still collecting, because a billing
+  # event must never delete a customer's data. An unscoped validation would then
+  # make every one of those sites unsavable — changing a timezone or a
+  # k-anonymity threshold would 422 with a message about site limits, which is
+  # both baffling and unfixable without deleting nineteen sites.
+  #
+  # So the limit governs adding, never keeping. spec/requests/sites_spec.rb asserts
+  # both halves.
+  validate  :account_within_site_limit, on: :create
+
   # The settings form edits this as one newline-separated textarea, because a
   # dynamic list widget is a lot of JavaScript for a field most sites never touch.
   def extra_hostnames_list
@@ -106,5 +119,33 @@ class Site < ApplicationRecord
     return if ActiveSupport::TimeZone[timezone].present?
 
     errors.add(:timezone, "is not a recognised timezone")
+  end
+
+  # Derived from the account's plan, with no separate check for deployment mode:
+  # a self-hosted install puts every account on Billing::Plan::SELF_HOSTED, whose
+  # site_limit is UNLIMITED, so this never fires there. Two gates on the same fact
+  # is how one of them ends up wrong.
+  #
+  # `errors.add(:base, ...)` rather than `:domain`, because nothing is wrong with
+  # the domain they typed — the message belongs in the form's summary, where
+  # TastaturFormBuilder#error_summary puts it.
+  def account_within_site_limit
+    return if account.nil?
+
+    limit = account.site_limit
+    return if limit == Billing::Plan::UNLIMITED
+    return unless account.at_site_limit?
+
+    errors.add(:base, "#{account.name} is limited to #{limit} #{'site'.pluralize(limit)}. #{limit_remedy}")
+  end
+
+  def limit_remedy
+    pro = Billing::Plan.pro
+
+    if account.can_upgrade?
+      "Upgrade to #{pro.name} for #{pro.site_limit} sites, or delete a site you no longer measure."
+    else
+      "Delete a site you no longer measure, or get in touch about raising the limit."
+    end
   end
 end

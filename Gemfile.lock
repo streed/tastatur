@@ -528,6 +528,7 @@ DEPENDENCIES
   brakeman
   bullet
   bundler-audit
+  concurrent-ruby
   connection_pool
   countries
   debug

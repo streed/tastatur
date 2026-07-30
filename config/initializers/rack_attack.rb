@@ -120,15 +120,42 @@ class Rack::Attack
   # Per-site ceiling, so one customer cannot be flooded into distorted numbers
   # by a distributed source that stays under the per-client limit. Deliberately
   # generous — this is a circuit breaker, not a quota.
+  #
+  # The path guard is FIRST here, unlike it used to be. `ingest_site_token` reads
+  # and JSON-parses the request body, and this block ran it before checking the
+  # path — so every request in the application had its body parsed by middleware,
+  # including a Stripe webhook POST. That worked only because the parser rewinds
+  # the stream afterwards, which made signature verification (which needs the exact
+  # raw body) depend on a `respond_to?(:rewind)` guard several files away. Checking
+  # the path first removes that coupling and a wasted parse per request; the
+  # discriminator was already nil for non-ingest paths, so throttling is unchanged.
   throttle("ingest/site", limit: 20_000, period: 1.minute) do |req|
+    next unless INGEST_PATHS.include?(req.path)
+
     token = ingest_site_token(req)
-    "site:#{token}" if INGEST_PATHS.include?(req.path) && token.present?
+    "site:#{token}" if token.present?
   end
 
   # --- Application ---------------------------------------------------------
-  # The general limit explicitly skips ingest, which has its own above.
+  # The general limit explicitly skips ingest, which has its own above, and the
+  # Stripe webhook, which must not have one at all.
+  #
+  # WHY THE WEBHOOK IS EXEMPT RATHER THAN GENEROUSLY LIMITED. Stripe delivers
+  # every event for every customer from a small fixed set of its own addresses, so
+  # under a per-client limit the entire instance shares ONE throttle key. At 300
+  # per 5 minutes a busy month-end would 429 — and Stripe treats a 429 as a failed
+  # delivery, retries for three days, and then DISABLES the endpoint. Losing
+  # subscription events silently is how an account that cancelled stays on Pro and
+  # an account that upgraded stays capped.
+  #
+  # Nothing is given away by exempting it. The endpoint's real gate is the
+  # signature check against STRIPE_WEBHOOK_SECRET, which is a stronger control
+  # than a rate limit: an unsigned request is refused whatever its volume, and a
+  # signed one came from Stripe. See Billing::StripeWebhooksController.
+  UNTHROTTLED_PATHS = (INGEST_PATHS + %w[/billing/stripe/webhook]).freeze
+
   throttle("req/client", limit: 300, period: 5.minutes) do |req|
-    client_key(req) unless INGEST_PATHS.include?(req.path)
+    client_key(req) unless UNTHROTTLED_PATHS.include?(req.path)
   end
 
   throttle("logins/client", limit: 5, period: 20.seconds) do |req|
