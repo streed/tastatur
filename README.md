@@ -100,7 +100,7 @@ For a real deployment see [docs/self-hosting/README.md](docs/self-hosting/README
 
 A visitor loads a page. The script sends the path, the referrer's host, a window
 width and the event name, and nothing else. That complete list is `payload()` in
-[`public/t.js`](public/t.js), which is served unminified so it can be audited.
+[`lib/tracker/t.js`](lib/tracker/t.js), which is served unminified so it can be audited.
 
 The visitor's IP address and user-agent arrive too, because every HTTP request
 carries them. They are used, in memory, to compute three things and are then

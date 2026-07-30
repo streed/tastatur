@@ -132,7 +132,7 @@ say it is configurable per account, and say what enforces it.
 ## Also avoid
 
 - **Claiming a size the tracker does not have.** State measured numbers. The
-  current script is 7,663 bytes raw, 3,190 gzipped, 2,508 brotli. If you change
+  current script is 7,649 bytes raw, 3,180 gzipped, 2,501 brotli. If you change
   the script, re-measure.
 - **Implying cross-day unique visitors.** The identifier rotates daily. A 30-day
   "unique visitors" figure is the sum of 30 daily figures. Label it accurately
@@ -154,7 +154,7 @@ All of these are true, checkable in the source, and covered by specs:
   no IndexedDB, no cache abuse.
 - No fingerprinting: no canvas, WebGL, font, audio, plugin, battery or hardware
   probing. The complete list of transmitted fields is `payload()` in
-  `public/t.js`, served unminified.
+  `lib/tracker/t.js`, served unminified.
 - The visitor identifier is scoped to a single site and to a single 24-hour
   window.
 - Do Not Track and Global Privacy Control are honoured by default.

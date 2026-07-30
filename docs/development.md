@@ -170,7 +170,7 @@ docker compose exec --user root web chown -R 1000:1000 /app/<path>
 | Adding | Goes in |
 |---|---|
 | A new breakdown dimension | `Analytics::Filters::DIMENSIONS` and `Analytics::Dashboard::PANELS` |
-| A new event field | the migration, `Ingest::WriteBuffer::COLUMNS`, `Ingest::RecordEvent#row`, and `public/t.js` `payload()` |
+| A new event field | the migration, `Ingest::WriteBuffer::COLUMNS`, `Ingest::RecordEvent#row`, and `lib/tracker/t.js` `payload()` |
 | A new referrer source | `config/referrer_sources.yml` |
 | A scheduled job | `config/schedule.yml` plus a thin job in `app/jobs/` |
 | A new report | `app/services/analytics/`, reading through `Analytics::Scope` |
