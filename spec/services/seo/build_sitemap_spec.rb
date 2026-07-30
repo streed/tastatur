@@ -16,6 +16,7 @@ RSpec.describe Seo::BuildSitemap do
     expect(locs).to contain_exactly(
       "https://analytics.example.org/",
       "https://analytics.example.org/docs",
+      "https://analytics.example.org/faq",
       "https://analytics.example.org/about",
       "https://analytics.example.org/pricing",
       "https://analytics.example.org/privacy",
@@ -44,6 +45,17 @@ RSpec.describe Seo::BuildSitemap do
       allow(Tastatur).to receive(:billing_enabled?).and_return(false)
 
       expect(locs).not_to include(a_string_including("/pricing"))
+    end
+
+    # The FAQ is the near miss here. It carries an entry about price, so the
+    # instinct is to gate it the same way — but Seo::Faq drops that one entry
+    # where there is nothing to buy and the page keeps answering the nine
+    # questions that have nothing to do with money. Gating the whole page would
+    # take the consent-banner and GDPR answers off every self-hosted install.
+    it "does not take the FAQ down with it" do
+      allow(Tastatur).to receive(:billing_enabled?).and_return(false)
+
+      expect(locs).to include("https://analytics.example.org/faq")
     end
   end
 

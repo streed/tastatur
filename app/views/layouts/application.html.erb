@@ -12,6 +12,12 @@
         manager — everything referenced below is served from this origin. %>
     <meta name="referrer" content="strict-origin-when-cross-origin">
 
+    <%# Description, canonical, social card and JSON-LD — but only on pages that
+        asked for them by calling `seo`. This layout is shared with every
+        authenticated screen, and a block rendered unconditionally would describe
+        a customer's dashboard to a link scraper. See SeoHelper. -%>
+    <%= seo_tags %>
+
     <%= yield :head %>
 
     <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48">
@@ -135,6 +141,7 @@
             <%= link_to "Pricing", pricing_path, class: "hover:text-ink" %>
           <% end %>
           <%= link_to "Docs", docs_path, class: "hover:text-ink" %>
+          <%= link_to "FAQ", faq_path, class: "hover:text-ink" %>
           <%= link_to "Privacy", privacy_path, class: "hover:text-ink" %>
           <%= link_to "DPA", dpa_path, class: "hover:text-ink" %>
           <%= link_to "Policy", privacy_policy_path, class: "hover:text-ink" %>

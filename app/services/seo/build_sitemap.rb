@@ -44,6 +44,11 @@ module Seo
       urls = [
         root_url(**@url_options),
         docs_url(**@url_options),
+        # Listed unconditionally, even though one of its entries is about price.
+        # Seo::Faq drops that entry where there is nothing to buy, so the page
+        # itself is public content on every deployment — unlike /pricing below,
+        # which redirects away entirely.
+        faq_url(**@url_options),
         about_url(**@url_options)
       ]
 
