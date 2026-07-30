@@ -1,0 +1,27 @@
+<%# The admin console announces itself. Every screen under /admin can see across
+    every account on the instance, and a page that looks like the rest of the
+    application is a page whose reach is easy to forget. -%>
+<div class="mb-8 pt-5 rule-heavy">
+  <div class="flex flex-wrap items-end justify-between gap-4 mt-5">
+    <div>
+      <h1 class="text-2xl font-semibold">
+        Admin
+        <span class="w-2 h-2 bg-signal inline-block align-middle ml-1" aria-hidden="true"></span>
+      </h1>
+      <p class="label mt-2">
+        Instance operations<span class="mx-2">·</span><%= Tastatur.version %>
+      </p>
+    </div>
+
+    <nav class="segmented">
+      <% [["Overview", admin_root_path], ["People", admin_users_path], ["Sites", admin_sites_path]].each do |label, path| %>
+        <%# `aria-current` drives the active style, and it is derived from the path
+            rather than from a local passed by each view — one place to be wrong
+            instead of three. -%>
+        <%= link_to label, path, class: "segment",
+                    "aria-current": (request.path == path || (path != admin_root_path && request.path.start_with?(path))).to_s %>
+      <% end %>
+      <%= link_to "Queues", "/sidekiq", class: "segment", "aria-current": "false" %>
+    </nav>
+  </div>
+</div>

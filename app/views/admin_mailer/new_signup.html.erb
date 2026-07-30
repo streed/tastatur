@@ -1,0 +1,46 @@
+<% content_for :preheader, "#{@user.email} signed up for Tastatur." %>
+
+<h1 style="margin:0 0 16px; font-size:21px; font-weight:600; letter-spacing:-0.4px; line-height:1.2; color:#16150f;">
+  New signup
+</h1>
+
+<p style="margin:0 0 20px; color:#57564e;">
+  <strong style="color:#16150f;"><%= @user.email %></strong> created an account
+  <%= time_ago_in_words(@signed_up_at) %> ago.
+</p>
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 20px;">
+  <% [
+       ["Name", @user.name.presence || "—"],
+       ["Account", @account&.name || "—"],
+       ["Signed up", @signed_up_at.to_fs(:long)],
+       ["Email confirmed", @user.confirmed? ? "yes" : "not yet"]
+     ].each do |label, value| %>
+    <tr>
+      <td style="padding:8px 0; border-top:1px solid #e3e1d8; width:40%;
+                 font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;
+                 font-size:11px; font-weight:600; letter-spacing:1.6px;
+                 text-transform:uppercase; color:#8c8a80;">
+        <%= label %>
+      </td>
+      <td style="padding:8px 0; border-top:1px solid #e3e1d8;
+                 font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;
+                 font-size:14px; color:#16150f;">
+        <%= value %>
+      </td>
+    </tr>
+  <% end %>
+</table>
+
+<%= render "devise/mailer/button",
+           url: "#{Tastatur.base_url}/admin/users/#{@user.to_param}",
+           label: "Open in the admin console" %>
+
+<%# No site, page or visitor figures here, and none in the console this links to.
+    An administrator can see that an account exists and whether its sites are
+    collecting; what those sites measured belongs to their audience. %>
+<p style="margin:0; padding-top:20px; border-top:1px solid #e3e1d8; font-size:13px; color:#8c8a80;">
+  You are receiving this because you are an administrator of
+  <%= link_to Tastatur.base_url.sub(%r{\Ahttps?://}, ""), Tastatur.base_url,
+              style: "color:#8c8a80;" %>.
+</p>

@@ -35,7 +35,13 @@ startCommand = "./bin/thrust ./bin/rails server"
 #
 # preDeployCommand is the right mechanism regardless: it runs once before the new
 # deployment takes traffic, rather than once per replica at boot.
-preDeployCommand = "bin/rails db:prepare"
+#
+# `tastatur:admin:sync` rides along because it is idempotent and belongs to the
+# same "make this environment correct" step. ADMIN_EMAILS lists who operates this
+# instance; the task only ever GRANTS, so a variable that fails to load cannot
+# lock every administrator out of the console you would use to fix it. Somebody
+# named there who has not signed up yet is picked up by a later deploy.
+preDeployCommand = "bin/rails db:prepare tastatur:admin:sync"
 
 # Railway waits for a 200 here before shifting traffic to a new deploy.
 #

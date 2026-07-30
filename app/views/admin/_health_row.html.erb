@@ -1,0 +1,12 @@
+<%# State is never carried by colour alone — a dot plus a word, so it survives
+    colour blindness, a greyscale print and a forced-colours mode. -%>
+<div class="px-5 py-4 border-b border-rule last:border-b-0">
+  <div class="flex items-center justify-between gap-4">
+    <p class="text-sm font-medium"><%= label %></p>
+    <span class="flex items-center gap-2 text-[12px] <%= ok ? "text-ink-2" : "text-negative font-semibold" %>">
+      <span class="w-1.5 h-1.5 inline-block <%= ok ? "bg-positive" : "bg-signal" %>" aria-hidden="true"></span>
+      <%= value %>
+    </span>
+  </div>
+  <p class="text-[12px] text-muted mt-1 leading-relaxed"><%= blurb %></p>
+</div>

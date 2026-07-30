@@ -1,0 +1,69 @@
+<% content_for :title, "People · Admin" %>
+
+<div class="shell">
+  <%= render "admin/nav" %>
+
+  <%# GET, so a search is a URL you can send to somebody. Uses the shared form
+      builder like every other form in the application — see rule 9 in CLAUDE.md;
+      a model-less form still gets it. -%>
+  <%= form_with url: admin_users_path, method: :get, class: "card card-body mb-6" do |f| %>
+    <div class="flex flex-wrap items-end gap-3">
+      <div class="flex-1 min-w-64">
+        <%= f.field :q, "Find someone", value: @query,
+                    hint: "Email or name. Partial matches are fine.",
+                    autofocus: @query.blank? %>
+      </div>
+      <div class="flex items-center gap-3 pb-0.5">
+        <%= f.submit "Search", class: "btn btn-primary" %>
+        <%= link_to "Clear", admin_users_path, class: "btn btn-quiet" if @query.present? %>
+      </div>
+    </div>
+  <% end %>
+
+  <div class="card">
+    <div class="card-head">
+      <h2 class="text-sm font-semibold">
+        <%= @query.present? ? "Matching \"#{@query}\"" : "Everyone" %>
+      </h2>
+      <span class="label"><%= pluralize(@users.size, "person", plural: "people") %></span>
+    </div>
+
+    <% if @users.any? %>
+      <div>
+        <% @users.each do |user| %>
+          <%= link_to admin_user_path(user),
+                      class: "flex items-center justify-between gap-4 px-5 py-4 border-b border-rule last:border-b-0 hover:bg-surface-2" do %>
+            <div class="min-w-0">
+              <p class="font-medium truncate"><%= user.email %></p>
+              <p class="label mt-1">
+                <%= user.name.presence || "no name" %>
+                <span class="mx-2">·</span>
+                <%= pluralize(user.accounts.size, "account") %>
+                <span class="mx-2">·</span>
+                joined <%= user.created_at.to_date.to_fs(:long) %>
+              </p>
+            </div>
+            <div class="flex items-center gap-2 shrink-0">
+              <% unless user.confirmed? %><span class="chip"><span class="chip-key">unconfirmed</span></span><% end %>
+              <% if user.locked? %><span class="chip"><span class="chip-key">locked</span></span><% end %>
+              <% if user.admin? %><span class="chip"><span class="chip-key">admin</span></span><% end %>
+            </div>
+          <% end %>
+        <% end %>
+      </div>
+
+      <%# The list is capped rather than paginated: support looks people up by
+          email, and a hundred rows is far past the point where scrolling beats
+          searching. Saying so is the difference between a cap and a bug. -%>
+      <% if @users.size >= 100 %>
+        <p class="px-5 py-3 text-[12px] text-muted border-t border-rule">
+          Showing the first 100. Narrow the search to see the rest.
+        </p>
+      <% end %>
+    <% else %>
+      <p class="px-5 py-10 text-center text-sm text-muted">
+        <%= @query.present? ? "Nobody matches \"#{@query}\"." : "Nobody has signed up yet." %>
+      </p>
+    <% end %>
+  </div>
+</div>
