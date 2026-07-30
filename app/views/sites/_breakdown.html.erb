@@ -66,6 +66,40 @@
                     data: { turbo_frame: "_top" } %>
       </p>
     <% end %>
+  <%# EVERY row was withheld, which is not the same as having no data and must not
+      say so.
+
+      This branch used to render "No data." whenever no row survived, because the
+      suppression notice above lives inside the `result.any?` arm and `any?` counts
+      the rows that SURVIVED. So the one case where a site owner most needs the
+      explanation — a new or quiet site where every row sits under the threshold —
+      was the exact case that told them there was nothing there.
+
+      It is also the panel contradicting the summary directly above it, which
+      reports the visitors these very rows are made of. The obvious reading is that
+      collection is broken. -%>
+  <% elsif result.suppressed? %>
+    <div class="px-5 py-8 text-center">
+      <p class="text-sm text-ink-2">
+        Nothing to show yet, but not because nothing happened.
+      </p>
+      <p class="text-[12px] text-muted mt-2 max-w-sm mx-auto leading-relaxed">
+        <%= pluralize(result.suppressed_rows, "row") %> withheld
+        (<%= metric_number(result.suppressed_visitors) %> visitors), because a row
+        seen by fewer than <%= result.threshold %> visitors can identify the people
+        in it. Rows appear here as traffic grows.
+        <%# Only the owner is offered the lever. The public shared dashboard renders
+            this same partial with drillable: false, and its readers can neither
+            reach site settings nor should be told the threshold is adjustable. -%>
+        <% if drillable %>
+          You can lower the threshold in
+          <%= link_to "site settings", edit_site_path(site), class: "underline hover:text-ink",
+                      data: { turbo_frame: "_top" } %>.
+        <% end %>
+        <%= link_to "Why?", privacy_path, class: "underline hover:text-ink",
+                    data: { turbo_frame: "_top" } %>
+      </p>
+    </div>
   <% else %>
     <p class="px-5 py-10 text-center text-sm text-muted">No data.</p>
   <% end %>

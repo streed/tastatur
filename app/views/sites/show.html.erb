@@ -30,6 +30,16 @@
       <%= link_to "Install", site_installation_path(@site), class: "btn btn-sm",
                   data: { analytics_event: "Install Snippet Viewed",
                           analytics_props: { source: "header" } } %>
+      <%# Settings used to be reachable only from the bottom of the install page,
+          which is a page you visit once and never again. Everything it holds —
+          the timezone the whole dashboard is bucketed in, the k-anonymity
+          threshold that decides which breakdown rows appear at all — is something
+          you want while looking at the dashboard, so the link belongs here. -%>
+      <% if policy(@site).update? %>
+        <%= link_to "Settings", edit_site_path(@site), class: "btn btn-sm",
+                    data: { analytics_event: "Site Settings Opened",
+                            analytics_props: { source: "dashboard_header" } } %>
+      <% end %>
     </div>
   </div>
 
@@ -42,9 +52,9 @@
     </div>
   <% end %>
 
-  <%= render "sites/filters", site: @site, filters: @filters %>
-
-  <%= turbo_frame_tag "dashboard" do %>
-    <%= render "sites/dashboard", site: @site, report: @report, drillable: true %>
-  <% end %>
+  <%# The filter chips and the turbo-frame both live inside this partial, so that
+      what a full page load renders and what a frame request returns are the same
+      markup. They were separate, and the frame response was missing the frame. -%>
+  <%= render "sites/dashboard", site: @site, report: @report,
+             filters: @filters, drillable: true %>
 </div>

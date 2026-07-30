@@ -14,11 +14,15 @@ class SitesController < ApplicationController
     @filters = Analytics::Filters.from_params(params)
     @report = Analytics::Dashboard.call(site: @site, period: @period, filters: @filters).value!
 
-    # Each breakdown card refreshes on its own via a Turbo Frame, so a filter
-    # change does not re-run every query on the page.
+    # Drilling into a breakdown row navigates the "dashboard" frame rather than the
+    # whole page, so the response skips the layout, the site header and the period
+    # switcher. The partial emits the <turbo-frame> itself — it has to, since Turbo
+    # swaps in the matching frame from the RESPONSE and there is no layout here to
+    # supply one.
     return unless turbo_frame_request?
 
-    render partial: "sites/dashboard", locals: { site: @site, report: @report, drillable: true }
+    render partial: "sites/dashboard",
+           locals: { site: @site, report: @report, filters: @filters, drillable: true }
   end
 
   # `current_account` is nil for a signed-in user who belongs to no account, and

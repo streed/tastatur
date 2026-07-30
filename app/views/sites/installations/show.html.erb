@@ -71,9 +71,10 @@
 
   <div class="mt-8 flex gap-3">
     <%= link_to "Go to dashboard", site_path(@site), class: "btn" %>
-    <%# The only link into settings anywhere in the application, which is itself
-        worth knowing: if this fires often, the screen is being looked for from
-        somewhere it cannot be reached. %>
+    <%# This was once the ONLY link into settings anywhere in the application, on a
+        page you visit exactly once. The dashboard header now carries one too; the
+        `source` prop is what distinguishes them, and the install-time visit is a
+        different act from going to change a threshold later. %>
     <%= link_to "Site settings", edit_site_path(@site), class: "btn btn-quiet",
                 data: { analytics_event: "Site Settings Opened",
                         analytics_props: { source: "install" } } %>

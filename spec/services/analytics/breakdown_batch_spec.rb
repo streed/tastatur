@@ -137,6 +137,48 @@ RSpec.describe "Analytics::Breakdown.batch" do
     end
   end
 
+  # `event` is the second conditional dimension and behaves exactly like
+  # entry_page: a CASE that yields NULL for the rows it does not describe. Its NULL
+  # bucket is every pageview on the site, so failing to discard it does not produce
+  # a merely wrong panel — it produces one row bigger than every real row put
+  # together, labelled "(none)".
+  #
+  # The fixture above sends only pageviews, so without these events both paths
+  # would return nothing and compare equal while testing nothing at all.
+  describe "event" do
+    before do
+      3.times { |i| create_event(site, visitor: "c#{i}", event_name: "Signup", path: "/pricing", at: 1.day.ago) }
+      2.times { |i| create_event(site, visitor: "c#{i}", event_name: "Purchase", path: "/pricing", at: 1.day.ago) }
+    end
+
+    it "lists the custom event names" do
+      expect(batch["event"].rows.map(&:value)).to contain_exactly("Signup", "Purchase")
+    end
+
+    it "excludes pageviews, which are not custom events" do
+      expect(batch["event"].rows.map(&:value)).not_to include("pageview")
+    end
+
+    it "discards the NULL bucket rather than showing it as a row" do
+      expect(batch["event"].rows.map(&:value)).to all(be_present)
+    end
+
+    it "counts distinct visitors per event name" do
+      signup = batch["event"].rows.find { |row| row.value == "Signup" }
+      expect(signup.visitors).to eq(3)
+    end
+
+    it "matches the per-dimension query exactly" do
+      expect(snapshot(batch["event"])).to eq(snapshot(one("event")))
+    end
+
+    # The custom events all landed on /pricing, so if the exclusion were dropped
+    # from one path and not the other this is where it would show.
+    it "leaves the pageview panels alone" do
+      expect(snapshot(batch["page"])).to eq(snapshot(one("page")))
+    end
+  end
+
   describe "the interface" do
     it "returns one result per requested dimension" do
       expect(batch.keys).to match_array(dimensions)

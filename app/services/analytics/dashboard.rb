@@ -15,7 +15,15 @@ module Analytics
       { dimension: "device",       title: "Devices" },
       { dimension: "browser",      title: "Browsers" },
       { dimension: "os",           title: "Operating systems" },
-      { dimension: "utm_campaign", title: "Campaigns" }
+      { dimension: "utm_campaign", title: "Campaigns" },
+      # Custom events had nowhere to appear at all. `tastatur('event', 'Signup')`
+      # was accepted, stored and indexed — there is even a partial index on
+      # (site_id, event_name, occurred_at) WHERE event_name <> 'pageview' — and then
+      # shown on no screen unless you first went and created a Goal whose name
+      # matched. Anyone following the "Track a custom event" instructions on the
+      # install page saw nothing happen and had no way to tell a broken snippet from
+      # a working one.
+      { dimension: "event", title: "Custom events", only_when_present: true }
     ].freeze
 
     Report = Struct.new(:site, :period, :filters, :summary, :timeseries,
@@ -56,6 +64,14 @@ module Analytics
       PANELS.filter_map do |panel|
         result = results[panel[:dimension]]
         next if result.nil?
+        # A site that has never sent a custom event should not carry a ninth card
+        # reading "No data." forever. The eight pageview panels are always shown,
+        # because for those an empty panel is itself the answer.
+        #
+        # `suppressed?` is part of the test on purpose: a site whose only custom
+        # events sit under the k-anonymity threshold HAS custom events, and hiding
+        # the panel would be indistinguishable from not collecting them.
+        next if panel[:only_when_present] && result.rows.empty? && !result.suppressed?
 
         panel.merge(result: result)
       end
