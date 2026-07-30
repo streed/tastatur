@@ -1,0 +1,43 @@
+<% content_for :title, "#{@site.domain} · Tastatur" %>
+
+<div class="shell">
+  <%# --- Site header ---------------------------------------------------- %>
+  <div class="flex flex-wrap items-end justify-between gap-4 mb-6">
+    <div>
+      <div class="flex items-center gap-3">
+        <h1 class="text-2xl font-semibold"><%= @site.domain %></h1>
+        <% if @report.realtime.positive? %>
+          <span class="flex items-center gap-2 label" title="Visitors active in the last 5 minutes">
+            <span class="w-1.5 h-1.5 bg-signal inline-block" aria-hidden="true"></span>
+            <%= pluralize(@report.realtime, "current visitor") %>
+          </span>
+        <% end %>
+      </div>
+      <p class="label mt-2"><%= @period.label %><span class="mx-2">·</span><%= @site.timezone %></p>
+    </div>
+
+    <div class="flex flex-wrap items-center gap-3">
+      <div class="segmented">
+        <% %w[today 7d 30d 90d 12mo].each do |key| %>
+          <%= period_link(@site, key, Analytics::Period::PRESETS[key].sub("Last ", "")) %>
+        <% end %>
+      </div>
+      <%= link_to "Funnels", site_funnels_path(@site), class: "btn btn-sm" %>
+      <%= link_to "Goals", site_goals_path(@site), class: "btn btn-sm" %>
+      <%= link_to "Install", site_installation_path(@site), class: "btn btn-sm" %>
+    </div>
+  </div>
+
+  <% unless @site.receiving_data? %>
+    <div class="notice mb-6 flex items-center justify-between gap-4">
+      <span>No data yet — this site has never received an event.</span>
+      <%= link_to "Show me the snippet", site_installation_path(@site), class: "btn btn-primary btn-sm" %>
+    </div>
+  <% end %>
+
+  <%= render "sites/filters", site: @site, filters: @filters %>
+
+  <%= turbo_frame_tag "dashboard" do %>
+    <%= render "sites/dashboard", site: @site, report: @report, drillable: true %>
+  <% end %>
+</div>

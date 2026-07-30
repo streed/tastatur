@@ -1,0 +1,53 @@
+name: Feature request
+description: Suggest something Tastatur should do
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        One thing worth knowing before you write this up, because it will save you
+        time: some features are not slow to build here, they are excluded by the
+        design.
+
+        There is no per-person identifier that survives the day. So anything needing
+        one — returning-visitor rates over weeks, per-user session replay, individual
+        journeys across months, cross-site tracking — cannot be built without
+        breaking the property the whole product rests on. Those are declines rather
+        than backlog items, and saying so plainly is more useful than leaving them
+        open forever.
+
+        Plenty is still possible within that constraint, including most things people
+        actually want from analytics. If you are not sure which side of the line your
+        idea falls on, file it anyway and we will work it out.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to find out
+      description: >-
+        The question you want answered about your site, rather than the feature you
+        have in mind. It is a better starting point, and sometimes there is already
+        a way to get at it.
+    validations:
+      required: true
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: What you have in mind
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: identity
+    attributes:
+      label: Does this need to identify a person over time
+      options:
+        - label: >-
+            As far as I can tell, this works with data that has no cross-day
+            identifier
+          required: false
+        - label: >-
+            This does need to follow individuals over time, and I would like to know
+            whether there is an approximation that does not
+          required: false

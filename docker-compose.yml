@@ -1,0 +1,195 @@
+# Tastatur — full local development stack.
+#
+#   docker compose up
+#   open http://localhost:3000
+#
+# The working directory is bind-mounted into the app containers, so editing a
+# file on the host reloads Rails and rebuilds the CSS with no restart.
+#
+# Database and Redis ports are deliberately non-default so this stack never
+# collides with another Postgres or Redis already running on the machine.
+
+name: tastatur
+
+x-app: &app
+  build:
+    context: .
+    dockerfile: Dockerfile.dev
+  image: tastatur-dev
+  volumes:
+    # The source, live. Everything else in this list is a named volume that
+    # SHADOWS a path inside it, so container-only artefacts never leak onto the
+    # host and host artefacts never confuse the container.
+    - .:/app
+    # Gems live in the image, not the mount — otherwise the bind mount would
+    # hide them and every boot would reinstall.
+    - bundle:/usr/local/bundle
+    # tmp/ and log/ churn constantly; keeping them out of the bind mount avoids
+    # thousands of pointless filesystem events on the host.
+    - tmp:/app/tmp
+    - log:/app/log
+  # Anchored separately from *app so a single service can override one variable
+  # without restating the rest. A YAML merge key replaces a nested mapping outright
+  # rather than merging into it, so `environment:` in a service that also uses
+  # `<<: *app` would otherwise discard everything below.
+  environment: &app-env
+    RAILS_ENV: development
+    # Service names, not localhost: inside the compose network these resolve to
+    # the containers, and they use the INTERNAL ports (5432/6379), not the
+    # remapped host ports.
+    DATABASE_URL: postgres://postgres:postgres@timescaledb:5432/tastatur_development
+    REDIS_URL: redis://redis:6379/0
+    REDIS_PRIVACY_URL: redis://redis-privacy:6379/0
+    DB_HOST: timescaledb
+    APP_HOST: localhost:3000
+    # Rails 7.2+ refuses requests whose Host header is not allowlisted; the
+    # browser sends "localhost", the health check sends the container name.
+    RAILS_DEVELOPMENT_HOSTS: localhost,127.0.0.1,web
+    # Log to stdout so `docker compose logs` is the single place to look.
+    RAILS_LOG_TO_STDOUT: "1"
+    MAIL_FROM: no-reply@tastatur.test
+    # Legal identity for this instance. A self-hosted install names whoever runs
+    # it, which is not Reedster. See docs/self-hosting/configuration.md
+    LEGAL_ENTITY: Reedster LLC
+    LEGAL_EMAIL: privacy@reedster.llc
+    LEGAL_JURISDICTION: the State of Delaware, USA
+  depends_on:
+    timescaledb:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+    redis-privacy:
+      condition: service_healthy
+
+services:
+  timescaledb:
+    # TimescaleDB is a PostgreSQL extension, so this is a normal Postgres 17
+    # server with hypertables, continuous aggregates, columnstore compression
+    # and retention policies available.
+    image: timescale/timescaledb:latest-pg17
+    container_name: tastatur-timescaledb
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "5455:5432"
+    volumes:
+      - pgdata:/home/postgres/pgdata/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    container_name: tastatur-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6389:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # Holds the rotating visitor salt and the session map — and NOTHING else.
+  #
+  # Persistence is switched off deliberately: `--save ""` disables RDB
+  # snapshots and `--appendonly no` disables the AOF, so a destroyed salt is
+  # destroyed rather than sitting in a file inside a backup next to the events
+  # it would de-anonymise. No volume is declared here for the same reason —
+  # though the redis image declares VOLUME /data itself, so docker attaches an
+  # empty anonymous one regardless. The flags are what make the guarantee.
+  #
+  # noeviction ensures a memory-pressure event fails loudly instead of silently
+  # evicting the current salt and recounting every visitor.
+  redis-privacy:
+    image: redis:7-alpine
+    container_name: tastatur-redis-privacy
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --save
+      - ""
+      - --appendonly
+      - "no"
+      - --maxmemory-policy
+      - noeviction
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  web:
+    <<: *app
+    container_name: tastatur-web
+    # Only this service migrates — the css and worker containers must not race
+    # it on startup.
+    environment:
+      RAILS_ENV: development
+      DATABASE_URL: postgres://postgres:postgres@timescaledb:5432/tastatur_development
+      REDIS_URL: redis://redis:6379/0
+      REDIS_PRIVACY_URL: redis://redis-privacy:6379/0
+      DB_HOST: timescaledb
+      APP_HOST: localhost:3000
+      RAILS_DEVELOPMENT_HOSTS: localhost,127.0.0.1,web
+      RAILS_LOG_TO_STDOUT: "1"
+      MAIL_FROM: no-reply@tastatur.test
+      # Legal identity for this instance. A self-hosted install names whoever runs
+      # it, which is not Reedster. See docs/self-hosting/configuration.md
+      LEGAL_ENTITY: Reedster LLC
+      LEGAL_EMAIL: privacy@reedster.llc
+      LEGAL_JURISDICTION: the State of Delaware, USA
+      RUN_MIGRATIONS: "1"
+    command: bin/rails server -b 0.0.0.0 -p 3000
+    ports:
+      - "3000:3000"
+    stdin_open: true
+    tty: true
+
+  # Tailwind rebuild loop. Polls file mtimes rather than using Tailwind's own
+  # watcher, which does not pick up directories created after it started, so
+  # utilities used only in new templates went silently missing from the
+  # stylesheet. See bin/tailwind-watch.
+  css:
+    <<: *app
+    container_name: tastatur-css
+    command: bin/tailwind-watch
+    depends_on:
+      web:
+        condition: service_started
+
+  worker:
+    <<: *app
+    container_name: tastatur-worker
+    command: bundle exec sidekiq
+    # Everything from the shared set, with one override.
+    #
+    # A YAML merge key does not deep-merge, so a plain `environment:` here would
+    # REPLACE the anchor's variables rather than add to them, silently dropping the
+    # database and Redis URLs. Merging *app-env explicitly is what keeps them.
+    environment:
+      <<: *app-env
+      # 0 disables the statement timeout for this process only. config/database.yml
+      # caps statements at 15s so one expensive dashboard query cannot hold a
+      # connection indefinitely; the worker is the opposite case, since
+      # refresh_continuous_aggregate and the nightly retention delete both run for
+      # minutes by design.
+      DB_STATEMENT_TIMEOUT: "0"
+    depends_on:
+      web:
+        condition: service_started
+
+volumes:
+  pgdata:
+  redisdata:
+  bundle:
+  tmp:
+  log:

@@ -1,0 +1,104 @@
+<% content_for :title, "About · Tastatur" %>
+<% maintainer = Tastatur.maintainer %>
+
+<div class="shell">
+  <div class="pt-5 rule-heavy mb-12 max-w-3xl">
+    <p class="label mt-5 mb-3">About</p>
+    <h1 class="text-3xl font-semibold tracking-[-0.03em]">Why this exists</h1>
+  </div>
+
+  <div class="grid lg:grid-cols-12 gap-10">
+    <div class="lg:col-span-7">
+      <%# The origin story, in the words of the person who had the problem.
+          Kept first-person and kept short: it is the most credible thing on the
+          site precisely because it is not a value proposition. -%>
+      <blockquote class="text-[19px] leading-relaxed border-l-2 border-signal pl-6 mb-10">
+        <p class="mb-4">
+          I have a portfolio of projects that I want to see what people do on them, but I do not
+          like using tracking cookies to do this, so a lot of services were cut out.
+        </p>
+        <p>
+          I enjoy building projects, and worked on this to monitor all of my projects.
+        </p>
+        <footer class="label mt-6 not-italic">
+          Sean Reed<span class="mx-2">·</span><%= maintainer[:name] %>
+        </footer>
+      </blockquote>
+
+      <div class="space-y-5 text-[15px] text-ink-2 leading-relaxed max-w-2xl">
+        <p>
+          That is the whole brief. Nothing about Tastatur is designed to win a feature comparison
+          against the large analytics platforms, because the reason for building it was that those
+          platforms already ruled themselves out.
+        </p>
+        <p>
+          It also explains the shape of the thing. A tool built for someone with a handful of side
+          projects has to install in one line, run on a small box, and never need attention. It has
+          no reason to add a data-warehouse integration or an audience-segmentation builder, and it
+          has every reason to be honest about what cookieless measurement genuinely cannot do,
+          because the person reading those caveats is the person who wrote them.
+        </p>
+        <p>
+          Tastatur is free software under the AGPL-3.0. Run it yourself, read every line, or use the
+          hosted version and let someone else keep it patched. The
+          <%= link_to "source is public", maintainer[:source], class: "underline hover:text-signal", rel: "noopener" %>,
+          which is the only reason any of the privacy claims on this site are worth more than a
+          promise.
+        </p>
+      </div>
+
+      <div class="flex flex-wrap gap-3 mt-9">
+        <%= link_to "What it collects", privacy_path, class: "btn" %>
+        <%= link_to "How to use it", docs_path, class: "btn btn-quiet" %>
+      </div>
+    </div>
+
+    <%# --- Who builds it -%>
+    <div class="lg:col-span-5 lg:border-l lg:border-rule lg:pl-10">
+      <p class="label mb-4">Built and maintained by</p>
+
+      <div class="card">
+        <div class="card-body">
+          <p class="text-xl font-semibold tracking-[-0.02em]"><%= maintainer[:name] %></p>
+          <p class="text-[13px] text-ink-2 mt-1.5"><%= maintainer[:tagline] %></p>
+          <p class="text-[13px] text-ink-2 mt-4 leading-relaxed">
+            A solo software practice run by Sean Reed, working mostly in Ruby on Rails and on AI
+            engineering. Tastatur is developed and supported there.
+          </p>
+          <div class="flex flex-wrap gap-2 mt-5">
+            <%= link_to "reedster.llc", maintainer[:url], class: "btn btn-sm", rel: "noopener" %>
+            <%= link_to "Source", maintainer[:source], class: "btn btn-quiet btn-sm", rel: "noopener" %>
+          </div>
+        </div>
+
+        <div class="card-body border-t border-rule bg-surface-2">
+          <p class="label mb-3">This instance</p>
+          <% if Tastatur.legal_configured? %>
+            <p class="text-[13px]">
+              Operated by <strong><%= Tastatur.legal_value(:entity) %></strong>.
+              <%= link_to "Privacy policy", privacy_policy_path, class: "underline hover:text-signal" %>
+              and <%= link_to "terms", terms_path, class: "underline hover:text-signal" %>.
+            </p>
+          <% else %>
+            <p class="text-[13px] text-ink-2">
+              <% if Tastatur.self_hosted? %>
+                A self-hosted install. Whoever runs it is the data controller, not
+                <%= maintainer[:name] %>.
+              <% else %>
+                The operator of this instance has not been configured yet.
+              <% end %>
+            </p>
+          <% end %>
+        </div>
+      </div>
+
+      <%# Authorship and operator are different facts, and a self-hoster reading
+          this page needs to know which one applies to them. -%>
+      <p class="text-[12px] text-muted mt-4 leading-relaxed">
+        <%= maintainer[:name] %> wrote the software. That is true of every copy of it. Who is
+        responsible for the data in <em>this</em> instance depends on who is running it, which is
+        why the two are stated separately.
+      </p>
+    </div>
+  </div>
+</div>

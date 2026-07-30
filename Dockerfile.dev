@@ -1,0 +1,40 @@
+# Development image. The production image is the Rails-generated `Dockerfile`;
+# this one exists so the app can run under docker compose with the working
+# directory bind-mounted, giving live code reload and a live Tailwind rebuild.
+#
+# It deliberately does NOT copy the application in — the source arrives via the
+# bind mount in docker-compose.yml. Only the dependency manifests are copied,
+# so a code change never invalidates the bundle layer.
+
+FROM ruby:3.4.2-slim
+
+ENV RAILS_ENV=development \
+    BUNDLE_PATH=/usr/local/bundle \
+    LANG=C.UTF-8 \
+    # Unbuffered so `docker compose logs -f` shows Rails output as it happens
+    # rather than in 8KB bursts.
+    RUBYOPT=-W:no-deprecated
+
+RUN apt-get update -qq && apt-get install --no-install-recommends -y \
+      build-essential \
+      libpq-dev \
+      libyaml-dev \
+      libvips42 \
+      pkg-config \
+      git \
+      curl \
+      postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Bundle in its own layer, keyed only on the manifests.
+COPY Gemfile Gemfile.lock ./
+RUN bundle install --jobs 4 --retry 3
+
+COPY bin/docker-dev-entrypoint /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-dev-entrypoint
+
+ENTRYPOINT ["docker-dev-entrypoint"]
+EXPOSE 3000
+CMD ["bin/rails", "server", "-b", "0.0.0.0", "-p", "3000"]

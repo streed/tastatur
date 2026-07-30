@@ -1,0 +1,14 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/streed/tastatur/security/advisories/new
+    about: Report privately, not as a public issue. See SECURITY.md.
+  - name: Question about a privacy or compliance claim
+    url: https://github.com/streed/tastatur/blob/main/docs/privacy/claims.md
+    about: What this project will and will not claim, and why — in both directions.
+  - name: Self-hosting documentation
+    url: https://github.com/streed/tastatur/blob/main/docs/self-hosting/README.md
+    about: Configuration, Railway, geolocation, and operations.
+  - name: Architecture notes
+    url: https://github.com/streed/tastatur/blob/main/docs/architecture/overview.md
+    about: How ingest, the aggregates, and funnels actually work.

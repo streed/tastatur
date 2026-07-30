@@ -1,0 +1,56 @@
+# Queues are named for the latency they promise, not for the work they carry.
+#
+# The previous scheme named them after subject matter — `ingest` and `default` —
+# and it failed in the way that scheme usually fails. `FlushEventBufferJob` was
+# moved to `ingest`, this file did not exist, and a bare `bundle exec sidekiq`
+# serves only `default`. So the job that moves buffered events out of Redis and
+# into PostgreSQL was enqueued every minute by cron and never once executed.
+# Nothing raised. Redis grew, the dashboard stopped advancing, and every test
+# passed, because in development a worker happened to have been started by hand
+# with `-q ingest`.
+#
+# An SLA name cannot fail that way. `within_30_seconds` tells you what breaks if
+# the queue backs up, it tells a new job where to go without a debate about
+# whether "ingest" means the HTTP path or the flush, and any queue not listed
+# below has no meaning at all — so a typo is caught by a spec rather than by
+# wondering why data stopped appearing.
+#
+# ORDER IS PRIORITY. Sidekiq drains a plain list strictly, checking the first
+# queue until it is empty before looking at the second. That is what makes the
+# promise real: tight-SLA work is never stuck behind the nightly retention sweep.
+# The cost is that a permanently busy fast queue starves the slow ones, which is
+# acceptable here because the fast queues carry small, frequent jobs and the slow
+# ones carry work that genuinely does not care.
+#
+# Adding a tier means adding it here and updating spec/jobs/queue_names_spec.rb,
+# which reads this file and fails if a job, a cron entry, or a framework default
+# points at a queue that is not on the list.
+#
+# Plain `queues:` rather than the historical `:queues:`. Sidekiq 8 reads both, but
+# the symbol form makes the file unloadable by `YAML.safe_load` without permitting
+# Symbol, and the spec above has to read it.
+queues:
+  # Someone is looking at a screen, waiting for this. Transactional mail:
+  # confirmation, password reset, a team invitation. A minute of delay on a
+  # confirmation email reads as "this product is broken" and gets abandoned.
+  - within_5_seconds
+
+  # The measurement pipeline. Buffered events reaching PostgreSQL, and the
+  # first-data email that tells someone their installation worked. Backing up
+  # here means the dashboard silently stops advancing while ingest keeps
+  # accepting, so the visible symptom is "my numbers are frozen".
+  - within_30_seconds
+
+  # Privacy obligations that are prompt but not interactive: salt rotation, and
+  # reconciling the aggregates after an erasure. Minutes are fine. Hours are not,
+  # because both back a claim we make in writing.
+  - within_5_minutes
+
+  # Nightly bulk work. Retention deletion, and anything else measured in chunks
+  # rather than rows.
+  - within_1_hour
+
+# Concurrency is set in config/initializers/sidekiq.rb from SIDEKIQ_CONCURRENCY,
+# so it is deliberately absent here rather than duplicated. Note that it is a
+# single shared pool across every queue above: raising it does not raise ingest
+# throughput, which is bounded by the INSERT rather than by thread count.

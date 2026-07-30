@@ -1,31 +1,94 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
     <title><%= content_for(:title) || "Tastatur" %></title>
     <meta name="viewport" content="width=device-width,initial-scale=1">
-    <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="application-name" content="Tastatur">
-    <meta name="mobile-web-app-capable" content="yes">
     <%= csrf_meta_tags %>
     <%= csp_meta_tag %>
 
+    <%# This app measures other people's sites; it does not measure its own
+        visitors with third-party anything. No external fonts, no CDN, no tag
+        manager — everything referenced below is served from this origin. %>
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+
     <%= yield :head %>
 
-    <%# Enable PWA manifest for installable apps (make sure to enable in config/routes.rb too!) %>
-    <%#= tag.link rel: "manifest", href: pwa_manifest_path(format: :json) %>
-
-    <link rel="icon" href="/icon.png" type="image/png">
+    <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48">
     <link rel="icon" href="/icon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="/icon.png">
-
-    <%# Includes all stylesheet files in app/assets/stylesheets %>
     <%= stylesheet_link_tag :app, "data-turbo-track": "reload" %>
     <%= javascript_importmap_tags %>
   </head>
 
-  <body>
-    <main class="container mx-auto mt-28 px-5 flex">
+  <body class="min-h-screen flex flex-col">
+    <header class="border-b border-rule bg-surface">
+      <div class="shell flex items-center justify-between h-14">
+        <div class="flex items-center gap-8">
+          <%= link_to root_path, class: "flex items-baseline gap-2" do %>
+            <span class="text-[15px] font-bold tracking-[0.24em] uppercase">Tastatur</span>
+            <span class="w-2 h-2 bg-signal inline-block translate-y-[-1px]" aria-hidden="true"></span>
+          <% end %>
+
+          <% if user_signed_in? && current_account %>
+            <nav class="hidden sm:flex items-center gap-1">
+              <%= link_to "Sites", sites_path, class: "btn btn-quiet btn-sm" %>
+              <%= link_to "Account", account_path, class: "btn btn-quiet btn-sm" %>
+              <%= link_to "Docs", docs_path, class: "btn btn-quiet btn-sm" %>
+            </nav>
+          <% end %>
+        </div>
+
+        <div class="flex items-center gap-3">
+          <% unless user_signed_in? %>
+            <%= link_to "Docs", docs_path, class: "btn btn-quiet btn-sm" %>
+          <% end %>
+          <% if user_signed_in? %>
+            <span class="label hidden md:inline"><%= current_user.email %></span>
+            <%= button_to "Sign out", destroy_user_session_path, method: :delete,
+                          class: "btn btn-quiet btn-sm" %>
+          <% else %>
+            <%= link_to "Sign in", new_user_session_path, class: "btn btn-quiet btn-sm" %>
+            <% if Tastatur.allow_signup? %>
+              <%= link_to "Get started", new_user_registration_path, class: "btn btn-primary btn-sm" %>
+            <% end %>
+          <% end %>
+        </div>
+      </div>
+    </header>
+
+    <% if flash.any? %>
+      <div class="shell mt-6">
+        <% flash.each do |type, message| %>
+          <div class="notice <%= "border-signal text-ink" if type.to_s.in?(%w[alert error]) %>" role="status">
+            <%= message %>
+          </div>
+        <% end %>
+      </div>
+    <% end %>
+
+    <main class="flex-1 py-8">
       <%= yield %>
     </main>
+
+    <footer class="border-t border-rule mt-16">
+      <div class="shell py-6 flex flex-wrap items-center justify-between gap-4 text-[12px] text-muted">
+        <span>
+          Tastatur <%= Tastatur.version %> · cookieless analytics · AGPL-3.0<br class="sm:hidden">
+          <span class="sm:before:content-['·'] sm:before:mx-2">Built by
+            <%= link_to Tastatur.maintainer[:name], Tastatur.maintainer[:url],
+                        class: "hover:text-ink underline", rel: "noopener" %></span>
+        </span>
+        <nav class="flex gap-5">
+          <%= link_to "About", about_path, class: "hover:text-ink" %>
+          <%= link_to "Docs", docs_path, class: "hover:text-ink" %>
+          <%= link_to "Privacy", privacy_path, class: "hover:text-ink" %>
+          <%= link_to "Your data", data_request_path, class: "hover:text-ink" %>
+          <%= link_to "DPA", dpa_path, class: "hover:text-ink" %>
+          <%= link_to "Policy", privacy_policy_path, class: "hover:text-ink" %>
+          <%= link_to "Terms", terms_path, class: "hover:text-ink" %>
+        </nav>
+      </div>
+    </footer>
   </body>
 </html>

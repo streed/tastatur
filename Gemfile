@@ -78,6 +78,27 @@ gem "sentry-ruby"
 gem "sentry-rails"
 gem "lograge"
 
+# --- Analytics ingest --------------------------------------------------------
+
+# Password digests for password-protected shared dashboards. Devise pulls
+# bcrypt in transitively, but has_secure_password is our own use of it.
+gem "bcrypt", "~> 3.1"
+
+# User-agent parsing. A Ruby port of Matomo's device detector — the same
+# database Matomo and Plausible rely on, which matters most for its bot list:
+# unfiltered crawler traffic is the single biggest source of wrong numbers in
+# self-hosted analytics. LGPL-3.0, compatible with our AGPL-3.0 licence.
+gem "device_detector"
+
+# Country-level IP geolocation, reading a local MaxMind-format database.
+# Apache-2.0. The database file itself is NOT bundled — see
+# `rails tastatur:geoip:download` and docs/self-hosting/geolocation.md.
+gem "maxmind-db"
+
+# ISO-3166 country names, so a breakdown reads "Germany" rather than "DE".
+# MIT. Data is maintained upstream rather than as a table we would let rot.
+gem "countries"
+
 group :development, :test do
   gem "rspec-rails"
   gem "factory_bot_rails"

@@ -1,0 +1,17 @@
+<% if filters.any? %>
+  <div class="flex flex-wrap items-center gap-2 mb-6">
+    <span class="label mr-1">Filtered by</span>
+
+    <% filters.each do |key, value| %>
+      <span class="chip">
+        <span class="chip-key"><%= filters.label_for(key) %></span>
+        <span class="font-semibold"><%= key == "country" ? country_name(value) : value %></span>
+        <%= link_to "×", remove_filter_url(site, key), class: "chip-x",
+                    "aria-label": "Remove #{filters.label_for(key)} filter" %>
+      </span>
+    <% end %>
+
+    <%= link_to "Clear all", dashboard_url_for(site, filters: Analytics::Filters.new),
+                class: "btn btn-quiet btn-sm" %>
+  </div>
+<% end %>

@@ -1,0 +1,12 @@
+<%# A copyable code block. Language is a label only; there is no syntax
+    highlighting, because a highlighter is a dependency and a colour scheme
+    fighting the one this page already has. %>
+<div data-controller="clipboard" class="border border-rule bg-surface">
+  <div class="flex items-center justify-between px-3 py-1.5 border-b border-rule bg-surface-2">
+    <span class="label text-[9px]"><%= local_assigns.fetch(:language, "HTML") %></span>
+    <button class="label text-[9px] hover:text-ink" data-action="clipboard#copy">
+      <span data-clipboard-target="label">Copy</span>
+    </button>
+  </div>
+  <pre class="p-3.5 overflow-x-auto text-[12.5px] leading-relaxed"><code data-clipboard-target="source"><%= code.strip %></code></pre>
+</div>

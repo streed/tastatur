@@ -5,6 +5,11 @@ Rails.application.configure do
   config.action_mailer.perform_deliveries = true
   config.action_mailer.raise_delivery_errors = true
   config.action_mailer.default_url_options = { host: "localhost", port: 3000 }
+
+  # We use RSpec, so previews live under spec/ rather than the Rails default
+  # test/mailers/previews. Without this, /rails/mailers is empty and the themed
+  # email templates cannot be reviewed without sending real mail.
+  config.action_mailer.preview_paths << Rails.root.join("spec/mailers/previews").to_s
   # Settings specified here will take precedence over those in config/application.rb.
 
   # Make code changes take effect immediately without server restart.

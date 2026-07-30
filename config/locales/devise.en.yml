@@ -17,16 +17,19 @@ en:
       unauthenticated: "You need to sign in or sign up before continuing."
       unconfirmed: "You have to confirm your email address before continuing."
     mailer:
+      # Subjects a person can act on, rather than Devise defaults that read like
+      # system output. The subject line is the whole message for anyone deciding
+      # whether to open it.
       confirmation_instructions:
-        subject: "Confirmation instructions"
+        subject: "Confirm your email address"
       reset_password_instructions:
-        subject: "Reset password instructions"
+        subject: "Reset your password"
       unlock_instructions:
-        subject: "Unlock instructions"
+        subject: "Unlock your account"
       email_changed:
-        subject: "Email Changed"
+        subject: "Your email address was changed"
       password_change:
-        subject: "Password Changed"
+        subject: "Your password was changed"
     omniauth_callbacks:
       failure: "Could not authenticate you from %{kind} because \"%{reason}\"."
       success: "Successfully authenticated from %{kind} account."

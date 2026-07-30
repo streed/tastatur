@@ -1,0 +1,20 @@
+<% content_for :subject, "Confirm your email address" %>
+<% content_for :preheader, "One click and your Tastatur account is ready." %>
+
+<h1 style="margin:0 0 16px; font-size:21px; font-weight:600; letter-spacing:-0.4px; line-height:1.2; color:#16150f;">
+  Confirm your email address
+</h1>
+
+<p style="margin:0 0 20px; color:#57564e;">
+  Welcome to Tastatur. Confirm this address and you can sign in and start
+  measuring your first site. Until you do, signing in will be refused.
+</p>
+
+<%= render "devise/mailer/button",
+           url: confirmation_url(@resource, confirmation_token: @token),
+           label: "Confirm my account" %>
+
+<p style="margin:0; padding-top:20px; border-top:1px solid #e3e1d8; font-size:13px; color:#8c8a80;">
+  Confirming opts you into nothing. We store your email address so you can sign
+  in, and nothing else about you.
+</p>

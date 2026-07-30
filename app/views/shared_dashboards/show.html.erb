@@ -1,0 +1,28 @@
+<% content_for :title, "#{@site.domain} · shared dashboard" %>
+<div class="shell">
+  <div class="flex flex-wrap items-end justify-between gap-4 mb-6">
+    <div>
+      <div class="flex items-center gap-3">
+        <h1 class="text-2xl font-semibold"><%= @site.domain %></h1>
+        <% if @report.realtime.positive? %>
+          <span class="flex items-center gap-2 label">
+            <span class="w-1.5 h-1.5 bg-signal inline-block" aria-hidden="true"></span>
+            <%= pluralize(@report.realtime, "current visitor") %>
+          </span>
+        <% end %>
+      </div>
+      <p class="label mt-2"><%= @period.label %><span class="mx-2">·</span><%= @site.timezone %></p>
+    </div>
+    <div class="segmented">
+      <% %w[today 7d 30d 90d].each do |key| %>
+        <%= link_to Analytics::Period::PRESETS[key].sub("Last ", ""),
+                    shared_dashboard_path(@shared_link.slug, period: key),
+                    class: "segment", "aria-current": (@period.key == key).to_s %>
+      <% end %>
+    </div>
+  </div>
+
+  <%# Not drillable: filtering someone else's audience is a re-identification
+      tool, so a public dashboard offers no filters. %>
+  <%= render "sites/dashboard", site: @site, report: @report, drillable: false %>
+</div>

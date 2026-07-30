@@ -1,0 +1,342 @@
+<% content_for :title, "Documentation · Tastatur" %>
+<% token = @example_site&.public_token || "YOUR_SITE_KEY" %>
+<% tracker = Tastatur.tracker_url %>
+<% ingest = Tastatur.ingest_url %>
+
+<%
+  sections = [
+    ["install",      "Install"],
+    ["options",      "Script options"],
+    ["events",       "Custom events"],
+    ["revenue",      "Revenue"],
+    ["spa",          "Single-page apps"],
+    ["goals",        "Goals"],
+    ["funnels",      "Funnels"],
+    ["filters",      "Filtering and sharing"],
+    ["csp",          "Content Security Policy"],
+    ["server",       "Server-side events"],
+    ["noscript",     "Without JavaScript"],
+    ["optout",       "Opt-out"],
+    ["blockers",     "Ad blockers"],
+    ["collected",    "What gets collected"]
+  ]
+%>
+
+<div class="shell">
+  <div class="pt-5 rule-heavy mb-10">
+    <p class="label mt-5 mb-3">Documentation</p>
+    <h1 class="text-3xl font-semibold tracking-[-0.03em]">Using Tastatur</h1>
+    <p class="text-ink-2 mt-3 max-w-2xl leading-relaxed">
+      One script tag installs it. Everything below is optional.
+      <% if @example_site %>
+        Examples are filled in with your real site key for
+        <strong class="text-ink"><%= @example_site.domain %></strong>, so they can be copied as-is.
+      <% end %>
+    </p>
+  </div>
+
+  <div class="grid lg:grid-cols-12 gap-10">
+    <%# --- Contents. Sticky on wide screens, a plain list on narrow ones. -%>
+    <nav class="lg:col-span-3 lg:sticky lg:top-8 lg:self-start" aria-label="Contents">
+      <p class="label mb-3">Contents</p>
+      <ul class="border-t border-rule">
+        <% sections.each do |id, title| %>
+          <li class="border-b border-rule">
+            <a href="#<%= id %>" class="block py-2 text-[13px] text-ink-2 hover:text-signal"><%= title %></a>
+          </li>
+        <% end %>
+      </ul>
+
+      <p class="label mt-8 mb-3">Deeper</p>
+      <ul class="border-t border-rule text-[13px]">
+        <% [["What we collect", privacy_path],
+            ["Your data", data_request_path],
+            ["Processor terms", dpa_path]].each do |title, path| %>
+          <li class="border-b border-rule">
+            <%= link_to title, path, class: "block py-2 text-ink-2 hover:text-signal" %>
+          </li>
+        <% end %>
+      </ul>
+    </nav>
+
+    <%# --- Body -%>
+    <div class="lg:col-span-9 divide-y divide-rule">
+
+      <%= render layout: "docs/section",
+                 locals: { id: "install", title: "Install",
+                           lede: "Paste this into your <head>. That is the entire installation, and nothing below is required to get numbers." } do %>
+        <%= render "docs/snippet", code: %(<script defer data-site="#{token}" src="#{tracker}"></script>) %>
+        <p class="text-[14px] text-ink-2 leading-relaxed">
+          <code>defer</code> keeps it off the critical path. The script is about 3.2 KB over the
+          wire and makes one request per pageview. Visits from
+          <code>localhost</code>, private network ranges and <code>file:</code> are ignored, so
+          local development will not appear in your numbers.
+        </p>
+      <% end %>
+
+      <%= render layout: "docs/section",
+                 locals: { id: "options", title: "Script options",
+                           lede: "Attributes on the script tag. All optional." } do %>
+        <div class="card">
+          <% [
+               ["data-site", "required", "Your site key. Public by design; it appears in your page source."],
+               ["data-api", "optional", "Override the ingest endpoint. Only needed if you proxy events through a different path than the script."],
+               ["data-hash", "optional", "Count URL fragment changes as pageviews. For apps that route on #."],
+               ["data-auto", %(default "true"), %(Set to "false" to stop automatic pageviews and send them yourself.)],
+               ["data-exclude", "optional", "Present means collect nothing. Useful on a staging build from the same codebase."],
+               ["data-ignore-dnt", "optional", "Stop honouring Do Not Track and Global Privacy Control. Read the note under Opt-out before using this."]
+             ].each do |attr, status, description| %>
+            <div class="px-4 py-3 border-b border-rule last:border-b-0">
+              <p class="text-[13px]">
+                <code class="font-semibold"><%= attr %></code>
+                <span class="label ml-2 text-[9px]"><%= status %></span>
+              </p>
+              <p class="text-[13px] text-ink-2 mt-1 leading-relaxed"><%= description %></p>
+            </div>
+          <% end %>
+        </div>
+
+        <%= render "docs/snippet", code: %(<script defer\n  data-site="#{token}"\n  data-hash\n  src="#{tracker}"></script>) %>
+      <% end %>
+
+      <%= render layout: "docs/section",
+                 locals: { id: "events", title: "Custom events",
+                           lede: "Anything worth counting that is not a pageview: a signup, a download, a plan selected." } do %>
+        <%= render "docs/snippet", language: "JavaScript", code: %(tastatur('event', 'Signup')\n\ntastatur('event', 'Signup', { props: { plan: 'pro', source: 'pricing-page' } }) ) %>
+
+        <div class="card card-body space-y-2.5 text-[13px] text-ink-2">
+          <p><strong class="text-ink">Event names</strong> are free text up to 120 characters. Keep
+            them stable; renaming one starts a new series rather than renaming the old.</p>
+          <p><strong class="text-ink">Properties</strong> are limited to 24 keys per event, 60
+            characters per key and 500 per value. Values may be strings, numbers or booleans.</p>
+          <p><strong class="text-ink">Do not put personal data in properties.</strong> This is the
+            one field whose contents you control, and nothing in Tastatur can tell that
+            <code>{ email: "…" }</code> should not have been sent.</p>
+        </div>
+
+        <p class="text-[14px] text-ink-2 leading-relaxed">
+          If you call <code>tastatur()</code> from code that may run before the deferred script has
+          loaded, add this stub first. It queues calls and replays them once the script is ready.
+        </p>
+        <%= render "docs/snippet", language: "JavaScript", code: %(window.tastatur = window.tastatur || function () {\n  (window.tastatur.q = window.tastatur.q || []).push(arguments)\n}) %>
+      <% end %>
+
+      <%= render layout: "docs/section",
+                 locals: { id: "revenue", title: "Revenue",
+                           lede: "Attach a monetary value to an event and it shows up against your goals." } do %>
+        <%= render "docs/snippet", language: "JavaScript", code: %(tastatur('event', 'Purchase', {\n  revenue: { amount: 4900, currency: 'EUR' },\n  props:   { plan: 'growth' }\n})) %>
+        <p class="text-[14px] text-ink-2 leading-relaxed">
+          <code>amount</code> is in minor units, so 4900 is &euro;49.00. A currency is required
+          whenever an amount is sent: without one, a total would silently mix euros and yen.
+        </p>
+      <% end %>
+
+      <%= render layout: "docs/section",
+                 locals: { id: "spa", title: "Single-page apps",
+                           lede: "Handled automatically. There is nothing to configure for React, Vue, Svelte, Turbo, HTMX or hand-rolled routing." } do %>
+        <div class="card card-body space-y-2.5 text-[13px] text-ink-2">
+          <p>The script patches <code>history.pushState</code> and <code>replaceState</code>, and
+            listens for <code>popstate</code>, so client-side navigation counts as a pageview.</p>
+          <p>Views are deduplicated against the last URL sent. Frameworks that call
+            <code>replaceState</code> during hydration would otherwise double-count every first
+            pageview.</p>
+          <p>Back/forward cache restores are counted via <code>pageshow</code>, because a restored
+            page does not re-run the script.</p>
+          <p>If you route on the URL fragment, add <code>data-hash</code>.</p>
+        </div>
+        <p class="text-[14px] text-ink-2 leading-relaxed">
+          To take control yourself, set <code>data-auto="false"</code> and call it from your router:
+        </p>
+        <%= render "docs/snippet", language: "JavaScript", code: %(router.afterEach(() => tastatur('pageview')) ) %>
+      <% end %>
+
+      <%= render layout: "docs/section",
+                 locals: { id: "goals", title: "Goals",
+                           lede: "A goal is a page or an event worth counting, with a conversion rate attached." } do %>
+        <div class="card">
+          <% [
+               ["Exact path", "/pricing", "Matches that page only."],
+               ["Starts with", "/blog", "Matches /blog and everything beneath it."],
+               ["Wildcard", "/blog/**", "* matches inside one path segment, ** matches across segments."],
+               ["Custom event", "Signup", "Matches an event name you send."]
+             ].each do |kind, example, note| %>
+            <div class="px-4 py-3 border-b border-rule last:border-b-0 flex flex-wrap items-baseline gap-x-4 gap-y-1">
+              <span class="label text-[9px] w-24 shrink-0"><%= kind %></span>
+              <code class="text-[13px] font-semibold w-28 shrink-0"><%= example %></code>
+              <span class="text-[13px] text-ink-2"><%= note %></span>
+            </div>
+          <% end %>
+        </div>
+        <div class="notice text-[13px]">
+          Goals are matched against history, so creating one immediately reports on data you
+          already have. You do not need to set them up in advance.
+        </div>
+        <% if @example_site %>
+          <%= link_to "Set up a goal for #{@example_site.domain}", site_goals_path(@example_site), class: "btn btn-sm" %>
+        <% end %>
+      <% end %>
+
+      <%= render layout: "docs/section",
+                 locals: { id: "funnels", title: "Funnels",
+                           lede: "An ordered sequence of steps, with the drop-off between each." } do %>
+        <p class="text-[14px] text-ink-2 leading-relaxed">
+          Steps use the same matchers as goals. A visitor counts at step 3 only if they reached it
+          <em>after</em> step 2, which means someone who backtracks and returns is still counted
+          correctly.
+        </p>
+        <div class="notice text-[13px]">
+          <strong>Pick a window of 24 hours or less.</strong> Visitor identifiers expire daily, so a
+          funnel spanning more than a day cannot follow anyone across that boundary and will
+          undercount. The funnel view says so when the window is longer, rather than quietly
+          reporting a low number.
+        </div>
+        <% if @example_site %>
+          <%= link_to "Build a funnel for #{@example_site.domain}", site_funnels_path(@example_site), class: "btn btn-sm" %>
+        <% end %>
+      <% end %>
+
+      <%= render layout: "docs/section",
+                 locals: { id: "filters", title: "Filtering and sharing",
+                           lede: "Click any row on the dashboard to filter everything by it." } do %>
+        <div class="card card-body space-y-2.5 text-[13px] text-ink-2">
+          <p>Filter state lives in the URL, so a filtered view can be bookmarked, sent to a
+            colleague, or kept open in a tab.</p>
+          <p>Filterable dimensions: page, entry page, source, referrer, country, browser,
+            operating system, device, screen class, every <code>utm_*</code> field, event name and
+            hostname.</p>
+          <p><strong class="text-ink">Shared dashboards</strong> give a read-only link that needs no
+            account, optionally password-protected and optionally expiring. They do not offer
+            filters, because narrow filters on someone else's audience are a re-identification
+            tool.</p>
+        </div>
+      <% end %>
+
+      <%= render layout: "docs/section",
+                 locals: { id: "csp", title: "Content Security Policy",
+                           lede: "If your site sets a CSP, allow this origin in two directives." } do %>
+        <%= render "docs/snippet", language: "CSP", code: %(script-src #{Tastatur.base_url};\nconnect-src #{Tastatur.base_url};) %>
+        <p class="text-[14px] text-ink-2 leading-relaxed">
+          <code>script-src</code> lets the browser fetch <code>t.js</code>;
+          <code>connect-src</code> lets it send the beacon. The script needs no
+          <code>unsafe-inline</code>, no <code>unsafe-eval</code>, and sets no cookie, so it does
+          not interact with your <code>cookie</code> or <code>frame</code> policy at all.
+        </p>
+      <% end %>
+
+      <%= render layout: "docs/section",
+                 locals: { id: "server", title: "Server-side events",
+                           lede: "The ingest endpoint is a plain HTTP API, so backend and mobile events work without the script." } do %>
+        <%= render "docs/snippet", language: "cURL", code: %(curl -X POST #{ingest} \\\n  -H 'Content-Type: application/json' \\\n  -H 'X-Forwarded-For: <the end user's IP>' \\\n  -H 'User-Agent: <the end user's user-agent>' \\\n  -d '{\n        "s": "#{token}",\n        "u": "https://example.com/checkout",\n        "n": "Purchase",\n        "v": 4900,\n        "c": "EUR"\n      }') %>
+        <div class="notice text-[13px]">
+          <strong>Pass the end user's address and user-agent, not your server's.</strong> Otherwise
+          every server-side event collapses into one visitor located wherever your server is. This
+          only works from a host your Tastatur instance trusts as a proxy.
+        </div>
+        <div class="card">
+          <% [["s", "Site key"], ["u", "Absolute URL of the page or screen"],
+              ["n", %(Event name. Defaults to "pageview")], ["r", "Referrer URL"],
+              ["w", "Viewport width in pixels, bucketed server-side"],
+              ["p", "Properties object"], ["v", "Revenue in minor units"],
+              ["c", "Three-letter currency code"]].each do |key, meaning| %>
+            <div class="px-4 py-2 border-b border-rule last:border-b-0 flex items-baseline gap-4 text-[13px]">
+              <code class="font-semibold w-6 shrink-0"><%= key %></code>
+              <span class="text-ink-2"><%= meaning %></span>
+            </div>
+          <% end %>
+        </div>
+        <p class="text-[13px] text-ink-2 leading-relaxed">
+          The endpoint answers <code>202</code> for everything, including a payload it rejected.
+          That is deliberate: a distinguishable response would let anyone test which site keys are
+          valid. Check your dashboard to confirm events are arriving.
+        </p>
+      <% end %>
+
+      <%= render layout: "docs/section",
+                 locals: { id: "noscript", title: "Without JavaScript",
+                           lede: "A tracking pixel for visitors who run no scripts." } do %>
+        <%= render "docs/snippet", code: %(<noscript>\n  <img src="#{Tastatur.base_url}/api/pixel?s=#{token}&u=https://example.com/"\n       alt="" width="1" height="1" referrerpolicy="no-referrer-when-downgrade">\n</noscript>) %>
+        <p class="text-[14px] text-ink-2 leading-relaxed">
+          The <code>u</code> parameter has to be written per page, so this is most practical in a
+          server-rendered layout where you can interpolate the current URL. Everything else
+          behaves the same, including bot filtering and the opt-out check.
+        </p>
+      <% end %>
+
+      <%= render layout: "docs/section",
+                 locals: { id: "optout", title: "Opt-out",
+                           lede: "Do Not Track and Global Privacy Control are honoured by default." } do %>
+        <div class="card card-body space-y-2.5 text-[13px] text-ink-2">
+          <p>If a visitor's browser sends <code>DNT: 1</code> or <code>Sec-GPC: 1</code>, no
+            identifier is computed and no event is stored. Only an anonymous per-hour counter is
+            incremented, so you can see that some requests opted out without any record of who.</p>
+          <p>This is checked in the script <em>and</em> again server-side, because the endpoint is a
+            public API that an older cached script or the pixel might call without checking.</p>
+          <p>There is no per-person opt-out flag, because storing one would mean keeping a durable
+            identifier for exactly the people who asked us not to.</p>
+        </div>
+        <div class="notice text-[13px]">
+          <code>data-ignore-dnt</code> turns this off. A working opt-out is a condition of the
+          audience-measurement consent exemptions Tastatur is designed to qualify for, so
+          disabling it likely forfeits that argument. Take your own advice before using it.
+        </div>
+      <% end %>
+
+      <%= render layout: "docs/section",
+                 locals: { id: "blockers", title: "Ad blockers",
+                           lede: "Some block Tastatur. You can proxy it through your own domain, and here is our position on doing so." } do %>
+        <p class="text-[14px] text-ink-2 leading-relaxed">
+          The script derives its endpoint from its own <code>src</code>, so proxying the script
+          through your domain automatically proxies the events with it. Point a path on your site
+          at this instance:
+        </p>
+        <%= render "docs/snippet", language: "nginx", code: %(location /stats.js  { proxy_pass #{Tastatur.base_url}/t.js; }\nlocation /stats/api { proxy_pass #{Tastatur.base_url}/api/event; }) %>
+        <%= render "docs/snippet", code: %(<script defer data-site="#{token}" src="/stats.js"></script>) %>
+        <div class="card card-body text-[13px] text-ink-2 leading-relaxed">
+          <p class="mb-2"><strong class="text-ink">Where we stand on this.</strong> Blockers exist
+            because tracking earned them. Tastatur sets no cookie, stores nothing on the device and
+            builds no cross-site profile, so a blocked Tastatur request protects nobody from
+            anything.</p>
+          <p>That said, proxying is a way around a user's stated choice, and we will not pretend
+            otherwise. It is documented because you will find it anyway and it is better done with
+            the tradeoff in front of you. Note also that Do Not Track and Global Privacy Control are
+            still honoured through a proxy, so a visitor who has explicitly objected remains
+            uncounted.</p>
+        </div>
+      <% end %>
+
+      <%= render layout: "docs/section",
+                 locals: { id: "collected", title: "What gets collected",
+                           lede: "The short version. The long version is a page of its own." } do %>
+        <div class="card">
+          <% [
+               ["Page path", "Query string stripped except utm_* tags. Personal data is removed from the path itself: emails, tokens, UUIDs and long ids are replaced with placeholders."],
+               ["Referrer host", "news.ycombinator.com, not the full referring URL."],
+               ["Country", "Two letters. No region, no city, no coordinates."],
+               ["Browser and OS", "Family plus major version only."],
+               ["Device class", "One of desktop, mobile, tablet."],
+               ["Screen class", "One of five buckets. The exact pixel width is never stored."],
+               ["Visitor identifier", "A truncated HMAC of a daily-rotating secret with the IP, user-agent and site. Unlinkable once the secret is destroyed."]
+             ].each do |field, note| %>
+            <div class="px-4 py-3 border-b border-rule last:border-b-0">
+              <p class="label text-[9px]"><%= field %></p>
+              <p class="text-[13px] text-ink-2 mt-1.5 leading-relaxed"><%= note %></p>
+            </div>
+          <% end %>
+        </div>
+        <p class="text-[14px] text-ink-2 leading-relaxed">
+          Raw IP addresses and user-agent strings are never written to the database, a log, or disk.
+          A returning visitor is counted as a new visitor tomorrow, so a 30-day figure is the sum of
+          30 daily figures rather than a count of distinct people.
+        </p>
+
+        <p class="label mt-7 mb-3">Cookies, precisely</p>
+        <%= render "shared/cookie_distinction" %>
+        <div class="flex flex-wrap gap-3">
+          <%= link_to "The full technical account", privacy_path, class: "btn btn-sm" %>
+          <%= link_to "Check what we hold about you", data_request_path, class: "btn btn-quiet btn-sm" %>
+        </div>
+      <% end %>
+
+    </div>
+  </div>
+</div>

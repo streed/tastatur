@@ -6,40 +6,88 @@ on:
     branches: [ main ]
 
 jobs:
-  scan_ruby:
+  test:
+    name: Test
     runs-on: ubuntu-latest
+
+    services:
+      # TimescaleDB, not plain postgres. The first migration enables the
+      # extension and raises if the version is below 2.18, so a stock
+      # `postgres:17` image fails on migration one with "could not open
+      # extension control file" and nothing afterwards runs.
+      timescaledb:
+        image: timescale/timescaledb:latest-pg17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+      # A second Redis, on a second port, standing in for the non-persistent
+      # instance that holds the visitor salt. Pointing both URLs at one server
+      # would let spec/privacy_invariants_spec.rb pass without testing anything:
+      # it asserts the salt is written *there* and not to the persistent
+      # instance, and that assertion is vacuous if they are the same server.
+      redis-privacy:
+        image: redis:7-alpine
+        ports:
+          - 6380:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      RAILS_ENV: test
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/tastatur_test
+      REDIS_URL: redis://localhost:6379/1
+      REDIS_PRIVACY_URL: redis://localhost:6380/1
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
 
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          bundler-cache: true
-
-      - name: Scan for common Rails security vulnerabilities using static analysis
-        run: bin/brakeman --no-pager
-      
-      - name: Scan for known security vulnerabilities in gems used
-        run: bin/bundler-audit
-      
-  scan_js:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
+      - name: Install packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y libpq-dev
 
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
+          ruby-version: .ruby-version
           bundler-cache: true
 
-      - name: Scan for security vulnerabilities in JavaScript dependencies
-        run: bin/importmap audit
+      # `db:prepare`, and never `db:schema:load`. There is no schema.rb in this
+      # repository on purpose: pg_dump emits neither `create_hypertable` nor the
+      # `timescaledb.continuous` flag, so a loaded schema silently yields
+      # ordinary tables and unmaterialised views — a database that works and is
+      # quietly wrong, with nothing raising. Migrations are the source of truth.
+      # See CONTRIBUTING.md.
+      - name: Set up the test database
+        run: bin/rails db:prepare
+
+      - name: Run the suite
+        run: bundle exec rspec
 
   lint:
+    name: Lint
     runs-on: ubuntu-latest
     env:
       RUBOCOP_CACHE_ROOT: tmp/rubocop
@@ -50,6 +98,7 @@ jobs:
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
+          ruby-version: .ruby-version
           bundler-cache: true
 
       - name: Prepare RuboCop cache
@@ -65,3 +114,47 @@ jobs:
       - name: Lint code for consistent style
         run: bin/rubocop -f github
 
+  security:
+    name: Security
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: .ruby-version
+          bundler-cache: true
+
+      - name: Scan for common Rails security vulnerabilities using static analysis
+        run: bin/brakeman --no-pager
+
+      - name: Scan for known security vulnerabilities in gems used
+        run: bin/bundler-audit
+
+      - name: Scan for security vulnerabilities in JavaScript dependencies
+        run: bin/importmap audit
+
+  # Proves the shipped image still builds. This job exists because it once did
+  # not: `production.rb` read ENV.fetch("APP_HOST") with no default, and since
+  # `assets:precompile` boots the app in production mode inside the build — where
+  # APP_HOST is neither set nor needed — the fetch raised KeyError and the image
+  # could not be produced at all. Every test above passed the whole time.
+  build:
+    name: Docker build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build the production image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

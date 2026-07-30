@@ -1,0 +1,29 @@
+<% content_for :title, "Sites · Tastatur" %>
+
+<div class="shell">
+  <div class="flex items-end justify-between gap-4 mb-8 pb-5 rule-heavy pt-5">
+    <div>
+      <h1 class="text-2xl font-semibold">Sites</h1>
+      <p class="label mt-2"><%= current_account&.name %></p>
+    </div>
+    <%= link_to "Add a site", new_site_path, class: "btn btn-primary" %>
+  </div>
+
+  <div class="card">
+    <% @sites.each do |site| %>
+      <%= link_to site_path(site), class: "flex items-center justify-between gap-4 px-5 py-4 border-b border-rule last:border-b-0 hover:bg-surface-2" do %>
+        <div>
+          <p class="font-semibold"><%= site.domain %></p>
+          <p class="label mt-1">
+            <% if site.receiving_data? %>
+              Collecting since <%= site.first_event_at.to_date.to_fs(:long) %>
+            <% else %>
+              Awaiting first event
+            <% end %>
+          </p>
+        </div>
+        <span class="label">View →</span>
+      <% end %>
+    <% end %>
+  </div>
+</div>

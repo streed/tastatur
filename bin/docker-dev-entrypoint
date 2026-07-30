@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+set -e
+
+# Runs before every dev container command.
+#
+# The bind mount means the image's bundle can drift from the Gemfile on disk
+# the moment someone adds a gem, so we re-resolve if needed rather than failing
+# with a confusing LoadError.
+if ! bundle check >/dev/null 2>&1; then
+  echo "==> Gemfile changed since the image was built — installing..."
+  bundle install --jobs 4 --retry 3
+fi
+
+# Only the web process should own migrations; the css watcher and the Sidekiq
+# worker must not race it on startup.
+if [ "$RUN_MIGRATIONS" = "1" ]; then
+  echo "==> Waiting for TimescaleDB..."
+  until pg_isready -h "${DB_HOST:-timescaledb}" -U postgres >/dev/null 2>&1; do
+    sleep 1
+  done
+
+  echo "==> Preparing database..."
+  # db:prepare creates the database if absent and then migrates. There is no
+  # schema file to load by design (see config/application.rb), so this always
+  # builds from migrations.
+  bin/rails db:prepare
+
+  # A stale server.pid left behind by a hard `docker compose kill` stops Puma
+  # from booting with a misleading "server is already running" error.
+  rm -f tmp/pids/server.pid
+fi
+
+exec "$@"

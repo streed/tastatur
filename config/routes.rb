@@ -1,23 +1,65 @@
 Rails.application.routes.draw do
-  get "up", to: "health#show"
+  # --- Ingest ---------------------------------------------------------------
+  # Called from customer sites, cross-origin, on every pageview. Kept at the
+  # very top of the routing table because it is by a wide margin the most
+  # requested path in the application and route matching is ordered.
+  namespace :api do
+    post "event", to: "events#create"
+    get  "event", to: "events#create"        # for beacons that cannot POST
+    match "event", to: "events#options", via: :options
+    get "pixel", to: "events#pixel"
+  end
+
+  # Custom registrations controller so a new user is given an account to own at
+  # signup, and so signup can be closed on a self-hosted instance.
+  devise_for :users, controllers: { registrations: "users/registrations" }
+
+  # --- Application ----------------------------------------------------------
+  resources :sites, param: :public_token do
+    scope module: :sites do
+      resource :installation, only: %i[show]
+      resources :goals, except: %i[show]
+      resources :funnels
+      resources :shared_links, only: %i[index create destroy]
+    end
+  end
+
+  resource :account, only: %i[show edit update] do
+    resources :members, only: %i[index create update destroy], module: :accounts
+  end
+
+  # --- Public shared dashboards --------------------------------------------
+  # Deliberately NOT nested under /sites: these are reached by unguessable slug
+  # with no session, and keeping them on their own path makes it obvious in the
+  # routing table which endpoints are unauthenticated.
+  get  "share/:slug", to: "shared_dashboards#show", as: :shared_dashboard
+  post "share/:slug/unlock", to: "shared_dashboards#unlock", as: :unlock_shared_dashboard
+
+  # --- Documentation --------------------------------------------------------
+  get "docs", to: "docs#show"
+  get "about", to: "pages#about"
+
+  # --- Compliance -----------------------------------------------------------
+  get "privacy", to: "compliance#privacy"
+  get "data-request", to: "compliance#data_request", as: :data_request
+  get "dpa", to: "compliance#dpa"
+  get "privacy-policy", to: "compliance#privacy_policy", as: :privacy_policy
+  get "terms", to: "compliance#terms"
+
+  # --- Onboarding -----------------------------------------------------------
+  get "setup", to: "first_run#show", as: :first_run
+  post "setup", to: "first_run#create"
+
   get "dashboard", to: "pages#dashboard"
   root to: "pages#home"
+
   require "sidekiq/web"
   require "sidekiq/cron/web"
   authenticate :user, ->(u) { u.respond_to?(:admin?) && u.admin? } do
     mount Sidekiq::Web => "/sidekiq"
   end
-  devise_for :users
-  # Define your application routes per the DSL in https://guides.rubyonrails.org/routing.html
 
-  # Reveal health status on /up that returns 200 if the app boots with no exceptions, otherwise 500.
-  # Can be used by load balancers and uptime monitors to verify that the app is live.
-  get "up" => "rails/health#show", as: :rails_health_check
-
-  # Render dynamic PWA files from app/views/pwa/* (remember to link manifest in application.html.erb)
-  # get "manifest" => "rails/pwa#manifest", as: :pwa_manifest
-  # get "service-worker" => "rails/pwa#service_worker", as: :pwa_service_worker
-
-  # Defines the root path route ("/")
-  # root "posts#index"
+  # Health status on /up: 200 if the app boots and can reach PostgreSQL and
+  # Redis, 503 otherwise.
+  get "up", to: "health#show", as: :rails_health_check
 end

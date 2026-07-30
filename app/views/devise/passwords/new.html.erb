@@ -1,0 +1,14 @@
+<% content_for :title, "Reset password · Tastatur" %>
+
+<%= render layout: "devise/shared/auth_card",
+           locals: { title: "Reset your password",
+                     subtitle: "We will email you a link to set a new one." } do %>
+  <%= form_for(resource, as: resource_name, url: password_path(resource_name),
+               html: { method: :post, class: "card card-body space-y-5" }) do |f| %>
+    <%= f.error_summary %>
+    <%= f.field :email, "Email", as: :email_field, autofocus: true, autocomplete: "email" %>
+    <div class="pt-1">
+      <%= f.submit "Send reset instructions", class: "btn btn-primary w-full justify-center" %>
+    </div>
+  <% end %>
+<% end %>

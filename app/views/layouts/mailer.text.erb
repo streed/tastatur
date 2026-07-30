@@ -1,1 +1,11 @@
+TASTATUR
 <%= yield %>
+
+--
+Cookieless web analytics.
+What we collect: <%= Tastatur.base_url %>/privacy
+Documentation:   <%= Tastatur.base_url %>/docs
+
+You are receiving this because someone used this address on
+<%= ENV.fetch("APP_HOST", "localhost:3000") %>. If that was not you, ignore this
+message and nothing will happen.

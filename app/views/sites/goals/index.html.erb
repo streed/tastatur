@@ -1,0 +1,75 @@
+<% content_for :title, "Goals · #{@site.domain}" %>
+
+<div class="shell max-w-4xl">
+  <div class="flex items-end justify-between gap-4 mb-8 pt-5 rule-heavy">
+    <div class="mt-5">
+      <h1 class="text-2xl font-semibold">Goals</h1>
+      <p class="label mt-2"><%= @site.domain %><span class="mx-2">·</span><%= @period.label %></p>
+    </div>
+    <div class="flex gap-3">
+      <%= link_to "Dashboard", site_path(@site), class: "btn btn-quiet" %>
+      <%= link_to "New goal", new_site_goal_path(@site), class: "btn btn-primary" %>
+    </div>
+  </div>
+
+  <% if @goals.any? %>
+    <div class="card">
+<%# Column widths shrink below `sm`. At 375px the fixed columns previously came to
+      about 400px on their own, which made the whole page pan sideways — and it was
+      this table rather than the header that did it. %>
+      <div class="bar-row label border-b border-rule">
+        <span>Goal</span>
+        <span class="flex gap-3 sm:gap-6">
+          <span class="w-14 sm:w-24 text-right">Visitors</span>
+          <span class="w-14 sm:w-24 text-right">Conv.</span>
+          <span class="w-12 sm:w-14 text-right">Rate</span>
+          <span class="w-10 sm:w-20"></span>
+        </span>
+      </div>
+
+      <% @report.each do |row| %>
+        <div class="bar-row">
+          <span class="bar-fill" style="width: <%= row.conversion_rate.clamp(0, 100) %>%"></span>
+          <span class="bar-label">
+            <span class="font-medium"><%= row.goal.name %></span>
+            <span class="text-muted ml-2 text-[12px]">
+              <%= row.goal.pageview? ? "path" : "event" %>
+              <%= row.goal.match_value %>
+              <%= "(#{row.goal.match_type})" unless row.goal.match_type == "exact" %>
+            </span>
+            <%# One figure per currency, never a total across them. Adding EUR to USD
+                would produce a number with no unit, and converting would mean
+                inventing a rate. See Analytics::GoalReport. %>
+            <% if row.revenue? %>
+              <span class="block text-[12px] text-ink-2 mt-0.5 num">
+                <% row.revenue.each_with_index do |(currency, cents), index| %><%= " · " if index.positive? %><%= money_amount(currency, cents) %><% end %>
+              </span>
+            <% end %>
+          </span>
+          <span class="flex gap-3 sm:gap-6 items-center num shrink-0">
+            <span class="w-14 sm:w-24 text-right"><%= metric_number(row.visitors) %></span>
+            <span class="w-14 sm:w-24 text-right"><%= metric_number(row.conversions) %></span>
+            <span class="w-12 sm:w-14 text-right font-semibold"><%= row.conversion_rate %>%</span>
+            <span class="w-10 sm:w-20 text-right">
+              <%= link_to "Edit", edit_site_goal_path(@site, row.goal), class: "btn btn-quiet btn-sm" %>
+            </span>
+          </span>
+        </div>
+      <% end %>
+    </div>
+
+    <p class="text-[12px] text-muted mt-4">
+      Conversion rate is converting visitors divided by all visitors in the period — not by
+      visits, and not by an unfiltered total.
+    </p>
+  <% else %>
+    <div class="card card-body text-center py-14">
+      <p class="font-semibold">No goals yet.</p>
+      <p class="text-sm text-ink-2 mt-2 max-w-md mx-auto">
+        A goal is a page path or a custom event worth counting — a signup, a pricing page view,
+        a purchase.
+      </p>
+      <div class="mt-6"><%= link_to "Create your first goal", new_site_goal_path(@site), class: "btn btn-primary" %></div>
+    </div>
+  <% end %>
+</div>

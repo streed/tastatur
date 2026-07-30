@@ -1,0 +1,64 @@
+<%# Your own login, on the account page rather than hidden behind a Devise URL
+    nobody would guess. Posts to Devise's registrations#update, so Devise's own
+    rules still apply: changing an email or a password requires the current
+    password, and a changed email needs re-confirmation before it can be used to
+    sign in. %>
+<div class="card" id="login-details">
+  <div class="card-head">
+    <h2 class="text-sm font-semibold">Your login</h2>
+    <span class="label"><%= current_user.email %></span>
+  </div>
+
+  <div class="card-body">
+    <%= form_for(current_user, as: :user, url: registration_path(:user),
+                 html: { method: :put, class: "space-y-6" }) do |f| %>
+      <%= f.error_summary %>
+
+      <div class="grid sm:grid-cols-2 gap-4">
+        <%= f.field :name, "Your name", autocomplete: "name" %>
+        <%= f.field :email, "Email", as: :email_field, autocomplete: "email" %>
+      </div>
+
+      <% if current_user.pending_reconfirmation? %>
+        <div class="notice">
+          Waiting on confirmation of <strong><%= current_user.unconfirmed_email %></strong>.
+          Until you confirm it, signing in still uses your previous address.
+        </div>
+      <% end %>
+
+      <div class="rule pt-6 space-y-4">
+        <p class="label">Change password</p>
+        <div class="grid sm:grid-cols-2 gap-4">
+          <%= f.field :password, "New password", as: :password_field,
+                      autocomplete: "new-password",
+                      hint: "Leave blank to keep your current password." %>
+          <%= f.field :password_confirmation, "Confirm new password", as: :password_field,
+                      autocomplete: "new-password" %>
+        </div>
+      </div>
+
+      <div class="rule pt-6">
+        <%= f.field :current_password, "Current password", as: :password_field,
+                    autocomplete: "current-password",
+                    hint: "Required to change your email address or your password.",
+                    wrapper: "sm:max-w-sm" %>
+      </div>
+
+      <div class="pt-1">
+        <%= f.submit "Save login details", class: "btn btn-primary" %>
+      </div>
+    <% end %>
+  </div>
+
+  <div class="card-body border-t border-rule bg-surface-2 flex flex-wrap items-center justify-between gap-4">
+    <div>
+      <p class="text-sm font-medium">Forgotten your password?</p>
+      <p class="text-[12px] text-muted mt-1">
+        We will email you a link to set a new one without needing your current password.
+      </p>
+    </div>
+    <%= button_to "Email me a reset link", user_password_path,
+                  params: { user: { email: current_user.email } },
+                  class: "btn btn-sm shrink-0" %>
+  </div>
+</div>

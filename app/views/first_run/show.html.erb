@@ -1,0 +1,49 @@
+<% content_for :title, "Set up Tastatur" %>
+
+<div class="shell max-w-xl">
+  <div class="pt-5 rule-heavy mb-8">
+    <p class="label mt-5 mb-3">First run</p>
+    <h1 class="text-2xl font-semibold">Welcome to your Tastatur instance</h1>
+    <p class="text-sm text-ink-2 mt-3">
+      Create the owner account and your first site. This screen is only reachable while the
+      database has no users, so it closes itself once you are done.
+    </p>
+  </div>
+
+  <%= form_with url: first_run_path, class: "space-y-6" do %>
+    <% if @user.errors.any? || @site.errors.any? %>
+      <div class="notice border-signal text-ink" role="alert">
+        <p class="font-semibold mb-1">This could not be saved:</p>
+        <ul class="list-disc pl-5 space-y-0.5">
+          <% (@user.errors.full_messages + @site.errors.full_messages).each do |message| %>
+            <li><%= message %></li>
+          <% end %>
+        </ul>
+      </div>
+    <% end %>
+
+    <div class="card card-body space-y-5">
+      <h2 class="text-sm font-semibold">You</h2>
+      <%= fields_for :user, @user do |f| %>
+        <%= f.field :email, "Email", as: :email_field, required: true, autofocus: true,
+                    autocomplete: "username" %>
+        <%= f.field :password, "Password", as: :password_field, required: true, minlength: 8,
+                    autocomplete: "new-password", hint: "At least 8 characters." %>
+      <% end %>
+    </div>
+
+    <div class="card card-body space-y-5">
+      <h2 class="text-sm font-semibold">Your first site</h2>
+      <%= fields_for :site, @site do |f| %>
+        <%= f.field :domain, "Domain", placeholder: "example.com", required: true,
+                    spellcheck: "false", autocomplete: "off" %>
+        <%= f.field :timezone, "Reporting timezone", as: :select,
+                    choices: ActiveSupport::TimeZone.all.map { |z| [z.to_s, z.tzinfo.name] },
+                    hint: "Decides where \"today\" starts. Storage is always UTC. Anything other than UTC also makes day-aligned reports slower on a busy site." %>
+        <%= f.hidden_field :k_anonymity_threshold, value: 25 %>
+      <% end %>
+    </div>
+
+    <button type="submit" class="btn btn-primary w-full justify-center">Create and sign in</button>
+  <% end %>
+</div>

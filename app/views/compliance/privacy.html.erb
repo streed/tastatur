@@ -1,0 +1,180 @@
+<% content_for :title, "Privacy · Tastatur" %>
+
+<div class="shell max-w-3xl">
+  <div class="pt-5 rule-heavy mb-10">
+    <h1 class="text-3xl font-semibold mt-5">What Tastatur collects</h1>
+    <p class="text-ink-2 mt-3">
+      Written to be checked rather than believed. Every claim on this page corresponds to
+      code you can read — the file paths are given so you can go and look.
+    </p>
+  </div>
+
+  <div class="space-y-10 text-[15px] leading-relaxed">
+    <section>
+      <h2 class="text-lg font-semibold mb-3">The short version</h2>
+      <div class="card card-body space-y-3">
+        <p><strong>No cookie is set on the site you visited.</strong> Tastatur sets none there and
+          reads none. (The site owner's own Tastatur dashboard uses a login cookie, which is a
+          different thing entirely and is covered
+          <a href="#cookies" class="underline hover:text-signal">below</a>.)</p>
+        <p><strong>Nothing is stored on your device.</strong> No localStorage, no sessionStorage,
+          no IndexedDB, no cache abuse.</p>
+        <p><strong>No fingerprinting.</strong> No canvas, WebGL, font, audio, plugin, battery or
+          hardware probing. You can read the entire tracking script — it is
+          <a href="/t.js" class="underline">served unminified at /t.js</a>.</p>
+        <p><strong>No cross-site or cross-device identity.</strong> The identifier is scoped to one
+          site and lasts under 24 hours by construction.</p>
+        <p><strong>No advertising, no data sales, no third parties.</strong> Your data is never
+          pooled with another customer's and is never used to improve our own product.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="text-lg font-semibold mb-3">What is actually transmitted</h2>
+      <p class="mb-4">
+        When you load a page on a site using Tastatur, the script sends exactly this and nothing
+        more (see <code>public/t.js</code>, function <code>payload()</code>):
+      </p>
+      <div class="card">
+        <% [
+             ["Site token", "Which site is being measured. Public by design."],
+             ["Page path", "The path only — the query string is discarded except utm_* campaign tags, and personal data is stripped from the path itself."],
+             ["Referrer host", "news.ycombinator.com, not the full referring URL. The path of a referring page can itself identify someone."],
+             ["Window width", "Bucketed server-side into one of five sizes, then discarded. The exact pixel value is never stored."],
+             ["Event name", "\"pageview\", or a custom name the site owner chose."]
+           ].each do |field, note| %>
+          <div class="px-5 py-4 border-b border-rule last:border-b-0">
+            <p class="label"><%= field %></p>
+            <p class="text-sm text-ink-2 mt-1.5"><%= note %></p>
+          </div>
+        <% end %>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="text-lg font-semibold mb-3">The part most tools are vague about</h2>
+      <p class="mb-4">
+        Your IP address and user-agent string reach our server, because every HTTP request
+        carries them. We will not pretend otherwise — under GDPR an IP address is personal
+        data (<em>Breyer</em>, C-582/14), and under the CCPA it is expressly listed as personal
+        information.
+      </p>
+      <p class="mb-4">Here is what happens to them:</p>
+      <div class="card card-body space-y-3 text-sm">
+        <p>
+          <strong>1.</strong> They are combined with a rotating secret and a site identifier into
+          an HMAC-SHA-256 digest, truncated to 128 bits.
+        </p>
+        <p>
+          <strong>2.</strong> The user-agent is reduced to four coarse facts — browser family,
+          major version, operating system, and one of desktop/mobile/tablet. The string itself is
+          discarded.
+        </p>
+        <p>
+          <strong>3.</strong> The IP is used once more to look up a two-letter country code. No
+          region, no city, no coordinates, no network operator.
+        </p>
+        <p>
+          <strong>4.</strong> Both are then out of scope and gone. Neither is written to the
+          database, to a log, or to disk anywhere.
+        </p>
+      </div>
+      <p class="mt-4">
+        This happens in <code>app/lib/ingest/identifier.rb</code>, the only place in the codebase
+        where a visitor's IP address is used for anything. The two ingest endpoints read it from the
+        request in order to hand it over, and the
+        <%= link_to "see my data", data_request_path, class: "underline hover:text-signal" %> page
+        derives your identifier from your live connection so it can show you your own rows. Nothing
+        else in the application receives it, and none of those paths store it.
+      </p>
+      <p class="mt-3 text-[13px] text-ink-2">
+        One exception, stated here rather than buried: if you hold a Tastatur account, we record the
+        IP of your two most recent sign-ins to the dashboard, so you can spot a login that was not
+        you. That is about you as a customer, not about visitors to any site you measure, and it is
+        listed in the <%= link_to "privacy policy", privacy_policy_path, class: "underline hover:text-signal" %>.
+      </p>
+    </section>
+
+    <section>
+      <h2 class="text-lg font-semibold mb-3">Why the identifier stops working every day</h2>
+      <p class="mb-4">
+        The secret in step 1 is replaced every 24 hours and the old value is destroyed. Once it
+        is gone, the digests made with it cannot be recomputed or matched against anything —
+        not by an attacker with our database, and not by us.
+      </p>
+      <p class="mb-4">
+        That secret lives only in a Redis instance running with persistence disabled and excluded
+        from every backup. This is deliberate and it is the load-bearing detail: a salt written
+        into a snapshot would sit in a backup next to the very events it would de-anonymise, and
+        a restore would bring it back.
+      </p>
+      <div class="notice">
+        <strong>The honest characterisation.</strong> While a salt is live, the data derived from
+        it is <em>pseudonymous</em>, not anonymous. Once the salt is destroyed the link cannot be
+        rebuilt and the data is unlinkable. We describe it that way rather than calling it
+        "fully anonymous", because during the salt window that would not be true.
+      </div>
+      <p class="mt-4">
+        The practical consequence for reporting: a visitor who returns tomorrow is a new visitor
+        as far as Tastatur is concerned. A 30-day visitor count is therefore the sum of 30 daily
+        counts, not a count of distinct humans. That is a real limitation of measuring without
+        tracking, and we would rather state it than quietly report a number that means something
+        different from what it says.
+      </p>
+    </section>
+
+    <section id="cookies" class="scroll-mt-8">
+      <h2 class="text-lg font-semibold mb-3">Cookies, precisely</h2>
+      <%= render "shared/cookie_distinction" %>
+      <p class="mt-4">
+        If you are a visitor reading this because a site you used links here: the second column does
+        not apply to you at all. It describes the login on this analytics dashboard, which only the
+        site's owner uses. Nothing was stored on your device.
+      </p>
+    </section>
+
+    <section>
+      <h2 class="text-lg font-semibold mb-3">Small numbers are withheld</h2>
+      <p>
+        A report row that describes two or three people is not a statistic; combined with outside
+        knowledge it can identify them. So any breakdown row seen by fewer than the site's
+        threshold of distinct visitors is withheld, and if withholding a single row would let you
+        recover it by subtraction, a second row is withheld too. The dashboard says when this has
+        happened rather than silently showing a shorter list.
+      </p>
+    </section>
+
+    <section>
+      <h2 class="text-lg font-semibold mb-3">Opting out</h2>
+      <p class="mb-4">
+        Tastatur honours <strong>Do Not Track</strong> and <strong>Global Privacy Control</strong>
+        by default. If your browser sends either, no identifier is computed and no event is
+        recorded — only an anonymous counter is incremented so site owners can see that some
+        requests opted out.
+      </p>
+      <p>
+        Because we store nothing on your device, we have nowhere to record a per-person opt-out —
+        and building one would mean keeping a durable identifier for exactly the people who asked
+        us not to. A browser header is the right mechanism here.
+      </p>
+    </section>
+
+    <section>
+      <h2 class="text-lg font-semibold mb-3">Your rights</h2>
+      <p class="mb-4">
+        The site owner is the data controller; we are their processor. Requests about a specific
+        site should go to that site's operator. That said, you can check what we hold that relates
+        to your current connection right now, with no account and no identity check:
+      </p>
+      <%= link_to "Check what Tastatur holds about you", data_request_path, class: "btn btn-primary" %>
+    </section>
+
+    <section class="rule pt-6 text-sm text-muted">
+      <p>
+        Tastatur is free software under the AGPL-3.0. If you want to verify anything on this page,
+        the source is the authority — this document only describes it.
+      </p>
+      <p class="mt-2">IP geolocation by DB-IP (<a href="https://db-ip.com" class="underline" rel="noopener">db-ip.com</a>), used under CC BY 4.0.</p>
+    </section>
+  </div>
+</div>

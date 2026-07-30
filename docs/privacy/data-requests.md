@@ -1,0 +1,127 @@
+# Data requests
+
+How subject access, erasure and objection work when the stored data contains no
+identifier that resolves to a person.
+
+## Who is responsible for what
+
+| | Controller | Processor |
+|---|---|---|
+| Measurement data (events from a site's visitors) | **the site owner** | Tastatur |
+| Account data (email, team membership, billing) | **Tastatur** | — |
+
+A visitor's request about a specific site belongs to that site's operator: they
+decide what is collected, for how long, and why. Tastatur's job is to make it
+possible for them to answer.
+
+## Subject access
+
+The honest answer to "what do you have on me?" is "nothing we can link to you",
+and GDPR Art.11(1) covers exactly that: where a controller can demonstrate it is
+not in a position to identify a data subject, the rights in Arts.15–20 do not
+apply.
+
+Replying with only that citation reads as evasion, though, and Art.11(2)
+explicitly invites the subject to supply information that would let us find them.
+So `/data-request` does the search instead of arguing about it.
+
+### The live lookup
+
+The visitor loads `/data-request` from the same device and network they browse
+from. Tastatur recomputes the same HMAC the ingest path would compute, **from the
+live connection**, and shows every matching row across every site on the instance.
+
+Why this is safe:
+
+- **It takes no user input.** The address comes from the TCP connection, not from
+  a form field, so the page cannot be pointed at anyone else.
+- **Source addresses cannot be meaningfully spoofed** over a completed TCP
+  handshake, so it is not an oracle against a third party.
+- **It writes nothing.** The address is used exactly as it is during ingest and
+  is not persisted.
+- **It requires no identity verification**, which would mean collecting more
+  personal data than we currently hold in order to hand back less.
+
+It also *demonstrates* the retention claim instead of asserting it: a visitor who
+was measured last week sees an empty result, because the salt that produced their
+identifier has been destroyed. That is the policy working, visibly.
+
+Implementation: `app/services/compliance/lookup_own_data.rb`.
+
+## Erasure
+
+For measurement data, erasure is per-site and immediate:
+
+**Site settings → Delete this site.**
+
+`Sites::Delete` removes the site and issues a `DELETE` over every event ever
+recorded for it, in one transaction, and clears the ingest token cache so
+collection stops at once rather than at the end of the cache TTL. There is no
+soft delete and no recovery.
+
+It then reconciles the continuous aggregates over the window that site occupied.
+This is not bookkeeping, it is part of the erasure: deleting raw rows does **not**
+remove them from an aggregate, and the scheduled refresh policies only look back
+three to ten days, so without this step the rollups would keep reporting the
+deleted events permanently, including `visitor_days`, which holds visitor hashes.
+Raw deletion is immediate and synchronous; the rollup reconciliation runs as a job
+straight afterwards and normally completes in seconds. Detail and the measurement
+that exposed it are in
+[../architecture/aggregates.md](../architecture/aggregates.md#deleting-raw-rows-does-not-delete-aggregate-rows).
+
+We cannot erase "all data about individual X" on request, because no query can
+identify which rows belong to them once the salt is gone. That is a consequence of
+the design rather than a limitation of the implementation, and it is the same
+property that makes the data unlinkable in the first place.
+
+An instance-wide option exists for incident response:
+
+```bash
+rails tastatur:privacy:purge_salts
+```
+
+which destroys both live salts, making every stored hash permanently unlinkable
+to any future observation.
+
+## Objection and opt-out
+
+Tastatur honours **Do Not Track** and **Global Privacy Control** by default, both
+in the tracker and again server-side — the server-side check matters because the
+ingest endpoint is a public HTTP API that an older cached copy of the script, or
+the `<noscript>` pixel, might call without checking a header.
+
+When honoured, nothing is hashed, geolocated or stored. Only a coarse counter is
+incremented, per site per hour, so a site owner can see that some requests opted
+out without any visitor-level record existing.
+
+There is deliberately **no per-person opt-out flag**, because storing one would
+mean keeping a durable identifier for precisely the people who asked us not to.
+A browser header is the right mechanism here.
+
+## Retention
+
+| Data | Default | Configurable |
+|---|---|---|
+| Visitor salt | ~24h live, destroyed within 48h | no |
+| Session map | 30 minutes of inactivity | `SESSION_TIMEOUT_MINUTES` |
+| Raw events | 12 months | per account, 3 to 25 months |
+| `visitor_days`, `session_days` | follows raw events | yes |
+| `events_by_hour` | 5 years | holds no identifiers |
+
+Aggregates that contain no visitor-level rows are kept longer than raw events;
+those that do (`visitor_days`, `session_days`) follow the raw-event window,
+because keeping a visitor-grain table for five years would undercut the retention
+promise made about the events table itself.
+
+## Answering a DPO's questionnaire
+
+The three documents to hand over:
+
+- `/privacy` — what is collected, what is discarded, and the honest
+  pseudonymous-versus-unlinkable distinction
+- `/dpa` — Art.28 processor terms, including the operating commitments enforced
+  in code (no cross-account pooling, no reuse for our own purposes)
+- [claims.md](claims.md) — the language this project refuses to use, which is
+  usually the fastest way to establish that nobody is overselling
+
+For the technical detail behind the identifier, [identity.md](identity.md).

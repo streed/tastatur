@@ -1,5 +1,34 @@
-# sidekiq-cron schedule. Add jobs as:
-# my_job:
-#   cron: "*/5 * * * *"
-#   class: "MyJob"
-#   description: "What it does"
+# sidekiq-cron schedule.
+#
+# Two of these are load-bearing for the privacy guarantees rather than being
+# housekeeping: if salt rotation stops, stored data quietly stops being
+# unlinkable; if retention stops, we hold data longer than we told people we
+# would. Both are worth alerting on, not silently retrying.
+
+flush_event_buffer:
+  cron: "* * * * *"
+  class: "FlushEventBufferJob"
+  queue: within_30_seconds
+  description: >
+    Backstop for the size-triggered flush. The ingest path enqueues a flush once
+    the buffer passes its threshold, so on a busy site this usually finds an
+    empty buffer and returns immediately. It exists for the quiet site whose
+    buffer would otherwise sit unflushed between visits.
+
+rotate_visitor_salt:
+  cron: "7 4 * * *"
+  class: "RotateVisitorSaltJob"
+  queue: within_5_minutes
+  description: >
+    Replaces the visitor salt and destroys the one from two days ago. 04:07
+    rather than midnight: rotation splits any session in flight, and 04:00 is
+    the global traffic trough, while the odd minute avoids the thundering herd
+    of every cron job on the box firing at once.
+
+enforce_data_retention:
+  cron: "23 3 * * *"
+  class: "EnforceDataRetentionJob"
+  queue: within_1_hour
+  description: >
+    Deletes events past each account's retention window. Runs before salt
+    rotation so the two are never contending for the same chunks.

@@ -1,0 +1,75 @@
+<% content_for :title, "Account · Tastatur" %>
+
+<div class="shell max-w-3xl">
+  <div class="flex items-end justify-between gap-4 mb-8 pt-5 rule-heavy">
+    <div class="mt-5">
+      <h1 class="text-2xl font-semibold"><%= @account.name %></h1>
+      <p class="label mt-2">
+        <%= @account.plan.humanize %><span class="mx-2">·</span>
+        <%= pluralize(@account.sites.count, "site") %><span class="mx-2">·</span>
+        <%= pluralize(@memberships.size, "member") %>
+      </p>
+    </div>
+    <% if policy(@account).update? %>
+      <%= link_to "Edit", edit_account_path, class: "btn btn-sm" %>
+    <% end %>
+  </div>
+
+  <div class="mb-6"><%= render "accounts/login_details" %></div>
+
+  <div class="card mb-6">
+    <div class="card-head"><h2 class="text-sm font-semibold">Data retention</h2></div>
+    <div class="card-body">
+      <p class="figure"><%= @account.data_retention_days %> <span class="text-base font-normal text-muted">days</span></p>
+      <p class="text-sm text-ink-2 mt-3">
+        Raw events older than this are dropped nightly. Retention is a compliance control. If you
+        are subject to a shorter limit than our default, set it here.
+      </p>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <h2 class="text-sm font-semibold">Members</h2>
+      <span class="label">Owner · Admin · Member · Viewer</span>
+    </div>
+
+    <% @memberships.each do |membership| %>
+      <div class="flex items-center justify-between gap-4 px-5 py-3.5 border-b border-rule last:border-b-0">
+        <div>
+          <p class="text-sm font-medium"><%= membership.user.email %></p>
+          <p class="label mt-0.5"><%= membership.role %></p>
+        </div>
+        <% if policy(membership).destroy? && @memberships.size > 1 %>
+          <%= button_to "Remove", account_member_path(membership), method: :delete,
+                        class: "btn btn-quiet btn-sm text-negative",
+                        form: { data: { turbo_confirm: "Remove #{membership.user.email} from #{@account.name}?" } } %>
+        <% end %>
+      </div>
+    <% end %>
+
+    <% if policy(@account).manage_members? %>
+      <div class="card-body border-t border-rule bg-surface-2">
+        <%= form_with model: @invitation, url: account_members_path,
+                      scope: :invitation, class: "space-y-5" do |f| %>
+          <%= f.error_summary %>
+
+          <div class="grid sm:grid-cols-3 gap-4">
+            <%= f.field :email, "Invite by email", as: :email_field,
+                        placeholder: "colleague@example.com", wrapper: "sm:col-span-2" %>
+            <%= f.field :role, "Role", as: :select,
+                        choices: Membership::ROLES.map { |r| [r.capitalize, r] } %>
+          </div>
+
+          <div class="flex items-center gap-3">
+            <%= f.submit "Send invitation", class: "btn" %>
+            <p class="text-[12px] text-muted">
+              They receive a password-reset email to set their own credentials. You never choose a
+              password on someone else's behalf.
+            </p>
+          </div>
+        <% end %>
+      </div>
+    <% end %>
+  </div>
+</div>

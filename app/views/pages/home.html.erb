@@ -1,9 +1,149 @@
-<h1>Welcome to <%= Rails.application.class.module_parent_name %></h1>
-<% if user_signed_in? %>
-  <p>Signed in as <%= current_user.email %>.</p>
-  <%= link_to "Dashboard", dashboard_path %> ·
-  <%= button_to "Sign out", destroy_user_session_path, method: :delete %>
-<% else %>
-  <%= link_to "Sign in", new_user_session_path %> ·
-  <%= link_to "Sign up", new_user_registration_path %>
-<% end %>
+<% content_for :title, "Tastatur: cookieless web analytics" %>
+
+<div class="shell">
+  <%# --- Hero. Asymmetric split on a strict grid: the Bauhaus move is the
+      heavy rule and the deliberate imbalance, not decoration. -%>
+  <section class="rule-heavy pt-8 pb-16 grid lg:grid-cols-12 gap-10">
+    <div class="lg:col-span-7">
+      <p class="label mb-5">Web analytics · no cookies · nothing of ours to consent to</p>
+      <h1 class="text-[clamp(2.25rem,5vw,3.75rem)] font-semibold leading-[1.04] tracking-[-0.035em]">
+        Know how people<br>use your site.<br>
+        <span class="text-signal">Learn nothing<br>about them.</span>
+      </h1>
+      <p class="text-lg text-ink-2 mt-7 max-w-xl leading-relaxed">
+        One script tag, 3.2 KB over the wire. No cookies, no local storage, no device
+        identifier, no fingerprinting. There is nothing of ours for a consent banner
+        to ask about.
+      </p>
+
+      <div class="flex flex-wrap items-center gap-3 mt-9">
+        <% if Tastatur.allow_signup? %>
+          <%= link_to "Start measuring", new_user_registration_path, class: "btn btn-primary" %>
+        <% end %>
+        <%= link_to "Read what it collects", privacy_path, class: "btn" %>
+      </div>
+      <p class="label mt-5">Free software · AGPL-3.0 · self-host or hosted</p>
+    </div>
+
+    <%# The snippet you paste, and what you get for it. -%>
+    <div class="lg:col-span-5 lg:border-l lg:border-rule lg:pl-10">
+      <p class="label mb-3">The entire installation</p>
+      <pre class="bg-surface border border-rule p-4 text-[12px] leading-relaxed overflow-x-auto"><code>&lt;script defer
+  data-site=<span class="text-signal">"YOUR_SITE_KEY"</span>
+  src="<%= Tastatur.tracker_url %>"&gt;
+&lt;/script&gt;</code></pre>
+
+      <p class="label mt-7 mb-3">What you get for it</p>
+      <%= render "pages/mini_dashboard" %>
+    </div>
+  </section>
+
+  <%# The four numbers, now a full-width band under the hero rather than a
+      cramped column beside it. -%>
+  <section class="border-t border-rule grid grid-cols-2 lg:grid-cols-4 divide-y lg:divide-y-0 divide-rule lg:divide-x">
+    <% [
+         ["0", "cookies set or read"],
+         ["0", "bytes written to the visitor's device"],
+         ["24h", "before an identifier stops working"],
+         ["2", "letters of location, the country code"]
+       ].each do |value, note| %>
+      <div class="px-6 py-7 first:pl-0 lg:first:pl-6">
+        <p class="figure text-[30px]"><%= value %></p>
+        <p class="text-[13px] text-ink-2 mt-2.5 leading-snug"><%= note %></p>
+      </div>
+    <% end %>
+  </section>
+
+  <%# --- How it works -%>
+  <section class="py-16 border-t border-rule">
+    <p class="label mb-8">How an anonymous visit is counted</p>
+    <div class="grid md:grid-cols-3 gap-px bg-rule">
+      <% [
+           ["01", "A request arrives",
+            "Your visitor's browser sends the page path and referrer host. Their IP and user-agent arrive too, as they do with every HTTP request on the internet."],
+           ["02", "It becomes a digest",
+            "IP, user-agent and site are combined with a secret that changes daily into a truncated HMAC. The IP and user-agent are then discarded. Never logged, never stored."],
+           ["03", "The secret is destroyed",
+            "Every 24 hours the secret is replaced and the old one deleted from a store that never writes to disk. Yesterday's digests can no longer be recomputed by anyone, including us."]
+         ].each do |number, title, body| %>
+         <div class="bg-surface p-7">
+           <p class="label text-signal mb-4"><%= number %></p>
+           <h3 class="font-semibold mb-2.5"><%= title %></h3>
+           <p class="text-sm text-ink-2 leading-relaxed"><%= body %></p>
+         </div>
+      <% end %>
+    </div>
+  </section>
+
+  <%# --- The cookie question, answered in both directions. -%>
+  <section class="py-16 border-t border-rule">
+    <div class="max-w-3xl">
+      <p class="label mb-5">The cookie question</p>
+      <h2 class="text-2xl font-semibold tracking-[-0.025em] mb-6">
+        Two different things get called cookies. Here is exactly where each one applies.
+      </h2>
+    </div>
+    <%= render "shared/cookie_distinction" %>
+  </section>
+
+  <%# --- What you get -%>
+  <section class="py-16 border-t border-rule grid lg:grid-cols-12 gap-10">
+    <div class="lg:col-span-4">
+      <h2 class="text-2xl font-semibold tracking-[-0.025em]">Still a real<br>analytics tool.</h2>
+      <p class="text-sm text-ink-2 mt-4 leading-relaxed">
+        Privacy is a constraint on <em>how</em> the numbers are collected, not an excuse
+        for having fewer of them.
+      </p>
+    </div>
+    <div class="lg:col-span-8 grid sm:grid-cols-2 gap-x-10 gap-y-7">
+      <% [
+           ["Traffic over time", "Visitors, pageviews and visits, bucketed by hour, day, week or month in your own timezone."],
+           ["Funnels", "Multi-step funnels with per-step drop-off, ordered correctly even when visitors backtrack."],
+           ["Goals and revenue", "Match a path or a custom event, with conversion rates against an honest denominator."],
+           ["Sources and campaigns", "Referrers grouped into recognisable sources, plus full utm_* campaign breakdowns."],
+           ["Filter and drill down", "Click any row to filter the whole dashboard. Filter state lives in the URL, so it stays shareable."],
+           ["Shareable dashboards", "Give a client or colleague a read-only link, optionally password-protected."]
+         ].each do |title, body| %>
+        <div class="border-t border-rule pt-4">
+          <h3 class="font-semibold text-sm mb-2"><%= title %></h3>
+          <p class="text-sm text-ink-2 leading-relaxed"><%= body %></p>
+        </div>
+      <% end %>
+    </div>
+  </section>
+
+  <%# --- The honest bit. Stating the limitation is the differentiator. -%>
+  <section class="py-16 border-t border-rule grid lg:grid-cols-12 gap-10">
+    <div class="lg:col-span-7">
+      <p class="label mb-5">What we will not claim</p>
+      <h2 class="text-2xl font-semibold tracking-[-0.025em] mb-6">
+        Measuring without tracking has real costs. Here they are.
+      </h2>
+      <div class="space-y-5 text-[15px] text-ink-2 leading-relaxed">
+        <p>
+          <strong class="text-ink">Returning visitors get counted again.</strong> Because the
+          identifier expires daily, a 30-day visitor figure is the sum of 30 daily figures, not a
+          count of distinct people. Any tool offering cross-day uniques without a banner is keeping
+          something durable.
+        </p>
+        <p>
+          <strong class="text-ink">Small rows are hidden.</strong> Breakdown rows describing only a
+          handful of visitors are withheld, because such a row can identify someone.
+        </p>
+        <p>
+          <strong class="text-ink">We will not promise you skip the banner.</strong> That depends on
+          your jurisdiction and on every other script on your site. Tastatur stores nothing on your
+          visitors' devices; the rest is your counsel's call, and Germany in particular is stricter
+          than our competitors' marketing copy suggests.
+        </p>
+      </div>
+      <%= link_to "The full technical account", privacy_path, class: "btn mt-8" %>
+    </div>
+
+    <%# The same two caveats, shown rather than described. -%>
+    <div class="lg:col-span-5 lg:border-l lg:border-rule lg:pl-10">
+      <p class="label mb-3">What that looks like</p>
+      <%= render "pages/mini_caveats" %>
+    </div>
+  </section>
+</div>

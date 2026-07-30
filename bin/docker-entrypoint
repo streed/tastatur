@@ -1,6 +1,27 @@
 #!/bin/bash -e
 
-# If running the rails server then create or migrate existing database
+# Bridge the platform's PORT to Thruster's HTTP_PORT.
+#
+# Railway, Fly, Render and Heroku all inject PORT and expect the process to
+# listen on it. Thruster instead reads HTTP_PORT and defaults to 80, so an
+# unmodified Rails 8 image ignores PORT entirely, listens on 80, and the
+# platform's health check gets a connection refused with nothing in the logs to
+# explain it. That failure looks like a broken app rather than a port mismatch,
+# which is why it is bridged here rather than left to per-platform config that
+# someone has to remember.
+#
+# Thruster then starts Puma with PORT set to its own TARGET_PORT (3000 by
+# default), so Puma and Thruster do not collide.
+if [ -n "${PORT}" ] && [ -z "${HTTP_PORT}" ]; then
+  export HTTP_PORT="${PORT}"
+fi
+
+# Prepare the database when starting a server.
+#
+# There is no schema file by design (a pg_dump of a TimescaleDB database
+# silently loses hypertables), so db:prepare always builds from migrations.
+# Concurrent replicas are safe: ActiveRecord takes a Postgres advisory lock
+# around migrations, so the second waits rather than racing.
 if [ "${@: -2:1}" == "./bin/rails" ] && [ "${@: -1:1}" == "server" ]; then
   ./bin/rails db:prepare
 fi

@@ -25,16 +25,23 @@ require 'rspec/rails'
 #
 # Rails.root.glob('spec/support/**/*.rb').sort_by(&:to_s).each { |f| require f }
 
-# Ensures that the test database schema matches the current schema file.
-# If there are pending migrations it will invoke `db:test:prepare` to
-# recreate the test database by loading the schema.
-# If you are not using ActiveRecord, you can remove these lines.
-begin
-  ActiveRecord::Migration.maintain_test_schema!
-rescue ActiveRecord::PendingMigrationError => e
-  abort e.to_s.strip
+Rails.root.glob('spec/support/**/*.rb').sort_by(&:to_s).each { |f| require f }
+
+# We keep no schema file — a pg_dump of a TimescaleDB database silently loses
+# hypertables and turns continuous aggregates into plain views (see
+# config/application.rb). So `maintain_test_schema!` has nothing to load and is
+# disabled; instead we bring the test database up to date by running the
+# migrations themselves, which are the single source of truth.
+if ActiveRecord::Base.connection_pool.migration_context.needs_migration?
+  puts "[tastatur] Test database has pending migrations — running them..."
+  ActiveRecord::Tasks::DatabaseTasks.migrate
+  ActiveRecord::Base.connection_pool.schema_cache.clear!
 end
+
 RSpec.configure do |config|
+  # `create(:site)` rather than `FactoryBot.create(:site)` in every example.
+  config.include FactoryBot::Syntax::Methods
+
   # Remove this line if you're not using ActiveRecord or ActiveRecord fixtures
   config.fixture_paths = [
     Rails.root.join('spec/fixtures')
@@ -44,6 +51,25 @@ RSpec.configure do |config|
   # examples within a transaction, remove the following line or assign false
   # instead of true.
   config.use_transactional_fixtures = true
+
+  # TimescaleDB refuses to refresh a continuous aggregate inside a transaction:
+  #
+  #   ERROR: refresh_continuous_aggregate() cannot run inside a transaction block
+  #
+  # So any spec that needs materialized aggregate data must opt out of the
+  # surrounding transaction and clean up by truncation instead. Tag it:
+  #
+  #   it "rolls up visitors", :continuous_aggregate do
+  #
+  config.when_first_matching_example_defined(:continuous_aggregate) do
+    config.before(:suite) { Tastatur::TestDatabase.truncatable_tables }
+  end
+
+  config.around(:example, :continuous_aggregate) do |example|
+    self.class.use_transactional_tests = false
+    example.run
+    Tastatur::TestDatabase.truncate!
+  end
 
   # You can uncomment this line to turn off ActiveRecord support entirely.
   # config.use_active_record = false

@@ -1,9 +1,53 @@
 #!/usr/bin/env bash
+# One-shot setup for a fresh checkout. Safe to re-run.
 set -euo pipefail
-bundle install
+
+cd "$(dirname "$0")/.."
+
+echo "==> Environment files"
+for env in development test; do
+  if [ ! -f ".env.$env" ]; then
+    cp ".env.$env.example" ".env.$env"
+    echo "    created .env.$env"
+  else
+    echo "    .env.$env already exists, leaving it alone"
+  fi
+done
+
+echo "==> Dependencies (TimescaleDB + Redis)"
+if ! docker compose ps --status running --quiet timescaledb >/dev/null 2>&1 \
+   || [ -z "$(docker compose ps --status running --quiet timescaledb)" ]; then
+  docker compose up -d
+fi
+
+printf "    waiting for TimescaleDB"
+for _ in $(seq 1 60); do
+  if docker compose exec -T timescaledb pg_isready -U postgres >/dev/null 2>&1; then
+    echo " ready"
+    break
+  fi
+  printf "."
+  sleep 1
+done
+
+echo "==> Gems"
+bundle install --quiet
+
+# NOTE: db:prepare, not db:schema:load. This project keeps no schema file —
+# a pg_dump of a TimescaleDB database silently loses hypertables and degrades
+# continuous aggregates into plain views. Migrations are the source of truth,
+# so every environment is built by running them. See config/application.rb.
+echo "==> Database (development)"
 bin/rails db:prepare
 bin/rails db:seed
+
+echo "==> Database (test)"
+RAILS_ENV=test bin/rails db:prepare
+
 echo
-echo "Setup complete. Seeded users:"
+echo "Setup complete. Start the app with:"
+echo "  bin/dev"
+echo
+echo "Seeded users:"
 echo "  admin@example.com / password  (admin)"
-echo "  user@example.com / password  (regular)"
+echo "  user@example.com  / password  (regular)"

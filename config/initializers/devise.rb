@@ -24,19 +24,29 @@ Devise.setup do |config|
   # Configure the e-mail address which will be shown in Devise::Mailer,
   # note that it will be overwritten if you use your own mailer class
   # with default "from" parameter.
-  config.mailer_sender = 'please-change-me-at-config-initializers-devise@example.com'
+  # Read from the environment, not hardcoded. Devise ships a placeholder here and
+  # it is easy to miss, because nothing fails until real mail is sent from a
+  # domain Resend has not verified.
+  config.mailer_sender = ENV.fetch("MAIL_FROM", "no-reply@localhost")
 
   # Configure the class responsible to send e-mails.
   # config.mailer = 'Devise::Mailer'
 
   # Configure the parent class responsible to send e-mails.
-  # config.parent_mailer = 'ActionMailer::Base'
+  # Inherit ApplicationMailer, NOT ActionMailer::Base.
+  #
+  # Devise's default parent is ActionMailer::Base, which means Devise::Mailer
+  # picks up neither our themed "mailer" layout nor our default from address.
+  # The confirmation and password-reset emails, which are the only mail most
+  # users ever see from us, would go out unstyled and from the placeholder
+  # address above. Nothing errors; they just look broken.
+  config.parent_mailer = "ApplicationMailer"
 
   # ==> ORM configuration
   # Load and configure the ORM. Supports :active_record (default) and
   # :mongoid (bson_ext recommended) by default. Other ORMs may be
   # available as additional gems.
-  require 'devise/orm/active_record'
+  require "devise/orm/active_record"
 
   # ==> Configuration for any authentication mechanism
   # Configure which keys are used when authenticating a user. The default is
@@ -90,7 +100,19 @@ Devise.setup do |config|
   # It will change confirmation, password recovery and other workflows
   # to behave the same regardless if the e-mail provided was right or wrong.
   # Does not affect registerable.
-  # config.paranoid = true
+  # Enabled. Without it, "Email not found" on a password reset or a resend of the
+  # confirmation is a membership oracle: anyone can test an address against this
+  # instance and learn whether that person has an account here. For an analytics
+  # tool that is a small leak; for a self-hosted instance belonging to one company
+  # it discloses who works there.
+  #
+  # The cost is that a genuine typo now gets the same reassuring message as a
+  # correct address, so the flows say "if that address has an account, instructions
+  # are on their way" rather than confirming either way.
+  #
+  # Note this deliberately does not affect registerable: sign-up still has to tell
+  # you an address is taken, because otherwise the form cannot work at all.
+  config.paranoid = true
 
   # By default Devise will store the user in session. You can skip storage for
   # particular strategies by setting this option.
@@ -143,7 +165,14 @@ Devise.setup do |config|
   # without confirming their account.
   # Default is 0.days, meaning the user cannot access the website without
   # confirming their account.
-  # config.allow_unconfirmed_access_for = 2.days
+  # Zero, stated explicitly rather than left to the commented-out default.
+  #
+  # A new user cannot sign in until they confirm their address. This is the
+  # setting someone would change by "just uncommenting the example line", which
+  # would silently open a two-day window in which an unverified address has a
+  # working account — long enough for someone to sign up as an address they do
+  # not control and use the service under it.
+  config.allow_unconfirmed_access_for = 0.days
 
   # A period that the user is allowed to confirm their account before their
   # token becomes invalid. For example, if set to 3.days, the user can confirm
@@ -151,7 +180,16 @@ Devise.setup do |config|
   # their account can't be confirmed with the token any more.
   # Default is nil, meaning there is no restriction on how long a user can take
   # before confirming their account.
-  # config.confirm_within = 3.days
+  # Set, because the default is nil and nil means a confirmation link works
+  # forever. A link sent today is still a valid credential for that account in two
+  # years, sitting in an inbox, a mail archive, or a log — and on an instance with
+  # no mail provider configured it sits in this application's own log, in plain
+  # text, by design (see config/initializers/resend.rb).
+  #
+  # Three days is long enough to survive a weekend and a spam folder. After that
+  # the sign-in page offers to send a new one, which costs the user one click and
+  # closes an indefinite window.
+  config.confirm_within = 3.days
 
   # If true, requires any email changes to be confirmed (exactly the same way as
   # initial account confirmation) to be applied. Requires additional unconfirmed_email
@@ -181,7 +219,13 @@ Devise.setup do |config|
 
   # ==> Configuration for :validatable
   # Range for password length.
-  config.password_length = 6..128
+  # Eight, not Devise's default six. NIST SP 800-63B sets eight characters as the
+  # floor for a user-chosen secret, and six is below every current guideline.
+  #
+  # The maximum stays high on purpose: bcrypt truncates at 72 bytes, so anything
+  # past that adds nothing, but rejecting a long passphrase teaches people that
+  # long passwords are unwelcome, which is the opposite of useful.
+  config.password_length = 8..128
 
   # Email regex used to validate email formats. It simply asserts that
   # one (and only one) @ exists in the given string. This is mainly

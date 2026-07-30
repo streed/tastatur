@@ -1,8 +1,11 @@
-# Omakase Ruby styling for Rails
+# Omakase Ruby styling for Rails, with one house deviation.
 inherit_gem: { rubocop-rails-omakase: rubocop.yml }
 
-# Overwrite or add rules to create your own house style
+# Use `[a, [b, c]]`, not `[ a, [ b, c ] ]`.
 #
-# # Use `[a, [b, c]]` not `[ a, [ b, c ] ]`
-# Layout/SpaceInsideArrayLiteralBrackets:
-#   Enabled: false
+# This is the override the generated config suggests in its own comment, and it
+# is taken deliberately rather than by neglect: the codebase is written in the
+# tighter style throughout, so enforcing omakase here would mean reformatting 50
+# files into a style nothing in the project actually uses.
+Layout/SpaceInsideArrayLiteralBrackets:
+  Enabled: false

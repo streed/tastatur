@@ -1,0 +1,62 @@
+<% result = panel[:result]
+   dimension = panel[:dimension]
+   max = result.rows.map(&:visitors).max.to_i
+   # Public shared dashboards pass drillable: false. Filtering someone else's
+   # audience is a re-identification tool, so the rows are not clickable there
+   # and there is no filter state to build a URL from.
+   drillable = local_assigns.fetch(:drillable, true) %>
+
+<div class="card">
+  <div class="card-head">
+    <h2 class="text-sm font-semibold"><%= panel[:title] %></h2>
+    <span class="label">Visitors</span>
+  </div>
+
+  <% if result.any? %>
+    <div>
+      <% result.rows.each do |row| %>
+        <% width = max.zero? ? 0 : ((row.visitors.to_f / max) * 100).round(1) %>
+
+        <%# The bar is a background wash scaled to the row's share of the largest
+            value, so the label and its magnitude share one line. %>
+        <% bar = capture do %>
+          <span class="bar-fill" style="width: <%= width %>%"></span>
+
+          <span class="bar-label">
+            <% if dimension == "country" %>
+              <span class="mr-2" aria-hidden="true"><%= country_flag(row.value) %></span><%= country_name(row.value) %>
+            <% else %>
+              <%= row.label %>
+            <% end %>
+          </span>
+
+          <span class="num font-medium shrink-0"><%= metric_number(row.visitors) %></span>
+        <% end %>
+
+        <% if drillable %>
+          <%= link_to drill_down_url(site, dimension, row.value), class: "bar-row",
+                      title: "Filter by #{row.label}" do %><%= bar %><% end %>
+        <% else %>
+          <div class="bar-row"><%= bar %></div>
+        <% end %>
+      <% end %>
+    </div>
+
+    <% if result.suppressed? %>
+      <%# The suppression is stated, not hidden. A site owner who cannot see a
+          row deserves to know it exists and why, and stating the count keeps the
+          total honest. %>
+      <p class="px-3 py-2.5 text-[11px] text-muted border-t border-rule">
+        <%= pluralize(result.suppressed_rows, "row") %> withheld
+        (<%= metric_number(result.suppressed_visitors) %> visitors)
+        because each was seen by fewer than <%= result.threshold %> visitors.
+<%# `_top`: this renders inside the "dashboard" turbo-frame, and /privacy has no
+            frame of that name, so an in-frame navigation would blank the dashboard. %>
+        <%= link_to "Why?", privacy_path, class: "underline hover:text-ink",
+                    data: { turbo_frame: "_top" } %>
+      </p>
+    <% end %>
+  <% else %>
+    <p class="px-5 py-10 text-center text-sm text-muted">No data.</p>
+  <% end %>
+</div>

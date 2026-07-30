@@ -1,0 +1,16 @@
+<%# Shared chrome for every Devise screen, so sign in, sign up, password reset,
+    confirmation and unlock are one shape rather than five near-misses. %>
+<div class="shell max-w-md py-16">
+  <div class="pt-5 rule-heavy">
+    <h1 class="text-2xl font-semibold mt-5"><%= title %></h1>
+    <% if local_assigns[:subtitle].present? %>
+      <p class="text-sm text-ink-2 mt-2"><%= subtitle %></p>
+    <% end %>
+  </div>
+
+  <div class="mt-8"><%= yield %></div>
+
+  <div class="mt-8 rule pt-5 flex flex-wrap gap-x-5 gap-y-2 text-[13px] text-ink-2">
+    <%= render "devise/shared/links" %>
+  </div>
+</div>

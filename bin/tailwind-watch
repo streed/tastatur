@@ -1,0 +1,61 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Polling Tailwind rebuild loop, used instead of `rails tailwindcss:watch` in
+# the Docker dev container.
+#
+# WHY NOT THE BUILT-IN WATCHER: Tailwind v4's watcher registers filesystem
+# watches for the directories it finds at startup. Create a NEW directory
+# afterwards (app/views/compliance/, say) and nothing in it is ever scanned —
+# so utilities used only in those templates are silently absent from the
+# stylesheet and the page renders with partial styling and no error to explain
+# it. Across a Docker bind mount the event delivery is less reliable still.
+#
+# Polling mtimes is unglamorous and completely dependable. A stat of a few
+# hundred files costs microseconds, and one second of latency on a CSS rebuild
+# is imperceptible while editing.
+
+require "digest"
+
+ROOT = File.expand_path("..", __dir__)
+INTERVAL = Float(ENV.fetch("TAILWIND_POLL_INTERVAL", "1"))
+
+# Must stay in step with the @source globs in app/assets/tailwind/application.css.
+PATTERNS = %w[
+  app/views/**/*.erb
+  app/views/**/*.html
+  app/helpers/**/*.rb
+  app/controllers/**/*.rb
+  app/javascript/**/*.js
+  app/assets/tailwind/**/*.css
+].freeze
+
+def fingerprint
+  files = PATTERNS.flat_map { |pattern| Dir.glob(File.join(ROOT, pattern)) }.sort
+  # Paths as well as mtimes, so that deleting a file also triggers a rebuild.
+  Digest::SHA256.hexdigest(files.map { |f| "#{f}:#{File.mtime(f).to_f}" }.join("\n"))
+end
+
+def build
+  started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+  ok = system({ "RAILS_ENV" => ENV.fetch("RAILS_ENV", "development") },
+              "bin/rails", "tailwindcss:build", chdir: ROOT)
+  elapsed = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round
+  warn(ok ? "[tailwind] rebuilt in #{elapsed}ms" : "[tailwind] BUILD FAILED")
+end
+
+warn "[tailwind] polling #{PATTERNS.size} globs every #{INTERVAL}s"
+build
+current = fingerprint
+
+loop do
+  sleep INTERVAL
+  latest = fingerprint
+  next if latest == current
+
+  current = latest
+  build
+rescue Interrupt
+  warn "[tailwind] stopping"
+  break
+end

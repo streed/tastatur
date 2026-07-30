@@ -1,0 +1,43 @@
+<% content_for :preheader, "Your first pageview arrived. The dashboard has data now." %>
+
+<h1 style="margin:0 0 16px; font-size:21px; font-weight:600; letter-spacing:-0.4px; line-height:1.2; color:#16150f;">
+  <%= @site.domain %> is sending data
+</h1>
+
+<p style="margin:0 0 20px; color:#57564e;">
+  Your first pageview came in at
+  <%= @site.first_event_at.in_time_zone(@site.timezone).to_fs(:short) %>
+  (<%= @site.timezone %>). The snippet is installed correctly and nothing further
+  is needed.
+</p>
+
+<%= render "devise/mailer/button", url: @dashboard_url, label: "Open the dashboard" %>
+
+<p style="margin:0 0 10px; font-size:11px; font-weight:600; letter-spacing:1.6px; text-transform:uppercase; color:#8c8a80;">
+  Worth doing next
+</p>
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 4px;">
+  <% [
+       ["Set up a goal", "Count the pages and events that matter, with conversion rates.", "#{Tastatur.base_url}/sites/#{@site.to_param}/goals"],
+       ["Build a funnel", "See where people drop out of a multi-step flow.", "#{Tastatur.base_url}/sites/#{@site.to_param}/funnels"],
+       ["Share a dashboard", "Give a client or colleague a read-only link, no account needed.", "#{Tastatur.base_url}/sites/#{@site.to_param}/shared_links"]
+     ].each do |title, blurb, url| %>
+    <tr>
+      <td style="padding:10px 0; border-top:1px solid #e3e1d8;
+                 font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+        <a href="<%= url %>" style="font-size:14px; font-weight:600; color:#16150f; text-decoration:none;">
+          <%= title %>
+        </a>
+        <div style="font-size:13px; color:#8c8a80; margin-top:2px;"><%= blurb %></div>
+      </td>
+    </tr>
+  <% end %>
+</table>
+
+<p style="margin:0; padding-top:20px; border-top:1px solid #e3e1d8; font-size:13px; color:#8c8a80;">
+  A reminder of what you are now collecting: no cookies, no device storage, and no
+  identifier that survives 24 hours.
+  <a href="<%= Tastatur.base_url %>/privacy" style="color:#00628f;">The full list</a>
+  is worth a read before you link it from your own privacy policy.
+</p>
