@@ -103,6 +103,20 @@ without editing anything:
 Substitute the actual service names Railway assigned; the references above assume
 `TimescaleDB`, `Redis` and `Redis-Privacy`.
 
+### Leave these alone
+
+Variables that appear in `.env.production.example` and should **not** be set on
+Railway, because the defaults are already right and changing them breaks things:
+
+| Variable | Why not |
+|---|---|
+| `ASSUME_SSL`, `FORCE_SSL` | Both default to `1`, which is correct: Railway's edge terminates TLS, so the app sees plain HTTP inside an HTTPS request. Setting `ASSUME_SSL=0` here marks session cookies `secure` over a connection Rails believes is insecure, and nobody can stay signed in |
+| `APP_DOMAIN` | Only used by the bundled Caddy to request a certificate. Railway issues its own |
+| `POSTGRES_PASSWORD` | Only used by the Postgres container in `docker-compose.prod.yml`. Railway's template supplies `DATABASE_URL` directly |
+
+Genuinely optional: `LEGAL_ADDRESS` and `LEGAL_DPO_EMAIL` (shown only if set),
+and `SENTRY_DSN` (error reporting is simply off without it).
+
 `RAILS_MAX_THREADS` sets both Puma's thread count and the ActiveRecord pool
 (`database.yml` maps it to `max_connections`), so they cannot drift apart. Keep it
 at or below what your database plan allows per connection.
