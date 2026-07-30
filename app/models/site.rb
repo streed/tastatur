@@ -12,9 +12,21 @@ class Site < ApplicationRecord
   has_many :funnels, dependent: :destroy
   has_many :shared_links, dependent: :destroy
 
+  # One rule for every hostname this model holds, because they all end up in the
+  # same place — Ingest::HostnamePolicy#candidates concatenates `domain` and
+  # `extra_hostnames` and treats them identically. A rule enforced on one and not
+  # the other is not a rule: the value refused in the Domain field was accepted
+  # verbatim one field lower, and the policy could not tell which box it came from.
+  HOSTNAME_FORMAT = /\A[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+\z/
+  HOSTNAME_MESSAGE = "must be a bare hostname like example.com".freeze
+
+  # Why an overlap is refused rather than tolerated, in the words of the person it
+  # happens to. The long version is on #hostnames_are_not_claimed_by_a_sibling.
+  CLAIM_CONSEQUENCE = "Sharing it means a page carrying the wrong site's snippet " \
+                      "is accepted instead of refused, so the mistake stops showing up.".freeze
+
   validates :domain, presence: true, uniqueness: { scope: :account_id },
-                     format: { with: /\A[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+\z/,
-                               message: "must be a bare hostname like example.com" }
+                     format: { with: HOSTNAME_FORMAT, message: HOSTNAME_MESSAGE }
   validates :public_token, presence: true, uniqueness: true, length: { is: TOKEN_LENGTH }
   validates :k_anonymity_threshold, numericality: { in: 0..10_000 }
   validate  :timezone_is_recognised
@@ -31,6 +43,26 @@ class Site < ApplicationRecord
   # So the limit governs adding, never keeping. spec/requests/sites_spec.rb asserts
   # both halves.
   validate  :account_within_site_limit, on: :create
+
+  # ALL THREE GOVERN CHANGING A HOSTNAME, NEVER KEEPING ONE — the same rule, and
+  # for the same reason, as `account_within_site_limit` above.
+  #
+  # None of these existed until now, so rows predating them can hold values they
+  # would refuse: `extra_hostnames_list=` normalised its input and never checked
+  # it. Applied unconditionally, a site with one bad entry could not have its
+  # timezone changed until that entry was fixed, and the overlap check is worse
+  # still — it fires on the site you are NOT editing, so the remedy would live on
+  # a different page than the refusal. Gated on the hostname actually changing,
+  # nothing already saved can lock anyone out and nothing new can get in.
+  #
+  # The residual is deliberate and worth stating: an existing bad value stays
+  # live until somebody edits that field.
+  HOSTNAMES_CHANGED = -> { new_record? || domain_changed? || extra_hostnames_changed? }
+  private_constant :HOSTNAMES_CHANGED
+
+  validate :extra_hostnames_are_well_formed, if: HOSTNAMES_CHANGED
+  validate :hostnames_are_not_public_suffixes, if: HOSTNAMES_CHANGED
+  validate :hostnames_are_not_claimed_by_a_sibling, if: HOSTNAMES_CHANGED
 
   # The settings form edits this as one newline-separated textarea, because a
   # dynamic list widget is a lot of JavaScript for a field most sites never touch.
@@ -112,6 +144,102 @@ class Site < ApplicationRecord
   def normalize_hostname(host)
     host.to_s.strip.downcase.sub(%r{\Ahttps?://}, "").split("/").first.to_s
         .sub(/:\d+\z/, "").sub(/\Awww\./, "").chomp(".").presence
+  end
+
+  def extra_hostnames_are_well_formed
+    bad = extra_hostnames.to_a.reject { |host| host.match?(HOSTNAME_FORMAT) }
+    return if bad.empty?
+
+    errors.add(:extra_hostnames_list, "#{HOSTNAME_MESSAGE.sub('must be', 'must each be')}. Check #{bad.to_sentence}.")
+  end
+
+  # A public suffix is not a site, and one in either field silently switches the
+  # hostname policy off. `HostnamePolicy#permitted?` accepts `host == allowed` OR
+  # anything ending in `.#{allowed}`, so an entry of `co.uk` accepts every
+  # hostname in the United Kingdom — while the settings page goes on reporting
+  # enforcement as on, and Site#rejected_hostnames stays reassuringly empty.
+  # Protection that reads as present and is not is worse than none.
+  #
+  # `github.io` and `vercel.app` are the versions somebody actually types, because
+  # that genuinely is where their site lives. The Public Suffix List is the only
+  # thing that knows `co.uk` is a suffix and `co.uk.com` is not; a label count
+  # cannot tell them apart.
+  #
+  # Only a BARE suffix is refused. `mysite.github.io` is a real site and passes.
+  def hostnames_are_not_public_suffixes
+    if suffix_only?(domain)
+      errors.add(:domain, "is a public suffix, not a site. Use the hostname you actually serve, like mysite.#{domain}.")
+    end
+
+    bare = extra_hostnames.to_a.select { |host| suffix_only?(host) }
+    return if bare.empty?
+
+    errors.add(:extra_hostnames_list,
+               "cannot contain a public suffix: #{bare.to_sentence}. " \
+               "An entry like that accepts every hostname beneath it, which turns hostname checking off.")
+  end
+
+  # Well-formed and not registrable is exactly the bare-suffix case. Anything that
+  # failed the format rule is somebody else's error to report.
+  def suffix_only?(host)
+    host.present? && host.match?(HOSTNAME_FORMAT) && !PublicSuffix.valid?(host)
+  end
+
+  # Two sites in one account accepting the same hostname does NOT double-count
+  # anything: Ingest::SiteResolver resolves the site from the token in the
+  # snippet, so each site still receives only what its own snippet sends.
+  #
+  # What an overlap costs is the signal. Paste site A's snippet onto a page of
+  # site B and the hostname policy normally refuses it and records the host in
+  # Site#rejected_hostnames — which is how that mistake gets noticed at all,
+  # because the events are otherwise simply missing from a report nobody is
+  # looking at yet. An overlap makes the wrong snippet acceptable to both sites,
+  # so the events land on the wrong one and nothing is ever recorded as refused.
+  # The misconfiguration becomes invisible in the exact place built to show it.
+  #
+  # Scoped to the account for the same reason `domain` uniqueness is: two
+  # unrelated customers measuring the same host is legitimate and not ours to
+  # arbitrate. Checked in both directions, since the overlap is symmetrical and
+  # whichever field the person is editing is the one they can fix.
+  def hostnames_are_not_claimed_by_a_sibling
+    return if account_id.nil?
+    return if errors.include?(:domain) || errors.include?(:extra_hostnames_list)
+
+    mine = allowed_hostnames
+    return if mine.empty?
+
+    sibling = claiming_sibling(mine)
+    return if sibling.nil?
+
+    (mine & sibling.allowed_hostnames).each { |host| add_claim_error(host, sibling) }
+  end
+
+  # The GIN index on extra_hostnames serves the `&&` half; the account scope keeps
+  # the other half to one customer's handful of rows.
+  def claiming_sibling(hosts)
+    account.sites
+           .where.not(id: id)
+           .where("domain = ANY (ARRAY[:hosts]::varchar[]) OR extra_hostnames && ARRAY[:hosts]::varchar[]",
+                  hosts: hosts)
+           .first
+  end
+
+  # Phrased to read after the attribute name that full_messages prepends, and
+  # never circularly: "already measured by example.com" says nothing useful when
+  # example.com is also the host being refused, which is the commonest case of
+  # all. Which site holds the claim, and how, is what the reader needs.
+  def add_claim_error(host, sibling)
+    if host == domain
+      errors.add(:domain, "is already an additional hostname on #{sibling.domain}. " \
+                          "Remove it there, or measure this site on a hostname of its own.")
+    elsif host == sibling.domain
+      errors.add(:extra_hostnames_list,
+                 "cannot include #{host}: it is already the domain of another site in this account. " \
+                 "#{CLAIM_CONSEQUENCE}")
+    else
+      errors.add(:extra_hostnames_list,
+                 "cannot include #{host}: the site #{sibling.domain} already lists it. #{CLAIM_CONSEQUENCE}")
+    end
   end
 
   def timezone_is_recognised

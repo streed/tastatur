@@ -29,3 +29,12 @@
 
 en:
   hello: "Hello world"
+
+  activerecord:
+    attributes:
+      site:
+        # The textarea is labelled "Additional hostnames", and TastaturFormBuilder's
+        # error_summary prints full messages. Without this, an error on the virtual
+        # attribute that backs that field reads "Extra hostnames list cannot contain
+        # a public suffix" — naming a field that appears nowhere on the page.
+        extra_hostnames_list: "Additional hostnames"

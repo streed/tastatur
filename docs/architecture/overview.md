@@ -50,7 +50,7 @@ Ingest::WriteBuffer ──► Redis list ──► FlushEventBufferJob ──►
 | **Rails 8** | The starter template this is built on; boring, fast enough, and the ingest path is a single controller action |
 | **PostgreSQL 17 + TimescaleDB 2.29** | One database for both relational and timeseries data. Hypertables give chunked storage, columnar compression and retention policies; continuous aggregates give the dashboard sub-10 ms queries. No second datastore to operate |
 | **Two Redis instances** | One persistent (ingest buffer, cache, Sidekiq). One **non-persistent** for the visitor salt and session map, because a salt written to disk is a salt that is not destroyed. See [../privacy/identity.md](../privacy/identity.md) |
-| **Sidekiq** | Buffer flush, salt rotation, retention enforcement |
+| **Sidekiq** | Buffer flush, retention enforcement, reconciliation |
 | **Hotwire + importmap, no npm** | A privacy tool should not ask users to load a bundle. Charts are server-rendered inline SVG; the only JavaScript is three small Stimulus controllers |
 | **Tailwind v4** | CSS-first config, no JS build |
 

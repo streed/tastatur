@@ -61,8 +61,7 @@ module Seo
         SitemapEntry.new(loc: privacy_url(**@url_options)),
         SitemapEntry.new(loc: privacy_policy_url(**@url_options), lastmod: legal_updated_on),
         SitemapEntry.new(loc: terms_url(**@url_options), lastmod: legal_updated_on),
-        SitemapEntry.new(loc: dpa_url(**@url_options)),
-        SitemapEntry.new(loc: data_request_url(**@url_options))
+        SitemapEntry.new(loc: dpa_url(**@url_options))
       ]
     end
 

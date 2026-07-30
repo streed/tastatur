@@ -50,7 +50,7 @@ module Admin
     def health
       Health.new(
         geoip: Ingest::Geolocation.available?,
-        salt: Ingest::SaltStore.current.present?,
+        salt: salt_store_reachable,
         buffer_depth: buffer_depth,
         queues: queue_depths
       )
@@ -68,6 +68,18 @@ module Admin
       Ingest::WriteBuffer.depth
     rescue *Ingest::RecordEvent::STORAGE_FAILURES
       :unavailable
+    end
+
+    # Reachability, not presence. Salts are per site and are minted on that site's
+    # first event of its local day, so on a quiet instance there may legitimately
+    # be none — which is not a fault and must not be reported as one. What an
+    # operator opens this page to learn is whether the privacy Redis is up, since
+    # if it is not then no event can be identified and ingest is dropping
+    # everything.
+    def salt_store_reachable
+      Ingest::SaltStore.available?
+    rescue *Ingest::RecordEvent::STORAGE_FAILURES
+      false
     end
 
     def queue_depths

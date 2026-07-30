@@ -21,8 +21,7 @@ RSpec.describe Seo::BuildSitemap do
       "https://analytics.example.org/privacy",
       "https://analytics.example.org/privacy-policy",
       "https://analytics.example.org/terms",
-      "https://analytics.example.org/dpa",
-      "https://analytics.example.org/data-request"
+      "https://analytics.example.org/dpa"
     )
   end
 

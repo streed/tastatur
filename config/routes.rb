@@ -116,7 +116,6 @@ Rails.application.routes.draw do
 
   # --- Compliance -----------------------------------------------------------
   get "privacy", to: "compliance#privacy"
-  get "data-request", to: "compliance#data_request", as: :data_request
   get "dpa", to: "compliance#dpa"
   get "privacy-policy", to: "compliance#privacy_policy", as: :privacy_policy
   get "terms", to: "compliance#terms"

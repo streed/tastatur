@@ -59,7 +59,7 @@ See [geolocation.md](geolocation.md) for the licence obligation that comes with 
 |---|---|---|
 | `caddy` | TLS termination, automatic certificates, static caching | 80, 443 |
 | `web` | Rails: dashboard and ingest endpoint | internal only |
-| `worker` | Sidekiq: buffer flush, salt rotation, retention | internal only |
+| `worker` | Sidekiq: buffer flush, retention, reconciliation | internal only |
 | `timescaledb` | PostgreSQL 17 + TimescaleDB | internal only |
 | `redis` | Ingest buffer, cache, job queue. **Persistent** | internal only |
 | `redis-privacy` | Visitor salt and session map. **Non-persistent, no volume** | internal only |

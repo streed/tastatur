@@ -195,7 +195,7 @@ The highest-value specs, and why they exist:
 |---|---|
 | `spec/policies/site_policy_spec.rb` | cross-tenant isolation, including the crafted-`?account=` case |
 | `spec/requests/api/events_spec.rb` | bots, DNT/GPC, prefetch, unknown tokens, and that no column resembles an IP or user-agent |
-| `spec/lib/ingest/identifier_spec.rb` | salt rotation keeping sessions intact while making yesterday unlinkable; IPv6 /64 |
+| `spec/lib/ingest/identifier_spec.rb` | the salt rolling over at the site's local midnight, keeping sessions intact while making yesterday unlinkable; IPv6 /64 |
 | `spec/lib/ingest/path_scrubber_spec.rb` | personal data in customer URLs |
 | `spec/services/analytics/breakdown_spec.rb` | k-anonymity, including complementary suppression |
 | `spec/services/analytics/funnel_report_spec.rb` | step ordering when a visitor backtracks |

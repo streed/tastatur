@@ -82,10 +82,8 @@
       <p class="mt-4">
         This happens in <code>app/lib/ingest/identifier.rb</code>, the only place in the codebase
         where a visitor's IP address is used for anything. The two ingest endpoints read it from the
-        request in order to hand it over, and the
-        <%= link_to "see my data", data_request_path, class: "underline hover:text-signal" %> page
-        derives your identifier from your live connection so it can show you your own rows. Nothing
-        else in the application receives it, and none of those paths store it.
+        request in order to hand it over. Nothing else in the application receives it, and neither
+        path stores it.
       </p>
       <p class="mt-3 text-[13px] text-ink-2">
         One exception, stated here rather than buried: if you hold a Tastatur account, we record the
@@ -162,11 +160,19 @@
     <section>
       <h2 class="text-lg font-semibold mb-3">Your rights</h2>
       <p class="mb-4">
-        The site owner is the data controller; we are their processor. Requests about a specific
-        site should go to that site's operator. That said, you can check what we hold that relates
-        to your current connection right now, with no account and no identity check:
+        The site owner is the data controller; we are their processor. Requests to access, erase,
+        restrict or object should go to the operator of the site you visited — they decide what is
+        collected and for how long, and they can delete a site's entire history at any time, which
+        removes it here immediately and irreversibly.
       </p>
-      <%= link_to "Check what Tastatur holds about you", data_request_path, class: "btn btn-primary" %>
+      <p>
+        For our part, what we hold carries no identifier that resolves to a person. Once the day's
+        secret is destroyed nobody, including us, can work out which rows belonged to you, so there
+        is no lookup we could honestly offer you: any search we ran on the strength of a shared
+        address and a browser header would be as likely to return somebody else's browsing as your
+        own. GDPR Art.11(1) covers exactly this position, and the unlinkability it rests on is the
+        same property described further up this page.
+      </p>
     </section>
 
     <section class="rule pt-6 text-sm text-muted">

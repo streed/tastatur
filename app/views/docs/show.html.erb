@@ -50,7 +50,6 @@
       <p class="label mt-8 mb-3">Deeper</p>
       <ul class="border-t border-rule text-[13px]">
         <% [["What we collect", privacy_path],
-            ["Your data", data_request_path],
             ["Processor terms", dpa_path]].each do |title, path| %>
           <li class="border-b border-rule">
             <%= link_to title, path, class: "block py-2 text-ink-2 hover:text-signal" %>
@@ -333,7 +332,6 @@
         <%= render "shared/cookie_distinction" %>
         <div class="flex flex-wrap gap-3">
           <%= link_to "The full technical account", privacy_path, class: "btn btn-sm" %>
-          <%= link_to "Check what we hold about you", data_request_path, class: "btn btn-quiet btn-sm" %>
         </div>
       <% end %>
 

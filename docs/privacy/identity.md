@@ -86,13 +86,12 @@ current salt and recounting every visitor.
 If `REDIS_PRIVACY_URL` is unset the salt falls back to the main Redis and the app
 logs a warning at boot, because that configuration trades away this guarantee.
 
-### Exactly two salts exist at a time
+### Exactly two salts exist per site at a time
 
-Rotating to a single new salt at midnight would sever every session in flight and
-inflate the visitor count every night. So the previous salt is kept, with a
-24-hour TTL, purely so a session that began before rotation can still be
-recognised. Writing the new previous value is what destroys the one from two days
-ago; there is no archive.
+Rotating to a single new salt would sever every session in flight and inflate the
+visitor count every night. So the previous salt is kept, for 24 hours past the end
+of the day it belonged to, purely so a session that began before the rollover can
+still be recognised. Its Redis TTL is what destroys it; there is no archive.
 
 The maximum life of any salt is therefore about 48 hours.
 
@@ -106,19 +105,49 @@ We also explicitly **reject** deriving salts from a master key, e.g.
 `HKDF(master_key, date)`. That is a common and fatal mistake: it makes every
 historical salt regenerable forever, so nothing is ever actually destroyed.
 
-### Rotation timing
+### Rotation timing: each site's own midnight
 
-Daily at 04:07 site time (`config/schedule.yml`). Not midnight: rotation splits
-any session in flight and 04:00 is the global traffic trough. The odd minute
-avoids firing simultaneously with every other cron job on the box.
+Every site draws its own salt, and it rolls over at **00:00 in that site's
+configured timezone**.
 
-Rotation is verified by spec to satisfy two properties at once, which naive
+This used to be one instance-wide salt rotated by a nightly job at 04:07 server
+time, and that was wrong in a way nothing surfaced. A day on the dashboard is a
+day in the site's timezone — `Analytics::Period` builds every range in
+`site.timezone` and the queries bucket with `time_bucket(..., site.timezone)`. So
+for a site set to America/Los_Angeles the reporting day ran 07:00 UTC to 07:00
+UTC, while the salt rotated at 04:07 UTC, which is 20:07 the previous *local*
+evening — three hours inside the day being reported. One person browsing at 20:00
+and again at 20:15 hashed to two different visitors and was **counted twice in the
+same day, on the same report**. Only a site actually set to UTC was measured over
+the window it was shown.
+
+Aligning the rollover with the site's midnight makes the salt window and the
+reporting day the same window, which is the only arrangement in which "unique
+visitors today" means what it says.
+
+There is no rotation job. The salt's Redis key names the site and the site-local
+date it belongs to, so *which salt is current* is a question about the clock
+rather than about whether a cron entry fired, and the retired key is destroyed by
+its own TTL. That removes a failure mode nothing was watching: a skipped or wedged
+job left yesterday's salt live indefinitely, and the symptom of the product
+quietly ceasing to be anonymous was nothing at all. It also serves zones a cron
+schedule cannot express — Asia/Kolkata (+05:30), Asia/Kathmandu (+05:45) and
+Pacific/Chatham (+12:45) have local midnights no hourly job can hit.
+
+**The date names the key; it does not produce the secret.** The value stored under
+that name is `SecureRandom` and is never recomputed from anything, which is the
+whole difference between this and the master-key derivation rejected above.
+`spec/privacy_invariants_spec.rb` holds that line.
+
+Rotation is verified by spec to satisfy three properties at once, which naive
 implementations get wrong:
 
-- the visitor hash **does** change across the rotation (yesterday becomes
-  unlinkable), and
+- the visitor hash **does** change across the rollover (yesterday becomes
+  unlinkable),
 - an in-flight session is **carried across** it, so nobody is counted twice and
-  no visit is cut in half
+  no visit is cut in half, and
+- two sites in different timezones roll over at **different moments**, each at its
+  own midnight
 
 ## Sessions
 

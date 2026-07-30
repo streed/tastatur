@@ -66,11 +66,14 @@
     <div class="card">
       <div class="card-head"><h2 class="text-sm font-semibold">Moving parts</h2></div>
       <div>
+        <%# "Reachable", not "present": each site mints its own salt on its first event
+            of its local day, so a quiet instance holding none is normal and a red light
+            there would be a false alarm. What can actually be wrong is the store. -%>
         <%= render "admin/health_row",
-                   label: "Visitor salt",
+                   label: "Visitor salt store",
                    ok: health.salt,
-                   value: health.salt ? "present" : "missing",
-                   blurb: "Held only in the non-persistent Redis. Without it, ingest cannot compute an identity at all." %>
+                   value: health.salt ? "reachable" : "unreachable",
+                   blurb: "The non-persistent Redis each site's rotating salt is held in. Without it, ingest cannot compute an identity at all." %>
 
         <%= render "admin/health_row",
                    label: "GeoIP database",

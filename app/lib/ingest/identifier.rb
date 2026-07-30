@@ -9,14 +9,18 @@ module Ingest
   class Identifier
     DIGEST_BYTES = 16
 
-    def initialize(site_id:, ip:, user_agent:)
-      @site_id = site_id
+    # Takes the Site rather than its id, because the salt now rolls over at the
+    # site's own local midnight and only the record knows which zone that is.
+    # See Ingest::SaltStore for why the rollover follows the reporting day.
+    def initialize(site:, ip:, user_agent:)
+      @site = site
+      @site_id = site.id
       @ip = normalize_ip(ip)
       @user_agent = user_agent.to_s
     end
 
     def call
-      visitor = digest(SaltStore.current)
+      visitor = digest(SaltStore.current(@site))
 
       session, is_new = SessionWindow.new(site_id: @site_id, visitor_hash: visitor).resolve do
         # Called only when there is no live session under today's hash. Before
@@ -24,7 +28,7 @@ module Ingest
         # had a session under YESTERDAY's salt: without this, every visitor
         # online at the moment of rotation would be counted twice and every
         # session in flight would be cut in half.
-        previous_salt = SaltStore.previous
+        previous_salt = SaltStore.previous(@site)
         previous_salt && SessionWindow.new(site_id: @site_id, visitor_hash: digest(previous_salt)).existing
       end
 

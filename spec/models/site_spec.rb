@@ -1,8 +1,7 @@
 require "rails_helper"
 
-# The plan's site limit, and the one place domain normalisation has consequences
-# beyond itself: whether the same site can be added twice. Normalisation's own
-# rules and the hostname policy are covered in
+# The plan's site limit, and which hostnames a site may claim. Normalisation's own
+# rules and the policy that consumes these hostnames are covered in
 # spec/lib/ingest/hostname_policy_spec.rb and the request specs, and duplicating
 # them here would mean two files to update for one change.
 RSpec.describe Site do
@@ -132,6 +131,130 @@ RSpec.describe Site do
       it "still cannot add another" do
         expect(build(:site, account: account)).not_to be_valid
       end
+    end
+  end
+
+  # `extra_hostnames` feeds Ingest::HostnamePolicy#candidates alongside `domain`
+  # and is treated identically there, but until now only `domain` was validated.
+  describe "additional hostnames" do
+    let(:account) { create(:account, plan: "pro") }
+    let(:site) { create(:site, account: account, domain: "example.com") }
+
+    it "accepts a genuinely separate domain, which is what the field is for" do
+      expect(site.update(extra_hostnames_list: "example.de\nexample.co.jp")).to be(true)
+      expect(site.reload.extra_hostnames).to eq(%w[example.de example.co.jp])
+    end
+
+    it "normalises each entry the same way the domain is normalised" do
+      expect(site.update(extra_hostnames_list: "https://WWW.Example.DE/pricing\n example.fr:8080 ")).to be(true)
+      expect(site.reload.extra_hostnames).to eq(%w[example.de example.fr])
+    end
+
+    it "refuses an entry that is not a hostname and names the offender" do
+      expect(site.update(extra_hostnames_list: "example.de\nnot-a-hostname")).to be(false)
+      expect(site.errors[:extra_hostnames_list].first).to include("must each be a bare hostname")
+      expect(site.errors[:extra_hostnames_list].first).to include("not-a-hostname")
+    end
+
+    # THE ONE WITH A SECURITY CONSEQUENCE. `permitted?` accepts anything ending in
+    # ".#{allowed}", so a bare suffix here accepts every hostname beneath it while
+    # the settings page still reports enforcement as on. `github.io` is the version
+    # somebody actually types, because that is where their site lives.
+    %w[co.uk github.io vercel.app].each do |suffix|
+      it "refuses #{suffix}, which would accept every hostname beneath it" do
+        expect(site.update(extra_hostnames_list: suffix)).to be(false)
+        expect(site.errors[:extra_hostnames_list].first).to include("public suffix")
+      end
+    end
+
+    it "refuses a public suffix as the domain too, since both feed the same policy" do
+      bad = build(:site, account: account, domain: "co.uk")
+
+      expect(bad).not_to be_valid
+      expect(bad.errors[:domain].first).to include("public suffix")
+    end
+
+    # Only a BARE suffix. The registrable name under one is an ordinary site and
+    # a rule that refused it would be unusable by everyone on GitHub Pages.
+    it "accepts a real site hosted under a public suffix" do
+      expect(build(:site, account: account, domain: "mysite.github.io")).to be_valid
+      expect(site.update(extra_hostnames_list: "docs.mysite.github.io")).to be(true)
+    end
+  end
+
+  # NOT because it double-counts. Ingest::SiteResolver resolves the site from the
+  # token in the snippet, so each site receives only what its own snippet sends.
+  # The cost is the signal: an overlap makes the wrong snippet acceptable to both
+  # sites, so pasting site A's key onto site B's page stops being refused and stops
+  # appearing in Site#rejected_hostnames — the one place that mistake is visible.
+  describe "a hostname another site in the account already claims" do
+    let(:account) { create(:account, plan: "pro") }
+    let!(:existing) { account.sites.create!(domain: "example.com") }
+
+    it "refuses it as an additional hostname on a second site" do
+      other = account.sites.create!(domain: "shop.example.net")
+
+      expect(other.update(extra_hostnames_list: "example.com")).to be(false)
+      expect(other.errors[:extra_hostnames_list].first)
+        .to include("already the domain of another site in this account")
+    end
+
+    # Symmetrical, and checked from both ends: whichever field the person is
+    # editing has to be the one that refuses, or the message names a remedy on a
+    # page they are not looking at.
+    it "refuses it as the domain of a new site when a sibling lists it as extra" do
+      existing.update!(extra_hostnames_list: "example.de")
+
+      expect(build(:site, account: account, domain: "example.de")).not_to be_valid
+    end
+
+    it "refuses the same additional hostname on two sites" do
+      first = account.sites.create!(domain: "one.example.net")
+      first.update!(extra_hostnames_list: "shared.example.org")
+      second = account.sites.create!(domain: "two.example.net")
+
+      expect(second.update(extra_hostnames_list: "shared.example.org")).to be(false)
+    end
+
+    # Same reasoning as domain uniqueness being account-scoped: two unrelated
+    # customers measuring the same host is legitimate and not ours to arbitrate.
+    it "allows another account to claim the same hostname" do
+      other = create(:account, plan: "pro").sites.create!(domain: "unrelated.example.net")
+
+      expect(other.update(extra_hostnames_list: "example.com")).to be(true)
+    end
+
+    it "does not count the site's own domain as a conflict with itself" do
+      expect(existing.update(extra_hostnames_list: "example.de")).to be(true)
+    end
+  end
+
+  # THE REASON ALL THREE ARE GATED ON THE HOSTNAME CHANGING, and the same reason
+  # `account_within_site_limit` is `on: :create`. These validations postdate the
+  # rows they apply to, and `extra_hostnames_list=` never checked its input, so
+  # values exist that they would refuse. Applied unconditionally, a site holding
+  # one would be unable to save an unrelated field — and for the overlap check the
+  # refusal appears on the site you are NOT editing, so the remedy would live on a
+  # different page than the error.
+  describe "a site already holding a value the new rules refuse" do
+    let(:account) { create(:account, plan: "pro") }
+    let!(:site) do
+      create(:site, account: account, domain: "example.com").tap do |s|
+        s.update_columns(extra_hostnames: ["co.uk", "not a hostname"])
+      end
+    end
+
+    it "can still save an unrelated field" do
+      expect(site.update(timezone: "Europe/Berlin")).to be(true)
+      expect(site.update(k_anonymity_threshold: 0)).to be(true)
+    end
+
+    it "still refuses the moment that field is touched" do
+      expect(site.update(extra_hostnames_list: "co.uk")).to be(false)
+    end
+
+    it "accepts the correction" do
+      expect(site.update(extra_hostnames_list: "example.co.uk")).to be(true)
     end
   end
 end

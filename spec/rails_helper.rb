@@ -61,9 +61,16 @@ RSpec.configure do |config|
   #
   #   it "rolls up visitors", :continuous_aggregate do
   #
-  config.when_first_matching_example_defined(:continuous_aggregate) do
-    config.before(:suite) { Tastatur::TestDatabase.truncatable_tables }
-  end
+  # The suite assumes it starts from an empty database, and nothing guaranteed
+  # that. `bin/dev-setup` builds the test database with `db:prepare`, which seeds
+  # a database it has just created — and db/seeds.rb runs in any local env, so a
+  # fresh checkout began every run with admin@example.com committed. The specs
+  # that count administrators then failed until the first `:continuous_aggregate`
+  # example happened to truncate the seeds away mid-run, which made the failures
+  # a function of the random seed and unreproducible afterwards. Truncating up
+  # front makes the starting state a property of the suite rather than of
+  # whatever `db:prepare`, an aborted run, or a stray `rails runner` left behind.
+  config.before(:suite) { Tastatur::TestDatabase.truncate! }
 
   # The flag is restored afterwards because it is set on the example *group*, not
   # on the example. Leaving it false means every later example in that group — and

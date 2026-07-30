@@ -25,15 +25,4 @@ class ComplianceController < ApplicationController
   def privacy_policy; end
 
   def terms; end
-
-  # The subject-access page. Rather than asking someone to prove an identity we
-  # cannot check, this looks up the identifier derived from their live
-  # connection — see Compliance::LookupOwnData for why that is both safe and
-  # more informative than a form.
-  def data_request
-    @result = Compliance::LookupOwnData.call(
-      ip: request.remote_ip,
-      user_agent: request.user_agent
-    ).value_or(nil)
-  end
 end

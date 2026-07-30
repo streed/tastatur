@@ -154,7 +154,7 @@ summing `events_by_hour`.
 
 ### The honest caveat about multi-day uniques
 
-Because the salt rotates daily, the same person produces a *different*
+Because the salt rotates at each site's local midnight, the same person produces a *different*
 `visitor_hash` tomorrow. So a 30-day unique count from `visitor_days` equals the
 sum of 30 daily counts either way — the aggregate is exact as a distinct count,
 but the underlying identifiers are not stable across days, and no query can
