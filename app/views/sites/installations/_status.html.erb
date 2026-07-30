@@ -21,6 +21,31 @@
         <%= link_to "View dashboard", site_path(site), class: "btn btn-primary btn-sm ml-auto shrink-0" %>
       </div>
     </div>
+  <% elsif usage.exceeded? %>
+    <%# No poll controller here either, and for a better reason than the success
+        state's: nothing will arrive until the allowance resets or the plan changes,
+        so polling would be an animation pretending to wait for something that
+        cannot happen. A snippet that is installed correctly and receiving nothing
+        is the most expensive thing to leave unexplained on this screen — the
+        obvious conclusion is that the product is broken. -%>
+    <div class="card border-signal">
+      <div class="card-body flex items-center gap-4">
+        <span class="w-2.5 h-2.5 bg-signal inline-block shrink-0" aria-hidden="true"></span>
+        <div>
+          <p class="font-semibold text-sm">Nothing is being recorded right now</p>
+          <p class="text-[13px] text-ink-2 mt-1">
+            This account has used the <%= number_with_delimiter(usage.event_limit) %> events its
+            <%= usage.plan.name %> plan covers this month, so events from
+            <%= site.domain %> are being refused. Your snippet may well be installed
+            correctly — there is no way to tell from here until the allowance resets on
+            <%= usage.period_end.to_date.to_fs(:long) %>.
+          </p>
+        </div>
+        <% unless Tastatur.self_hosted? %>
+          <%= link_to "Review plan", billing_path, class: "btn btn-primary btn-sm ml-auto shrink-0" %>
+        <% end %>
+      </div>
+    </div>
   <% else %>
     <%# The success state above deliberately carries no poll controller, so
         polling stops by virtue of the markup rather than by a flag anyone has to

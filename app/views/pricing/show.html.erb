@@ -1,0 +1,122 @@
+<% content_for :title, "Pricing · Tastatur" %>
+
+<div class="shell">
+  <section class="rule-heavy pt-8 pb-12">
+    <p class="label mb-5">Pricing</p>
+    <h1 class="text-[clamp(2rem,4vw,3rem)] font-semibold leading-[1.06] tracking-[-0.035em] max-w-2xl">
+      Two plans. Both of them<br>count events, not people.
+    </h1>
+    <p class="text-lg text-ink-2 mt-6 max-w-xl leading-relaxed">
+      Priced on the events we store for you, because that is the thing that costs us
+      anything. Teammates are unlimited on both — an analytics tool nobody can afford
+      to give access to is an analytics tool nobody reads.
+    </p>
+  </section>
+
+  <%# --- The plans, side by side on one grid so the numbers line up. --------- -%>
+  <section class="grid md:grid-cols-2 gap-px bg-rule">
+    <% @plans.each do |plan| %>
+      <div class="bg-surface p-8 flex flex-col">
+        <p class="label <%= "text-signal" if plan.paid? %>"><%= plan.name %></p>
+
+        <p class="mt-4 flex items-baseline gap-2">
+          <span class="text-[40px] font-semibold tracking-[-0.03em] leading-none num">
+            $<%= plan.price_display %>
+          </span>
+          <span class="text-sm text-muted"><%= plan.paid? ? "per month" : "forever" %></span>
+        </p>
+
+        <dl class="mt-8 space-y-0">
+          <% [
+               ["Events a month", number_with_delimiter(plan.monthly_event_limit)],
+               ["Sites", plan.unlimited_sites? ? "Unlimited" : plan.site_limit.to_s],
+               ["Teammates", "Unlimited"],
+               ["Data retention", "Up to #{Account::MAX_RETENTION_DAYS / 30} months, your choice"],
+               ["Shared dashboards", "Included"],
+               ["Goals and funnels", "Included"]
+             ].each do |term, value| %>
+            <div class="flex items-baseline justify-between gap-4 border-t border-rule py-3">
+              <dt class="text-sm text-ink-2"><%= term %></dt>
+              <dd class="text-sm font-medium num shrink-0"><%= value %></dd>
+            </div>
+          <% end %>
+        </dl>
+
+        <div class="mt-8 pt-2">
+          <% if user_signed_in? %>
+            <%= link_to plan.paid? ? "Upgrade" : "Your current options", billing_path,
+                        class: "btn #{'btn-primary' if plan.paid?}" %>
+          <% elsif Tastatur.allow_signup? %>
+            <%= link_to plan.paid? ? "Start on #{plan.name}" : "Start free", new_user_registration_path,
+                        class: "btn #{'btn-primary' if plan.paid?}" %>
+          <% else %>
+            <%= link_to "Sign in", new_user_session_path, class: "btn" %>
+          <% end %>
+        </div>
+
+        <p class="text-[12px] text-muted mt-4 leading-relaxed">
+          <% if plan.paid? %>
+            Cancel any time, from the same portal you pay in. No annual commitment and
+            no per-seat pricing.
+          <% else %>
+            No card, no trial clock. Upgrade if and when you outgrow it.
+          <% end %>
+        </p>
+      </div>
+    <% end %>
+  </section>
+
+  <%# --- What happens at the limit. Stated here rather than found out later. - -%>
+  <section class="py-16 border-t border-rule grid lg:grid-cols-12 gap-10">
+    <div class="lg:col-span-5">
+      <p class="label mb-5">What the limit actually does</p>
+      <h2 class="text-2xl font-semibold tracking-[-0.025em]">
+        We stop recording.<br>We do not bill you<br>for going over.
+      </h2>
+    </div>
+    <div class="lg:col-span-7 space-y-5 text-[15px] text-ink-2 leading-relaxed">
+      <p>
+        <strong class="text-ink">There is no overage charge.</strong> Once an account passes
+        its monthly allowance, further events are not recorded, and the allowance resets on
+        the first of the month. You will never get an invoice larger than the price above.
+      </p>
+      <p>
+        <strong class="text-ink">You are told before it happens.</strong> Owners and admins
+        get an email at 80% and again if the allowance runs out, and the figure is on your
+        plan screen the whole time. A quota nobody warned you about is indistinguishable
+        from a broken installation.
+      </p>
+      <p>
+        <strong class="text-ink">Bots do not count.</strong> Crawler traffic is dropped
+        before it is stored, and so are events claiming a hostname that is not yours. Neither
+        reaches your allowance — you are only charged for measurement you can actually read.
+      </p>
+      <p>
+        <strong class="text-ink">Downgrading never deletes anything.</strong> Cancel while
+        you have twenty sites and all twenty keep collecting; you simply cannot add a
+        twenty-first until you are back under the limit. Your data is yours, and a billing
+        event is not a reason to destroy it.
+      </p>
+    </div>
+  </section>
+
+  <%# --- The third option, which is free in the other sense. ---------------- -%>
+  <section class="py-16 border-t border-rule grid lg:grid-cols-12 gap-10">
+    <div class="lg:col-span-5">
+      <p class="label mb-5">Or don't pay us at all</p>
+      <h2 class="text-2xl font-semibold tracking-[-0.025em]">Self-host it.<br>No limits, no billing.</h2>
+    </div>
+    <div class="lg:col-span-7">
+      <p class="text-[15px] text-ink-2 leading-relaxed">
+        Tastatur is AGPL-3.0 and the hosted service runs the same code you can. A
+        self-hosted install has no plans, no event ceiling and no Stripe: it is one
+        environment variable, and the upgrade interface disappears entirely. You bring
+        PostgreSQL with TimescaleDB and a Redis, and you own every row.
+      </p>
+      <div class="flex flex-wrap gap-3 mt-7">
+        <%= link_to "Read the source", Tastatur.maintainer[:source], class: "btn", rel: "noopener" %>
+        <%= link_to "What it collects", privacy_path, class: "btn btn-quiet" %>
+      </div>
+    </div>
+  </section>
+</div>

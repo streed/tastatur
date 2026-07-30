@@ -1,0 +1,179 @@
+<% content_for :title, "Plan · Tastatur" %>
+
+<div class="shell max-w-3xl">
+  <div class="flex items-end justify-between gap-4 mb-8 pt-5 rule-heavy">
+    <div class="mt-5">
+      <h1 class="text-2xl font-semibold">Plan</h1>
+      <p class="label mt-2">
+        <%= @account.name %><span class="mx-2">·</span><%= @usage.plan.name %>
+        <% if @usage.plan.paid? %>
+          <span class="mx-2">·</span>$<%= @usage.plan.price_display %>/month
+        <% end %>
+      </p>
+    </div>
+    <%= link_to "Account", account_path, class: "btn btn-sm" %>
+  </div>
+
+  <%# --- Anything wrong, first and in words. -------------------------------- -%>
+  <% if @account.payment_problem? %>
+    <div class="notice border-signal text-ink mb-6" role="alert">
+      <p class="font-semibold mb-1">Your last payment did not go through.</p>
+      <p class="text-sm">
+        <% if @account.subscription_status == "past_due" %>
+          Stripe is retrying, and nothing has changed about what you can do in the
+          meantime — your sites are still collecting. Updating your card in the
+          billing portal fixes it immediately.
+        <% else %>
+          Stripe has stopped retrying, so this account is back on the
+          <%= Billing::Plan.free.name %> plan's limits. Updating your card in the
+          billing portal restores it.
+        <% end %>
+      </p>
+    </div>
+  <% end %>
+
+  <% if @usage.exceeded? %>
+    <div class="notice border-signal text-ink mb-6" role="alert">
+      <p class="font-semibold mb-1">
+        <%= number_with_delimiter(@usage.events_refused) %> events were not recorded this month.
+      </p>
+      <p class="text-sm">
+        This account has passed the <%= number_with_delimiter(@usage.event_limit) %> events
+        the <%= @usage.plan.name %> plan covers. Collection resumes on
+        <%= @usage.period_end.to_date.to_fs(:long) %>
+        <%= "or as soon as you upgrade" if @account.can_upgrade? %>.
+        Events already recorded are unaffected.
+      </p>
+    </div>
+  <% elsif @usage.approaching_limit? %>
+    <div class="notice mb-6" role="status">
+      <p class="text-sm">
+        <%= @usage.percent_used %>% of this month's events used, with
+        <%= pluralize(@usage.days_until_reset, "day") %> to go. Nothing has been dropped.
+      </p>
+    </div>
+  <% end %>
+
+  <%# --- Usage. The one number that decides everything else. ---------------- -%>
+  <div class="card mb-6">
+    <div class="card-head">
+      <h2 class="text-sm font-semibold">Events this month</h2>
+      <span class="label">
+        <%= @usage.period_start.to_date.to_fs(:long) %> – <%= (@usage.period_end - 1.day).to_date.to_fs(:long) %>
+      </span>
+    </div>
+    <div class="card-body">
+      <p class="figure">
+        <%= number_with_delimiter(@usage.events_used) %>
+        <span class="text-base font-normal text-muted">
+          <% if @usage.unlimited_events? %>
+            recorded
+          <% else %>
+            of <%= number_with_delimiter(@usage.event_limit) %>
+          <% end %>
+        </span>
+      </p>
+
+      <% unless @usage.unlimited_events? %>
+        <%# A bare div rather than <progress>, which cannot be styled consistently
+            across browsers and announces a percentage that is wrong the moment
+            usage passes 100%. The text beside it carries the real figure. -%>
+        <div class="mt-4 h-2 bg-surface-2 border border-rule" role="img"
+             aria-label="<%= @usage.percent_used %>% of this month's events used">
+          <div class="h-full <%= @usage.exceeded? ? 'bg-signal' : 'bg-ink' %>"
+               style="width: <%= @usage.bar_percent %>%"></div>
+        </div>
+        <p class="text-sm text-ink-2 mt-3">
+          <%= @usage.percent_used %>% used<span class="mx-1.5">·</span>
+          <% if @usage.exceeded? %>
+            <%= number_with_delimiter(@usage.events_refused) %> refused
+          <% else %>
+            <%= number_with_delimiter(@usage.events_remaining) %> left
+          <% end %>
+          <span class="mx-1.5">·</span>resets in <%= pluralize(@usage.days_until_reset, "day") %>
+        </p>
+      <% end %>
+
+      <p class="text-[13px] text-muted mt-4 leading-relaxed">
+        Counted when an event is stored. Crawler traffic and events refused for
+        claiming a hostname that is not yours never reach the count.
+        <% if @usage.events_used_last_month.positive? %>
+          Last month: <%= number_with_delimiter(@usage.events_used_last_month) %>.
+        <% end %>
+      </p>
+    </div>
+  </div>
+
+  <%# --- Sites. The other limit. ------------------------------------------- -%>
+  <div class="card mb-6">
+    <div class="card-head">
+      <h2 class="text-sm font-semibold">Sites</h2>
+      <span class="label">Teammates: unlimited on every plan</span>
+    </div>
+    <div class="card-body">
+      <p class="figure">
+        <%= number_with_delimiter(@usage.sites_used) %>
+        <span class="text-base font-normal text-muted">
+          <%= @usage.unlimited_sites? ? "sites" : "of #{@usage.site_limit}" %>
+        </span>
+      </p>
+
+      <% if @usage.over_site_limit? %>
+        <p class="text-sm text-ink-2 mt-3">
+          This account has more sites than the <%= @usage.plan.name %> plan includes, from
+          when it was on a larger plan. Nothing has been deleted and all of them keep
+          collecting — you just cannot add another until you are back under
+          <%= @usage.site_limit %>.
+        </p>
+      <% elsif @usage.at_site_limit? %>
+        <p class="text-sm text-ink-2 mt-3">
+          At the limit. <%= "Upgrading raises it to #{Billing::Plan.pro.site_limit}." if @account.can_upgrade? %>
+        </p>
+      <% end %>
+    </div>
+  </div>
+
+  <%# --- The two buttons. -------------------------------------------------- -%>
+  <div class="card">
+    <div class="card-head"><h2 class="text-sm font-semibold">Payment</h2></div>
+    <div class="card-body">
+      <% if @account.cancelling? %>
+        <p class="text-sm text-ink-2 mb-5">
+          This subscription is set to end
+          <%= "on #{@account.current_period_ends_at.to_date.to_fs(:long)}" if @account.current_period_ends_at %>.
+          Until then nothing changes. You can reverse it in the billing portal.
+        </p>
+      <% elsif @account.billing_plan.paid? && @account.current_period_ends_at %>
+        <p class="text-sm text-ink-2 mb-5">
+          $<%= @usage.plan.price_display %> a month, renewing
+          <%= @account.current_period_ends_at.to_date.to_fs(:long) %>.
+        </p>
+      <% elsif @account.can_upgrade? %>
+        <p class="text-sm text-ink-2 mb-5">
+          <%= Billing::Plan.pro.name %> is $<%= Billing::Plan.pro.price_display %> a month:
+          <%= number_with_delimiter(Billing::Plan.pro.monthly_event_limit) %> events across
+          <%= Billing::Plan.pro.site_limit %> sites. Cancel whenever you like, from the same
+          screen you pay on. Upgrades apply within a minute.
+        </p>
+      <% end %>
+
+      <div class="flex flex-wrap items-center gap-3">
+        <% if @account.can_upgrade? %>
+          <%= button_to "Upgrade to #{Billing::Plan.pro.name}", billing_checkout_path,
+                        class: "btn btn-primary" %>
+        <% end %>
+
+        <% if @account.stripe_customer? %>
+          <%= button_to "Billing portal", billing_portal_path, class: "btn" %>
+        <% end %>
+
+        <%= link_to "Compare plans", pricing_path, class: "btn btn-quiet" %>
+      </div>
+
+      <p class="text-[12px] text-muted mt-5 leading-relaxed">
+        Cards, invoices, VAT details and cancellation are all handled by Stripe's
+        billing portal. No card number ever reaches Tastatur.
+      </p>
+    </div>
+  </div>
+</div>

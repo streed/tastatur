@@ -26,6 +26,25 @@ Rails.application.config.after_initialize do
     "REDIS_URL" => "the ingest buffer, cache and job queue have nowhere to go"
   }.reject { |key, _| ENV[key].present? }
 
+  # Billing settings, but only on a deployment that actually bills. A self-hosted
+  # install has no plans and no Stripe, so warning about a missing Stripe key there
+  # would be telling an operator to fix something that is correct.
+  #
+  # STRIPE_WEBHOOK_SECRET earns its place here rather than being discovered later:
+  # without it the webhook endpoint refuses every delivery, so subscriptions are
+  # bought and then never applied. That failure is invisible from the outside —
+  # Stripe shows the charge, the customer stays on the free plan, and nothing in
+  # this application raises.
+  unless Tastatur.self_hosted?
+    missing.merge!(
+      {
+        "STRIPE_SECRET_KEY" => "checkout and the billing portal will raise when used",
+        "STRIPE_WEBHOOK_SECRET" => "subscription changes will be refused, so paying customers stay on the free plan",
+        "STRIPE_PRICE_PRO" => "the Pro plan cannot be bought"
+      }.reject { |key, _| ENV[key].present? }
+    )
+  end
+
   missing.each do |key, consequence|
     Rails.logger.error("[tastatur] #{key} is not set — #{consequence}")
   end

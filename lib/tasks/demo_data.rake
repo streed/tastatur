@@ -9,7 +9,12 @@ namespace :tastatur do
   task demo_data: :environment do
     days = Integer(ENV.fetch("DAYS", "90"))
 
-    account = Account.find_or_create_by!(name: "Demo Account")
+    # `site_limit_override` because the free plan allows one site and this task is
+    # commonly re-run with a different SITE= to demonstrate more than one. An
+    # override rather than putting the demo account on `pro`, so nothing here
+    # pretends to be a paying customer.
+    account = Account.find_or_create_by!(name: "Demo Account") { |a| a.site_limit_override = 20 }
+    account.update!(site_limit_override: 20) if account.site_limit_override.blank?
     user = User.find_by(email: "user@example.com")
     if user && !user.member_of?(account)
       Membership.find_or_create_by!(account: account, user: user, role: "owner")
@@ -104,7 +109,7 @@ namespace :tastatur do
         rows << rows.last.merge(
           occurred_at: rows.last[:occurred_at] + rng.rand(30..300).seconds,
           event_name: "Signup", is_entry: false, path: "/pricing",
-          props: { "plan" => %w[starter growth business].sample(random: rng) }
+          props: { "plan" => Billing::Plan::OFFERED.map(&:key).sample(random: rng) }
         )
       end
     end
@@ -121,6 +126,13 @@ namespace :tastatur do
     end
 
     site.update!(first_event_at: rows.map { |r| r[:occurred_at] }.min)
+
+    # These rows went in through the write buffer, which bypasses
+    # Ingest::RecordEvent and therefore the usage meter — so the plan screen would
+    # read zero events against months of stored traffic until the hourly
+    # reconciliation caught up. `notify: false` because nobody wants a
+    # "you are near your limit" email from seeding demo data.
+    Billing::ReconcileUsage.call(notify: false) unless Tastatur.self_hosted?
 
     puts "Done. Site token: #{site.public_token}"
   end
