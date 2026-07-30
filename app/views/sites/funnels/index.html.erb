@@ -1,0 +1,39 @@
+<% content_for :title, "Funnels · #{@site.domain}" %>
+<div class="shell max-w-4xl">
+  <div class="flex items-end justify-between gap-4 mb-8 pt-5 rule-heavy">
+    <div class="mt-5">
+      <h1 class="text-2xl font-semibold">Funnels</h1>
+      <p class="label mt-2"><%= @site.domain %></p>
+    </div>
+    <div class="flex gap-3">
+      <%= link_to "Dashboard", site_path(@site), class: "btn btn-quiet" %>
+      <%= link_to "New funnel", new_site_funnel_path(@site), class: "btn btn-primary" %>
+    </div>
+  </div>
+
+  <% if @funnels.any? %>
+    <div class="card">
+      <% @funnels.each do |funnel| %>
+        <%= link_to site_funnel_path(@site, funnel),
+                    class: "flex items-center justify-between gap-4 px-5 py-4 border-b border-rule last:border-b-0 hover:bg-surface-2" do %>
+          <div>
+            <p class="font-semibold"><%= funnel.name %></p>
+            <p class="label mt-1">
+              <%= funnel.funnel_steps.map(&:name).join(" → ") %>
+            </p>
+          </div>
+          <span class="label shrink-0">View →</span>
+        <% end %>
+      <% end %>
+    </div>
+  <% else %>
+    <div class="card card-body text-center py-14">
+      <p class="font-semibold">No funnels yet.</p>
+      <p class="text-sm text-ink-2 mt-2 max-w-md mx-auto">
+        A funnel is an ordered sequence of pages or events — landing page, pricing, signup — and
+        shows where people drop out.
+      </p>
+      <div class="mt-6"><%= link_to "Build your first funnel", new_site_funnel_path(@site), class: "btn btn-primary" %></div>
+    </div>
+  <% end %>
+</div>

@@ -1,3 +1,28 @@
+# UNCONFIGURED. This is the Rails generator default, kept because Kamal is a
+# reasonable way to put this app on a VPS, but it has never been used to deploy
+# Tastatur and the server below is still the placeholder 192.168.0.1.
+#
+# The two paths that are actually tested and documented:
+#
+#   docs/self-hosting/README.md   docker compose, with Caddy terminating TLS
+#   docs/self-hosting/railway.md  Railway
+#
+# If you do want Kamal, the work is in the `accessories` section at the bottom,
+# which is entirely commented out. This app needs three backing services rather
+# than the usual one:
+#
+#   - PostgreSQL with the TimescaleDB extension. Not plain postgres: the first
+#     migration enables the extension and refuses to run without it.
+#   - Redis, persistent, for the ingest buffer, cache and job queue.
+#   - A second Redis, non-persistent, for the rotating visitor salt. Started with
+#     --save "" --appendonly no and given no volume. This one is not optional
+#     bookkeeping: a salt that reaches a disk sits in a backup next to the events
+#     it would de-anonymise, and the unlinkability claim stops being true.
+#     See docs/privacy/identity.md
+#
+# Copy the service definitions out of docker-compose.prod.yml, which has all
+# three configured correctly with comments explaining each flag.
+
 # Name of your application. Used to uniquely configure containers.
 service: tastatur
 

@@ -1,0 +1,164 @@
+<% content_for :title, "Data Processing Agreement · Tastatur" %>
+
+<div class="shell max-w-3xl">
+  <div class="pt-5 rule-heavy mb-10">
+    <h1 class="text-3xl font-semibold mt-5">Data Processing Agreement</h1>
+    <p class="text-ink-2 mt-3">
+      Template terms under GDPR Art.28. This is a starting point drafted to be accurate about
+      what the software does — it is not legal advice, and you should have your own counsel
+      review it before relying on it.
+    </p>
+  </div>
+
+  <%# The same "not configured" banner the policy and terms carry. This page names
+      a legal entity too, so publishing it with the entity blank puts an agreement
+      in front of a customer that identifies nobody as the processor. It was the
+      one legal page missing the check. %>
+  <%= render "compliance/unconfigured_banner" %>
+
+  <div class="space-y-9 text-[15px] leading-relaxed">
+    <div class="notice">
+      <strong>Self-hosting? You probably need none of this.</strong> A DPA governs the relationship
+      between a controller and a separate processor. On a self-hosted install there is no separate
+      processor: you run the software, so you are the only party handling the data. You may still
+      need agreements with <em>your own</em> providers, such as whoever hosts the server, but not
+      with us. Sections 1 and 4 are still worth reading, because they describe what the software
+      does and does not do with the data.
+    </div>
+
+    <div class="notice">
+      <strong>Using the hosted service, with GDPR or UK GDPR in scope? Then you need one of
+      these.</strong> Art.28(3) requires a written contract wherever a processor handles personal
+      data on a controller's behalf, and it specifies what that contract must contain. Missing DPAs
+      are independently sanctionable, so this is not paperwork you can defer.
+      <br><br>
+      Two scoping notes, because unqualified claims here are how this category gets itself into
+      trouble. Art.28(3) is a GDPR provision: if neither the GDPR nor the UK GDPR applies to you,
+      it does not bind you, though other regimes may impose comparable terms. And a vendor arguing
+      that <em>no</em> DPA is needed because they collect no personal data is on shaky ground,
+      because an IP address reaches their server like everyone else's and is personal data
+      (<em>Breyer</em>, C-582/14). We receive one too, which is why we do not make that argument
+      and why this document exists.
+    </div>
+
+    <section>
+      <h2 class="text-lg font-semibold mb-3">1. Roles</h2>
+      <div class="card card-body space-y-3 text-sm">
+        <p>
+          <strong>For measurement data</strong> — the events collected from your site's visitors —
+          you are the <strong>controller</strong> and we are the <strong>processor</strong>. You
+          decide which sites are measured, what custom events are sent, the retention period, and
+          the privacy threshold.
+        </p>
+        <p>
+          <strong>For account data</strong> — your email, your team's membership, billing records —
+          we are the <strong>controller</strong>, because we determine what is needed to operate
+          the service.
+        </p>
+        <p>
+          The distinction matters: joint controllership can arise where a provider determines
+          purposes and derives its own benefit from the data (<em>Wirtschaftsakademie</em>,
+          C-210/16; <em>Fashion ID</em>, C-40/17). The operating constraints in §4 exist
+          specifically so that does not happen here.
+        </p>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="text-lg font-semibold mb-3">2. Subject matter and duration</h2>
+      <p>
+        Processing consists of receiving, aggregating and reporting website usage measurements for
+        the sites you configure, for as long as your account is active. On deletion of a site, its
+        measurement data is erased immediately and irreversibly.
+      </p>
+    </section>
+
+    <section>
+      <h2 class="text-lg font-semibold mb-3">3. Categories of data</h2>
+      <div class="card">
+        <% [
+             ["Transient, never stored", "IP address and user-agent string. Used in memory to derive a rotating digest, a coarse device profile, and a country code, then discarded."],
+             ["Stored", "Rotating visitor digest, session digest, page path, referrer host, campaign tags, country code, browser and OS family with major version, device class, screen size class, event name, and any custom properties your site sends."],
+             ["Never collected", "Names, email addresses, precise location, cross-site identifiers, cross-device identifiers, special-category data under Art.9."]
+           ].each do |heading, body| %>
+          <div class="px-5 py-4 border-b border-rule last:border-b-0">
+            <p class="label"><%= heading %></p>
+            <p class="text-sm text-ink-2 mt-1.5"><%= body %></p>
+          </div>
+        <% end %>
+      </div>
+      <p class="text-sm text-ink-2 mt-4">
+        Custom event properties are the one field whose contents you control. Do not put personal
+        data in them.
+      </p>
+    </section>
+
+    <section>
+      <h2 class="text-lg font-semibold mb-3">4. Our operating commitments</h2>
+      <p class="mb-4">These are enforced in the software, not only in this document:</p>
+      <div class="card card-body space-y-2.5 text-sm">
+        <p>— We do not pool raw measurement data across customers.</p>
+        <p>— We do not use your data for our own purposes. That includes product analytics,
+          benchmarking, "industry average" features, and training machine-learning models.</p>
+        <p>— We do not sell or share measurement data, and we do not engage in cross-context
+          behavioural advertising. Under CCPA §1798.140(ah) we could not: the identifier is
+          site-scoped and expires daily.</p>
+        <p>— We process only on your documented instructions, which are the settings on your
+          sites.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="text-lg font-semibold mb-3">5. Security measures (Art.32)</h2>
+      <div class="card card-body space-y-2.5 text-sm">
+        <p>— TLS in transit; encryption at rest where the deployment supports it.</p>
+        <p>— The rotating secret is held only in a non-persistent store excluded from all backups,
+          so it cannot be recovered from a snapshot.</p>
+        <p>— Tenant isolation enforced at the query layer: every read is scoped by authorisation
+          policy, and no code path queries across accounts.</p>
+        <p>— Personal data is stripped from URLs at ingest, before any write.</p>
+        <p>— Report rows below a configurable distinct-visitor threshold are suppressed.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="text-lg font-semibold mb-3">6. Sub-processors</h2>
+      <p>
+        A self-hosted installation has none — you are the only processor involved. For the hosted
+        service, the current list is published and you will be notified before it changes, with an
+        opportunity to object.
+      </p>
+    </section>
+
+    <section>
+      <h2 class="text-lg font-semibold mb-3">7. Assistance with data-subject requests</h2>
+      <p>
+        Because measurement data contains no identifier we can resolve to a person, we generally
+        cannot locate "all data about individual X" — Art.11(1) applies. We assist by providing the
+        <%= link_to "live self-service lookup", data_request_path, class: "underline" %>, and by
+        making per-site erasure immediate and complete.
+      </p>
+    </section>
+
+    <section>
+      <h2 class="text-lg font-semibold mb-3">8. International transfers</h2>
+      <p>
+        Self-hosted: data stays wherever you run it, so there is no transfer. Hosted: the region
+        is stated at signup, and transfers outside it rely on the Standard Contractual Clauses.
+      </p>
+    </section>
+
+    <section class="rule pt-6">
+      <h2 class="text-lg font-semibold mb-3">On the "no consent banner" question</h2>
+      <p class="text-sm text-ink-2">
+        We will not tell you that Tastatur means you need no banner. Whether one is required
+        depends on your jurisdiction, your configuration, and every <em>other</em> tool on your
+        site. What we can say precisely: Tastatur stores nothing on your visitors' devices, which
+        is the trigger for ePrivacy Art.5(3) and its national implementations. In many EU and UK
+        configurations that means Tastatur alone does not require consent — but Germany's TDDDG
+        §25 has no audience-measurement exemption, and if anything else on your site needs a
+        banner, you still need one. Take your own advice on this.
+      </p>
+    </section>
+  </div>
+</div>

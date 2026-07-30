@@ -1,0 +1,30 @@
+<%# One funnel step row. Rendered both for real rows and, with a placeholder
+    index, into the <template> the Add button clones. -%>
+<div class="border border-rule p-4 space-y-4" data-nested-form-row>
+  <div class="flex items-center justify-between">
+    <span class="label" data-nested-form-position>Step</span>
+
+    <%# The hidden _destroy field is what makes removal of a SAVED row work.
+        Omitting the row from the submission instead would leave it untouched on
+        the server, so it would reappear on the next page load. -%>
+    <%= step.hidden_field :_destroy, value: "0" %>
+
+    <button type="button" class="btn btn-quiet btn-sm text-negative"
+            data-action="nested-form#remove" data-nested-form-remove>
+      Remove
+    </button>
+  </div>
+
+  <div class="grid sm:grid-cols-2 gap-4">
+    <%= step.field :name, "Label", placeholder: "Saw pricing" %>
+    <%= step.field :kind, "Type", as: :select,
+                   choices: [["Pageview", "pageview"], ["Custom event", "event"]] %>
+  </div>
+
+  <div class="grid sm:grid-cols-3 gap-4">
+    <%= step.field :match_value, "Path or event name", placeholder: "/pricing",
+                   wrapper: "sm:col-span-2" %>
+    <%= step.field :match_type, "Match", as: :select,
+                   choices: [["Exactly", "exact"], ["Starts with", "prefix"], ["Wildcard", "wildcard"]] %>
+  </div>
+</div>

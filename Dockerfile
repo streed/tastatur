@@ -51,8 +51,26 @@ COPY . .
 # -j 1 disable parallel compilation to avoid a QEMU bug: https://github.com/rails/bootsnap/issues/495
 RUN bundle exec bootsnap precompile -j 1 app/ lib/
 
-# Precompiling assets for production without requiring secret RAILS_MASTER_KEY
+# Precompiling assets for production without requiring secret RAILS_MASTER_KEY.
+# This also runs tailwindcss:build, which propshaft then digests along with the
+# vendored Archivo woff2 files.
 RUN SECRET_KEY_BASE_DUMMY=1 ./bin/rails assets:precompile
+
+# Bake in the country database.
+#
+# Baked rather than mounted, because a platform volume is per-service, costs
+# money, and would have to be populated by hand after every fresh deploy — which
+# means country reporting would silently be missing until someone remembered.
+# The file is ~8 MB and DB-IP Lite is CC BY 4.0, so redistributing it inside the
+# image is permitted provided the attribution on /privacy stays.
+#
+# Build with --build-arg WITH_GEOIP=0 to skip it (offline or air-gapped builds).
+# Without the file the app still works; country breakdowns are simply empty.
+ARG WITH_GEOIP=1
+RUN if [ "$WITH_GEOIP" = "1" ]; then \
+      SECRET_KEY_BASE_DUMMY=1 ./bin/rails tastatur:geoip:download || \
+      echo "GeoIP download failed; continuing without it. Country reporting will be disabled."; \
+    fi
 
 
 

@@ -1,0 +1,82 @@
+name: Self-hosting problem
+description: Trouble deploying or operating your own instance
+labels: ["self-hosting"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please don't paste a `SECRET_KEY_BASE`, a `DATABASE_URL` with a password in
+        it, or a site token.
+
+        Four things account for most reports, so they are worth ruling out first:
+
+        **TimescaleDB, not PostgreSQL.** The first migration enables the extension
+        and refuses to continue without it. On Railway this means deploying the
+        TimescaleDB template, because the default Postgres service cannot
+        `CREATE EXTENSION timescaledb`. The symptom is a failure on migration one
+        with `could not open extension control file`.
+
+        **`REDIS_PRIVACY_URL` should point at a second, non-persistent Redis.** If
+        it is unset the app still runs and logs a warning at boot, but the visitor
+        salt is then stored somewhere that writes to disk, and the unlinkability
+        claim on your privacy page stops being true.
+
+        **Reports showing data you deleted.** Bulk deletion has to reconcile the
+        continuous aggregates; the refresh policies only look back a few days.
+
+        **Numbers that do not add up between periods.** Unique visitor counts are
+        not additive across buckets. Hourly figures do not sum to a daily total.
+
+        [docs/self-hosting/](https://github.com/streed/tastatur/blob/main/docs/self-hosting/) covers configuration,
+        Railway, geolocation and day-to-day operations.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What is going wrong
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Where
+      options:
+        - docker compose on my own server
+        - Railway
+        - Fly.io
+        - Kubernetes
+        - Bare metal or a VM, without Docker
+        - Something else
+    validations:
+      required: true
+
+  - type: input
+    id: timescale
+    attributes:
+      label: TimescaleDB version
+      description: "`SELECT extversion FROM pg_extension WHERE extname = 'timescaledb';` — 2.18 or newer is required."
+      placeholder: "2.29.0"
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: ruled-out
+    attributes:
+      label: Already checked
+      options:
+        - label: TimescaleDB is installed and the extension is enabled
+        - label: "`REDIS_PRIVACY_URL` points at a separate Redis with persistence disabled"
+        - label: "`/up` returns 200"
+        - label: I have read the relevant page under docs/self-hosting/
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Boot or error output
+      description: >-
+        The app logs a line for each missing setting at boot, which is often enough
+        on its own. Redact secrets.
+      render: text
+    validations:
+      required: false

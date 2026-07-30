@@ -1,0 +1,40 @@
+<% unless Tastatur.legal_configured? %>
+  <%# A policy naming nobody is worse than no policy: it looks like diligence
+      while providing neither the disclosure the law requires nor the protection
+      the operator wanted. So an unconfigured instance says so, loudly, on the
+      page itself rather than in a README nobody re-reads. -%>
+  <div class="card border-signal mb-8" role="alert">
+    <div class="card-head border-signal">
+      <h2 class="text-sm font-semibold text-signal">This document is not configured</h2>
+      <span class="label">Operator action required</span>
+    </div>
+    <div class="card-body text-[13px] text-ink-2 space-y-3">
+      <p>
+        This page is a template. It names no legal entity and specifies no governing law, so it
+        is <strong class="text-ink">not usable as published</strong>. Set these environment
+        variables and restart:
+      </p>
+      <div class="border border-rule bg-surface-2 p-3 space-y-1 font-mono text-[12px]">
+        <% [["LEGAL_ENTITY", "Legal Name Ltd", Tastatur.legal[:entity]],
+            ["LEGAL_ADDRESS", "1 Example Street, City, Country", Tastatur.legal[:address]],
+            ["LEGAL_EMAIL", "privacy@yourdomain.com", Tastatur.legal[:email]],
+            ["LEGAL_JURISDICTION", "England and Wales", Tastatur.legal[:jurisdiction]],
+            ["LEGAL_DPO_EMAIL", "dpo@yourdomain.com (optional)", Tastatur.legal[:dpo_email]]].each do |name, example, value| %>
+          <p class="flex items-baseline gap-2">
+            <span class="<%= value.present? ? "text-positive" : "text-signal" %> shrink-0">
+              <%= value.present? ? "set" : "----" %>
+            </span>
+            <span class="text-ink"><%= name %></span>
+            <span class="text-muted truncate">= <%= value.presence || example %></span>
+          </p>
+        <% end %>
+      </div>
+      <p>
+        These are templates drafted to be accurate about what the software does. They are
+        <strong class="text-ink">not legal advice</strong>, and you should have your own counsel
+        review them before relying on them. See
+        <code>docs/self-hosting/configuration.md</code>.
+      </p>
+    </div>
+  </div>
+<% end %>

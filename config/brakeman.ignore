@@ -1,0 +1,13 @@
+{
+  "ignored_warnings": [
+    {
+      "warning_type": "SQL Injection",
+      "fingerprint": "3db3e70d36df9d4668cb6f2c8129662265e46297e6b3296caa5859f7b04dae7d",
+      "check_name": "SQL",
+      "message": "Possible SQL injection",
+      "file": "app/lib/ingest/write_buffer.rb",
+      "note": "False positive, reviewed. The interpolated INSERT is built from two sources and neither is caller-controlled. Column names come from WriteBuffer::COLUMNS, a frozen constant array of symbols defined in the same file; nothing in the request can add to or reorder it. Every value goes through ActiveRecord's `connection.quote` (or is a hardcoded TRUE/FALSE literal) before interpolation, including the bytea, jsonb and timestamptz casts. Brakeman cannot follow the constant into the map, so it flags the interpolation. A multi-row INSERT is built by hand here on purpose: it is the ingest hot path, and `insert_all` per event would cost an order of magnitude in throughput. If you change the `quote` method, re-review this rather than re-ignoring it."
+    }
+  ],
+  "brakeman_version": "7.1.0"
+}

@@ -1,0 +1,22 @@
+<% content_for :title, "Edit account · Tastatur" %>
+
+<div class="shell max-w-xl">
+  <div class="pt-5 rule-heavy mb-8">
+    <h1 class="text-2xl font-semibold mt-5">Account settings</h1>
+  </div>
+
+  <%= form_with model: @account, url: account_path, class: "card card-body space-y-6" do |f| %>
+    <%= f.error_summary %>
+
+    <%= f.field :name, "Account name" %>
+
+    <%# Discrete options, not a free number field. This is a compliance decision
+        to be made deliberately, and the ceiling is 25 months because that is
+        CNIL's stated limit for audience-measurement data. -%>
+    <%= f.field :data_retention_days, "Keep raw events for", as: :select,
+                choices: Account::RETENTION_OPTIONS,
+                hint: "Enforced nightly against the raw event table. Shortening this deletes data at the next run and cannot be undone. Aggregated rollups that contain no visitor identifiers are kept longer; the ones that do follow this setting." %>
+
+    <%= f.actions "Save", cancel_to: account_path %>
+  <% end %>
+</div>

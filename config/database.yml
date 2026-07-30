@@ -19,6 +19,27 @@ default: &default
   # https://guides.rubyonrails.org/configuring.html#database-pooling
   max_connections: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
 
+  variables:
+    # A ceiling on how long any one statement may run.
+    #
+    # Dashboard queries scan the raw hypertable whenever a filter is applied or the
+    # site's timezone does not align to the aggregate buckets, and that cost grows
+    # with the site's event count. Without a timeout, one expensive report holds a
+    # connection until it finishes — and with a small pool, a handful of those is
+    # the whole pool. The request has usually been abandoned by the browser long
+    # before the query gives up.
+    #
+    # Fifteen seconds is far above any healthy dashboard query (the slowest measured
+    # is around two seconds, on 1.5M events with a non-UTC timezone) and far below
+    # the point at which a stuck connection matters.
+    #
+    # THE WORKER MUST SET THIS TO 0. `refresh_continuous_aggregate` over a wide
+    # window and the nightly retention delete across compressed chunks both run for
+    # minutes by design; killing them would leave aggregates unreconciled after an
+    # erasure, which is a privacy claim rather than a slow page. Both compose files
+    # set DB_STATEMENT_TIMEOUT=0 on the worker for that reason.
+    statement_timeout: <%= ENV.fetch("DB_STATEMENT_TIMEOUT", "15s") %>
+
 
 development:
   <<: *default
@@ -78,8 +99,26 @@ test:
 # Read https://guides.rubyonrails.org/configuring.html#configuring-a-database
 # for a full overview on how database connection configuration can be specified.
 #
+# Configured entirely by DATABASE_URL, which Rails merges over whatever is here.
+#
+# The generated template left `username: tastatur` and a TASTATUR_DATABASE_PASSWORD
+# lookup behind. No such role is ever created, that variable appears in no compose
+# file, env example or document, and it only ever worked because DATABASE_URL
+# overrode it. Someone deploying against a managed PostgreSQL with PGHOST/PGUSER
+# set and no DATABASE_URL got `ActiveRecord::DatabaseConnectionError ... username:
+# tastatur` — and libpq's PGUSER cannot rescue it, because an explicit `username`
+# here wins.
+#
+# Deliberately NOT `url: <%%= ENV.fetch("DATABASE_URL") %>`: the Dockerfile runs
+# `assets:precompile` with RAILS_ENV=production and no DATABASE_URL, so the fetch
+# raises KeyError and the image cannot be built. bin/docker-entrypoint is the right
+# place for a required-variable check, since it never runs during precompilation.
+#
+# `seeds: false` is a security control, not tidiness. `db:prepare` seeds a database
+# it has just created, and db/seeds.rb creates admin@example.com / password with
+# admin = true. This is the second of two independent guards; the other is the
+# environment check at the top of db/seeds.rb.
 production:
   <<: *default
   database: tastatur_production
-  username: tastatur
-  password: <%= ENV["TASTATUR_DATABASE_PASSWORD"] %>
+  seeds: false

@@ -1,3 +1,16 @@
-<svg width="512" height="512" xmlns="http://www.w3.org/2000/svg">
-  <circle cx="256" cy="256" r="256" fill="red"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <title>Tastatur</title>
+  <!-- Drawn on a 16-unit grid scaled by 32, so 16/32/48/64px rasters land on
+       whole pixels. Colours are the ink, paper and signal custom properties
+       from app/assets/tailwind/application.css. The square echoes the one
+       that follows the wordmark in the header.
+
+       This file is the source of truth; favicon.ico is derived from it and is
+       reproducible byte-for-byte with:
+         for s in 16 32 48; do rsvg-convert -w $s -h $s icon.svg -o i$s.png; done
+         magick i16.png i32.png i48.png -colors 4 -depth 8 favicon.ico -->
+  <rect width="512" height="512" fill="#16150f"/>
+  <rect x="96"  y="128" width="320" height="64"  fill="#f2f1ec"/>
+  <rect x="224" y="192" width="64"  height="192" fill="#f2f1ec"/>
+  <rect x="352" y="320" width="64"  height="64"  fill="#c1440e"/>
 </svg>

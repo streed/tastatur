@@ -39,6 +39,25 @@
 .env.*.local
 .env.development
 .env.test
+# .env.production holds SECRET_KEY_BASE, the database password and API keys.
+# The starter template did not ignore it by name; committing it would publish
+# every secret a self-hosted instance has.
+.env.production
+
+# ...but the .example templates MUST be committed. Rails' own `/.env*` rule
+# above is broad enough to swallow them, which would silently break the
+# documented setup step (`cp .env.production.example .env.production`) for
+# anyone cloning the repository. Negations have to come after the rule they
+# override, so they live here at the end.
+!/.env.development.example
+!/.env.test.example
+!/.env.production.example
 
 /app/assets/builds/*
 !/app/assets/builds/.keep
+
+# Third-party country database, fetched by `rails tastatur:geoip:download`.
+# Deliberately not vendored: it carries its own licence and is republished
+# monthly, so a committed copy would ship stale forever.
+/db/geoip/*.mmdb
+

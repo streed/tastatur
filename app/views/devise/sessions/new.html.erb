@@ -1,0 +1,18 @@
+<% content_for :title, "Sign in · Tastatur" %>
+
+<%= render layout: "devise/shared/auth_card",
+           locals: { title: "Sign in", subtitle: "Welcome back." } do %>
+  <%= form_for(resource, as: resource_name, url: session_path(resource_name),
+               html: { class: "card card-body space-y-5" }) do |f| %>
+    <%= f.field :email, "Email", as: :email_field, autofocus: true, autocomplete: "username" %>
+    <%= f.field :password, "Password", as: :password_field, autocomplete: "current-password" %>
+
+    <% if devise_mapping.rememberable? %>
+      <%= f.check_box_field :remember_me, "Stay signed in on this device" %>
+    <% end %>
+
+    <div class="pt-1">
+      <%= f.submit "Sign in", class: "btn btn-primary w-full justify-center" %>
+    </div>
+  <% end %>
+<% end %>

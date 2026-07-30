@@ -1,0 +1,20 @@
+<% content_for :subject, "Unlock your account" %>
+<% content_for :preheader, "Too many failed sign-in attempts." %>
+
+<h1 style="margin:0 0 16px; font-size:21px; font-weight:600; letter-spacing:-0.4px; line-height:1.2; color:#16150f;">
+  Your account is locked
+</h1>
+
+<p style="margin:0 0 20px; color:#57564e;">
+  There were too many failed sign-in attempts for this address, so we locked the
+  account. That is a precaution, not a sign that anything was compromised.
+</p>
+
+<%= render "devise/mailer/button",
+           url: unlock_url(@resource, unlock_token: @token),
+           label: "Unlock my account" %>
+
+<p style="margin:0; padding-top:20px; border-top:1px solid #e3e1d8; font-size:13px; color:#8c8a80;">
+  If it was not you attempting to sign in, unlock the account and then change
+  your password.
+</p>

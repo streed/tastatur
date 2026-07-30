@@ -1,0 +1,76 @@
+<% content_for :title, "Install · #{@site.domain}" %>
+
+<div class="shell max-w-3xl">
+  <div class="mb-8 pt-5 rule-heavy">
+    <h1 class="text-2xl font-semibold mt-5">Install on <%= @site.domain %></h1>
+    <p class="text-sm text-ink-2 mt-2">
+      Paste this into your <code class="text-ink">&lt;head&gt;</code>. That is the whole installation.
+    </p>
+  </div>
+
+  <div class="card mb-6">
+    <div class="card-head">
+      <h2 class="text-sm font-semibold">Your snippet</h2>
+      <span class="label">1 line · 3.2 KB gzipped · no cookies</span>
+    </div>
+    <div class="card-body">
+      <div data-controller="clipboard" class="space-y-3">
+        <pre class="bg-surface-2 border border-rule p-4 overflow-x-auto text-[12.5px] leading-relaxed"><code data-clipboard-target="source"><%= @site.snippet %></code></pre>
+        <button class="btn btn-sm" data-action="clipboard#copy">
+          <span data-clipboard-target="label">Copy to clipboard</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <%# Live status. The partial supplies its own turbo-frame — see the note in it
+      for why that matters. The frame polls itself until the first event lands. %>
+  <%= render "sites/installations/status", site: @site %>
+
+  <div class="card mt-6">
+    <div class="card-head"><h2 class="text-sm font-semibold">Optional extras</h2></div>
+    <div class="card-body space-y-6 text-sm text-ink-2">
+      <div>
+        <p class="label mb-2">Track a custom event</p>
+        <pre class="bg-surface-2 border border-rule p-3 overflow-x-auto text-[12.5px]"><code>tastatur('event', 'Signup', { props: { plan: 'pro' } })</code></pre>
+      </div>
+
+      <div>
+        <p class="label mb-2">Track revenue</p>
+        <pre class="bg-surface-2 border border-rule p-3 overflow-x-auto text-[12.5px]"><code>tastatur('event', 'Purchase', { revenue: { amount: 4900, currency: 'EUR' } })</code></pre>
+        <p class="text-[12px] text-muted mt-2">Amount in minor units. 4900 is €49.00.</p>
+      </div>
+
+      <div>
+        <p class="label mb-2">If you call tastatur() before the script loads</p>
+        <pre class="bg-surface-2 border border-rule p-3 overflow-x-auto text-[12.5px]"><code>window.tastatur=window.tastatur||function(){(window.tastatur.q=window.tastatur.q||[]).push(arguments)}</code></pre>
+        <p class="text-[12px] text-muted mt-2">
+          Queues calls until the deferred script is ready, then replays them.
+        </p>
+      </div>
+
+      <div>
+        <p class="label mb-2">Content Security Policy</p>
+        <p class="text-[13px]">
+          If your site sets a CSP, allow this origin in <code>script-src</code> and
+          <code>connect-src</code>:
+        </p>
+        <pre class="bg-surface-2 border border-rule p-3 mt-2 overflow-x-auto text-[12.5px]"><code>script-src <%= Tastatur.base_url %>; connect-src <%= Tastatur.base_url %></code></pre>
+      </div>
+
+      <div>
+        <p class="label mb-2">Single-page apps</p>
+        <p class="text-[13px]">
+          Handled automatically. <code>pushState</code>, <code>replaceState</code> and the back
+          button all count, deduplicated so hydration does not double-count the first view.
+          Add <code>data-hash</code> to the script tag if you route on the URL fragment.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div class="mt-8 flex gap-3">
+    <%= link_to "Go to dashboard", site_path(@site), class: "btn" %>
+    <%= link_to "Site settings", edit_site_path(@site), class: "btn btn-quiet" %>
+  </div>
+</div>

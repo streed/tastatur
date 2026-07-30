@@ -1,0 +1,27 @@
+<% content_for :title, "Add a site · Tastatur" %>
+
+<div class="shell max-w-xl">
+  <div class="mb-8 pt-5 rule-heavy">
+    <h1 class="text-2xl font-semibold mt-5">Add a site</h1>
+    <p class="text-sm text-ink-2 mt-2">
+      One line of script. You will have the snippet on the next screen.
+    </p>
+  </div>
+
+  <%= form_with model: @site, class: "card card-body space-y-6" do |f| %>
+    <%= f.error_summary %>
+
+    <%= f.field :domain, "Domain",
+                placeholder: "example.com", autofocus: true, autocomplete: "off", spellcheck: "false",
+                hint: "Just the hostname. Paste a full URL if it is easier and it will be tidied up." %>
+
+    <%= f.field :timezone, "Reporting timezone", as: :select,
+                choices: ActiveSupport::TimeZone.all.map { |z| [z.to_s, z.tzinfo.name] },
+                hint: "Decides where \"today\" starts. Storage is always UTC. Anything other than UTC also makes day-aligned reports slower on a busy site, because the pre-aggregated buckets are UTC-aligned and those reports fall back to scanning raw events." %>
+
+    <%= f.field :k_anonymity_threshold, "Privacy threshold", as: :number_field, min: 0, max: 10_000,
+                hint: "Breakdown rows seen by fewer than this many visitors are withheld, so no row can describe an individual. 25 is a sensible default; 0 turns suppression off." %>
+
+    <%= f.actions "Add site", cancel_to: sites_path %>
+  <% end %>
+</div>

@@ -1,0 +1,52 @@
+<% content_for :preheader, "#{inviter_name} added you to #{@account.name} on Tastatur." %>
+
+<h1 style="margin:0 0 16px; font-size:21px; font-weight:600; letter-spacing:-0.4px; line-height:1.2; color:#16150f;">
+  You have been added to <%= @account.name %>
+</h1>
+
+<p style="margin:0 0 20px; color:#57564e;">
+  <strong style="color:#16150f;"><%= inviter_name %></strong> added you to the
+  <strong style="color:#16150f;"><%= @account.name %></strong> account on Tastatur
+  as <%= @role == "owner" ? "an" : "a" %> <strong style="color:#16150f;"><%= @role %></strong>.
+</p>
+
+<% if @new_account %>
+  <p style="margin:0 0 20px; color:#57564e;">
+    An account has been created for you. Choose a password to finish setting it up.
+    Nobody, including whoever invited you, has ever seen or set your password.
+  </p>
+
+  <%= render "devise/mailer/button", url: @action_url, label: "Choose a password" %>
+
+  <p style="margin:0 0 20px; font-size:13px; color:#8c8a80;">
+    This link expires in <%= Devise.reset_password_within.inspect %>. If it has, use
+    "Forgot your password?" on the sign-in page and you will get a fresh one.
+  </p>
+<% else %>
+  <p style="margin:0 0 20px; color:#57564e;">
+    You already have a Tastatur account, so there is nothing to set up. Sign in with
+    your usual password and <%= @account.name %> will be there.
+  </p>
+
+  <%= render "devise/mailer/button", url: @action_url, label: "Open Tastatur" %>
+<% end %>
+
+<p style="margin:0 0 10px; font-size:11px; font-weight:600; letter-spacing:1.6px; text-transform:uppercase; color:#8c8a80;">
+  What this account can see
+</p>
+
+<p style="margin:0 0 20px; font-size:13px; color:#57564e;">
+  Analytics for the websites belonging to <%= @account.name %>. Tastatur measures
+  those sites without cookies and without storing visitors' IP addresses, so there is
+  no personal browsing history in here to be given access to.
+  <a href="<%= Tastatur.base_url %>/privacy" style="color:#00628f;">How that works</a>.
+</p>
+
+<%# Said plainly, because the alternative is someone quietly assuming they were
+    hacked. An unexpected account invitation is exactly the shape of a phishing
+    email, and the honest response is to tell them what to do about it. %>
+<p style="margin:0; padding-top:16px; border-top:1px solid #e3e1d8; font-size:13px; color:#8c8a80;">
+  If you were not expecting this, you can ignore it — you can be removed from the
+  account at any time, and an account you never sign in to does nothing. If it looks
+  wrong to you, reply to this message and tell us.
+</p>

@@ -1,0 +1,60 @@
+name: A claim looks wrong
+description: Something we say about privacy, compliance, or what the software does is inaccurate
+labels: ["claim", "documentation"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This project makes specific claims about what it stores and what it
+        protects, and those claims are the product. If one of them is wrong,
+        overstated, or too strong for what the code actually does, we want to know
+        more than we want to be right.
+
+        This applies in both directions. Telling users they need to worry about
+        something they don't is as much a credibility problem as the reverse, and
+        [docs/privacy/claims.md](https://github.com/streed/tastatur/blob/main/docs/privacy/claims.md) lists both
+        kinds. Two entries in it exist because a claim was too strong and had to be
+        walked back.
+
+        You do not need to be a lawyer to file this, and you do not need to be
+        certain. "This sentence reads as promising more than the paragraph below it
+        delivers" is a useful report.
+
+  - type: textarea
+    id: claim
+    attributes:
+      label: The claim
+      description: Quote it, and say where it appears — a page, a doc, the README, an email.
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Why it is wrong
+      description: >-
+        What the code, the law, or the data actually says. A pointer to the file or
+        the article is plenty; you do not have to write an argument.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: direction
+    attributes:
+      label: Which way is it wrong
+      options:
+        - It promises more than the software does
+        - It overstates what the user has to worry about
+        - It is legally inaccurate
+        - It is technically inaccurate
+        - It is accurate but misleading in context
+    validations:
+      required: true
+
+  - type: textarea
+    id: instead
+    attributes:
+      label: What it should say instead
+      description: Optional. A suggested replacement is welcome but not expected.
+    validations:
+      required: false

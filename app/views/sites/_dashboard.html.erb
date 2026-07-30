@@ -1,0 +1,88 @@
+<% summary = report.summary
+   drillable = local_assigns.fetch(:drillable, true) %>
+
+<%# --- Stat row -------------------------------------------------------------
+    A strict five-column grid separated by hairlines rather than boxes: the
+    grid does the work a card border would otherwise do. -%>
+<div class="card mb-6">
+  <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+    <% [
+         ["Unique visitors", metric_number(summary.visitors),  delta_tag(summary, :visitors)],
+         ["Pageviews",       metric_number(summary.pageviews), delta_tag(summary, :pageviews)],
+         ["Visits",          metric_number(summary.sessions),  delta_tag(summary, :sessions)],
+         ["Bounce rate",     "#{summary.bounce_rate}%",        delta_tag(summary, :bounce_rate, lower_is_better: true)],
+         ["Visit duration",  summary.formatted_duration,       delta_tag(summary, :avg_duration)]
+       ].each_with_index do |(label, value, delta), index| %>
+      <div class="px-5 py-5 <%= "grid-hairline" unless index.zero? %> border-t border-rule first:border-t-0 md:border-t-0">
+        <p class="label"><%= label %></p>
+        <p class="figure mt-2.5"><%= value %></p>
+        <p class="mt-1.5"><%= delta %></p>
+      </div>
+    <% end %>
+  </div>
+</div>
+
+<%# --- Timeseries ---------------------------------------------------------- %>
+<div class="card mb-6">
+  <div class="card-head">
+    <h2 class="text-sm font-semibold">Traffic</h2>
+    <%# Legend is always present for two series — identity must never depend on
+        colour-matching alone. -%>
+    <div class="flex items-center gap-5 text-[12px] text-ink-2">
+      <span class="flex items-center gap-2">
+        <span class="inline-block w-3 h-0.5 bg-signal" aria-hidden="true"></span>Visitors
+      </span>
+      <span class="flex items-center gap-2">
+        <span class="inline-block w-3 h-0.5 bg-petrol" aria-hidden="true"></span>Pageviews
+      </span>
+    </div>
+  </div>
+  <div class="card-body pt-6">
+    <%= timeseries_chart(report.timeseries, interval: report.period.interval) %>
+  </div>
+</div>
+
+<%# --- Goals ---------------------------------------------------------------- %>
+<% if report.goals.any? %>
+  <div class="card mb-6">
+    <div class="card-head">
+      <h2 class="text-sm font-semibold">Goal conversions</h2>
+<%# `_top` because this partial renders inside the "dashboard" turbo-frame on
+          sites#show. Without it Turbo looks for a <turbo-frame id="dashboard"> in the
+          goals page, does not find one, and replaces the dashboard with an error
+          instead of navigating. The drill-down links below deliberately do NOT get
+          this: they return the dashboard page, which does contain a matching frame,
+          so staying in-frame is exactly what should happen. %>
+      <%= link_to "Manage", site_goals_path(site), class: "label hover:text-ink",
+                  data: { turbo_frame: "_top" } if drillable %>
+    </div>
+    <div>
+      <div class="bar-row label border-b border-rule">
+        <span>Goal</span>
+        <span class="flex gap-8">
+          <span class="w-24 text-right">Visitors</span>
+          <span class="w-24 text-right">Conversions</span>
+          <span class="w-16 text-right">Rate</span>
+        </span>
+      </div>
+      <% report.goals.each do |row| %>
+        <div class="bar-row">
+          <span class="bar-fill" style="width: <%= row.conversion_rate.clamp(0, 100) %>%"></span>
+          <span class="bar-label font-medium"><%= row.goal.name %></span>
+          <span class="flex gap-8 num">
+            <span class="w-24 text-right"><%= metric_number(row.visitors) %></span>
+            <span class="w-24 text-right"><%= metric_number(row.conversions) %></span>
+            <span class="w-16 text-right font-semibold"><%= row.conversion_rate %>%</span>
+          </span>
+        </div>
+      <% end %>
+    </div>
+  </div>
+<% end %>
+
+<%# --- Breakdowns ----------------------------------------------------------- %>
+<div class="grid md:grid-cols-2 gap-6">
+  <% report.breakdowns.each do |panel| %>
+    <%= render "sites/breakdown", site: site, panel: panel, drillable: drillable %>
+  <% end %>
+</div>

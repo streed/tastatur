@@ -1,0 +1,134 @@
+<% content_for :title, "Settings · #{@site.domain}" %>
+
+<div class="shell max-w-xl">
+  <div class="pt-5 rule-heavy mb-8">
+    <h1 class="text-2xl font-semibold mt-5"><%= @site.domain %></h1>
+    <p class="label mt-2">Site settings</p>
+  </div>
+
+  <%= form_with model: @site, url: site_path(@site), class: "card card-body space-y-6" do |f| %>
+    <%= f.error_summary %>
+
+    <%= f.field :domain, "Domain", spellcheck: "false" %>
+
+    <%= f.field :timezone, "Reporting timezone", as: :select,
+                choices: ActiveSupport::TimeZone.all.map { |z| [z.to_s, z.tzinfo.name] },
+                hint: "Decides where \"today\" starts. Storage is always UTC. Anything other than UTC also makes day-aligned reports slower on a busy site, because the pre-aggregated buckets are UTC-aligned and those reports fall back to scanning raw events." %>
+
+    <%= f.field :k_anonymity_threshold, "Privacy threshold", as: :number_field, min: 0, max: 10_000,
+                hint: "Breakdown rows below this many distinct visitors are withheld. If withholding one row would let you recover it by subtraction, a second is withheld too." %>
+
+    <div class="rule pt-6 space-y-5">
+      <div>
+        <p class="label mb-2">Accepted hostnames</p>
+        <p class="text-[12px] text-ink-2 leading-relaxed">
+          Your site key is public, because it sits in the HTML of every page it measures. Anyone
+          who reads it can post events with it, so events are only counted when they come from a
+          hostname belonging to you.
+        </p>
+        <div class="mt-3 border border-rule bg-surface-2 p-3 text-[12px] space-y-1">
+          <p><strong>Accepted automatically:</strong> <code><%= @site.domain %></code>,
+            <code>www.<%= @site.domain %></code>, and any subdomain
+            (<code>app.<%= @site.domain %></code>, <code>blog.<%= @site.domain %></code>, and so on).</p>
+        </div>
+      </div>
+
+      <%= f.field :extra_hostnames_list, "Additional hostnames", as: :text_area, rows: 3,
+                  value: @site.extra_hostnames.join("\n"),
+                  hint: "One per line. Only needed for a genuinely separate domain, such as example.de alongside example.com. Subdomains of these are accepted too." %>
+
+      <%= f.check_box_field :enforce_hostname, "Reject events from hostnames that are not mine",
+                            hint: "Recommended. Turning this off accepts events claiming any hostname, which means anyone with your site key can add traffic to your reports." %>
+    </div>
+
+    <%= f.actions "Save settings", cancel_to: site_path(@site),
+                  destructive: link_to("Share links", site_shared_links_path(@site), class: "btn btn-quiet") %>
+  <% end %>
+
+  <%# Rejections are shown, not hidden. A site owner whose app.example.com traffic
+      is being refused needs to see which hostname it was; an owner whose key is
+      being used elsewhere needs to know it is happening. -%>
+  <% rejections = @site.rejection_counts
+     refused = @site.rejected_hostnames %>
+  <% if rejections.values.sum.positive? %>
+    <div class="card mt-8">
+      <div class="card-head">
+        <h2 class="text-sm font-semibold">Rejected events</h2>
+        <span class="label">Last 7 days</span>
+      </div>
+      <div class="card-body">
+        <%# `to_i` on every read: counts_for now reports only the reasons that
+            actually occurred, so a reason that has never fired is absent rather
+            than zero. %>
+        <div class="flex gap-8 mb-4">
+          <div>
+            <p class="label">Wrong hostname</p>
+            <p class="figure text-[24px] mt-1.5"><%= number_with_delimiter(rejections[:hostname_mismatch].to_i) %></p>
+          </div>
+          <div>
+            <p class="label">Wrong origin</p>
+            <p class="figure text-[24px] mt-1.5"><%= number_with_delimiter(rejections[:origin_mismatch].to_i) %></p>
+          </div>
+          <%# Payloads the validation contract refused. These used to be dropped in
+              total silence — the endpoint answered 202 and nothing recorded it
+              anywhere — so a broken integration looked exactly like no traffic. %>
+          <% malformed = rejections.select { |reason, _| reason.to_s.start_with?("invalid_") } %>
+          <% if malformed.any? %>
+            <div>
+              <p class="label">Malformed</p>
+              <p class="figure text-[24px] mt-1.5"><%= number_with_delimiter(malformed.values.sum) %></p>
+            </div>
+          <% end %>
+        </div>
+
+        <% if malformed.any? %>
+          <p class="label mb-2">Fields rejected</p>
+          <div class="flex flex-wrap gap-2 mb-4">
+            <% malformed.sort_by { |_, count| -count }.each do |reason, count| %>
+              <span class="chip">
+                <span class="chip-key"><%= ingest_field_name(reason) %></span>
+                <span class="num"><%= number_with_delimiter(count) %></span>
+              </span>
+            <% end %>
+          </div>
+          <p class="text-[13px] text-ink-2 mb-4">
+            These events were accepted with a 202 and then discarded, because the endpoint never
+            reports an error into a visitor's browser. Check the call in your snippet against the
+            <%= link_to "tracking reference", docs_path(anchor: "events"), class: "underline hover:text-signal" %>.
+          </p>
+        <% end %>
+
+        <% if refused.any? %>
+          <p class="label mb-2">Hostnames refused</p>
+          <div class="border border-rule">
+            <% refused.each do |host, count| %>
+              <div class="flex items-center justify-between px-3 py-2 border-b border-rule last:border-b-0 text-[13px]">
+                <code class="truncate"><%= host %></code>
+                <span class="num text-muted shrink-0"><%= number_with_delimiter(count) %></span>
+              </div>
+            <% end %>
+          </div>
+          <p class="text-[12px] text-ink-2 mt-3 leading-relaxed">
+            If one of these is yours, add it above and the traffic will start counting. If none of
+            them are, someone is using your site key: the numbers on your dashboard are the real
+            ones, and the rejected traffic was never recorded.
+          </p>
+        <% end %>
+      </div>
+    </div>
+  <% end %>
+
+  <div class="card mt-8 border-negative">
+    <div class="card-head"><h2 class="text-sm font-semibold text-negative">Delete this site</h2></div>
+    <div class="card-body flex items-center justify-between gap-6">
+      <p class="text-sm text-ink-2">
+        Removes the site, every event ever recorded for it, and the pre-aggregated rollups
+        derived from them. Irreversible. This is also how you satisfy an erasure request for
+        this site's measurement data.
+      </p>
+      <%= button_to "Delete", site_path(@site), method: :delete,
+                    class: "btn btn-quiet text-negative shrink-0",
+                    form: { data: { turbo_confirm: "Permanently delete #{@site.domain} and all of its analytics?" } } %>
+    </div>
+  </div>
+</div>

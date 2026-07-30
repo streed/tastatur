@@ -1,0 +1,187 @@
+<% content_for :title, "Privacy policy · Tastatur" %>
+<% entity = Tastatur.legal_value(:entity) %>
+<% contact = Tastatur.legal_value(:email) %>
+
+<div class="shell max-w-3xl">
+  <div class="pt-5 rule-heavy mb-8">
+    <p class="label mt-5 mb-3">Legal</p>
+    <h1 class="text-3xl font-semibold tracking-[-0.03em]">Privacy policy</h1>
+    <p class="text-ink-2 mt-3 leading-relaxed">
+      How <%= entity %> handles data about <strong class="text-ink">you</strong>, the person
+      holding a Tastatur account.
+    </p>
+  </div>
+
+  <%= render "compliance/unconfigured_banner" %>
+
+  <%# The single most important thing to establish up front: this page and
+      /privacy answer two different questions, and a reader who conflates them
+      will not find what they came for. -%>
+  <div class="card mb-9">
+    <div class="card-head"><h2 class="text-sm font-semibold">Which document you want</h2></div>
+    <div>
+      <div class="px-5 py-4 border-b border-rule">
+        <p class="text-sm font-medium">This page</p>
+        <p class="text-[13px] text-ink-2 mt-1.5">
+          Data about <strong class="text-ink">account holders</strong>: your email address, your
+          team, your billing. We are the controller of it.
+        </p>
+      </div>
+      <div class="px-5 py-4">
+        <p class="text-sm font-medium">
+          <%= link_to "What Tastatur collects", privacy_path, class: "underline hover:text-signal" %>
+        </p>
+        <p class="text-[13px] text-ink-2 mt-1.5">
+          Data collected from <strong class="text-ink">visitors to measured websites</strong>. The
+          site owner is the controller of that; we are their processor. That is the page to link
+          from your own privacy policy, and the page to send a visitor who asks.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div class="space-y-9 text-[15px] leading-relaxed">
+    <section>
+      <h2 class="text-lg font-semibold mb-3">1. Who we are</h2>
+      <p class="mb-3">
+        <%= entity %><% if Tastatur.legal[:address].present? %>, <%= Tastatur.legal[:address] %><% end %>
+        operates this Tastatur instance and is the controller of the account data described below.
+      </p>
+      <p>
+        Contact for anything in this policy: <strong class="text-ink"><%= contact %></strong><% if Tastatur.legal[:dpo_email].present? %>.
+        Data protection officer: <strong class="text-ink"><%= Tastatur.legal[:dpo_email] %></strong><% end %>.
+      </p>
+    </section>
+
+    <section>
+      <h2 class="text-lg font-semibold mb-3">2. What we hold about you</h2>
+      <div class="card">
+        <% [
+             ["Email address", "Required. It is your login and how we send confirmations, password resets and service notices.", "Contract"],
+             ["Name", "Optional. Used to address you in the interface and in email.", "Contract"],
+             ["Password", "Stored only as a bcrypt hash. We cannot read it and cannot tell you what it is.", "Contract"],
+             ["Sign-in metadata", "Sign-in counts and timestamps, and a lock after repeated failures. Used only to secure the account.", "Legitimate interest"],
+             ["Sign-in IP address", "The IP of your two most recent sign-ins to this dashboard, so you can recognise a login that was not you. This is the one place we store an IP address against an identity, it applies to you as an account holder rather than to visitors of any measured site, and it is overwritten as you sign in again.", "Legitimate interest"],
+             ["Team membership", "Which accounts you belong to and your role in each.", "Contract"],
+             ["Billing records", "On the hosted service only, and held by our payment processor rather than by us. We store a customer reference, never card details.", "Contract"],
+             ["Server logs", "Standard web logs, which include IP addresses, retained briefly for security and debugging.", "Legitimate interest"]
+           ].each do |what, why, basis| %>
+          <div class="px-5 py-4 border-b border-rule last:border-b-0">
+            <div class="flex items-baseline justify-between gap-4">
+              <p class="label"><%= what %></p>
+              <span class="text-[10px] text-muted shrink-0"><%= basis %></span>
+            </div>
+            <p class="text-[13px] text-ink-2 mt-1.5"><%= why %></p>
+          </div>
+        <% end %>
+      </div>
+      <p class="text-[13px] text-ink-2 mt-4">
+        That is the complete list. There is no profiling, no advertising, no tracking of you across
+        other websites, and no automated decision-making with legal effect.
+      </p>
+    </section>
+
+    <section>
+      <h2 class="text-lg font-semibold mb-3">3. Cookies on this site</h2>
+      <p class="mb-3">
+        Tastatur's own dashboard sets a <strong class="text-ink">first-party session cookie</strong>
+        when you sign in, and a second one if you ask to be remembered. They are strictly necessary
+        to keep you signed in and are exempt from consent requirements on that basis.
+      </p>
+      <div class="notice">
+        This is not in tension with anything the product claims. The promise is that
+        <em>your visitors' devices</em> get nothing. Our own application, which you have signed
+        into, is a different matter, and pretending a login needs no session cookie would be
+        nonsense rather than privacy.
+      </div>
+    </section>
+
+    <section>
+      <h2 class="text-lg font-semibold mb-3">4. How long we keep it</h2>
+      <div class="card card-body space-y-2.5 text-sm">
+        <p><strong class="text-ink">Account data:</strong> for as long as your account exists.
+          Delete the account and it goes, along with the sites and measurement data belonging to it.</p>
+        <p><strong class="text-ink">Server logs:</strong> a short rolling window, measured in days.</p>
+        <p><strong class="text-ink">Billing records:</strong> as long as tax and accounting law
+          requires, which is typically several years and is not something we can shorten on request.</p>
+        <p><strong class="text-ink">Measurement data:</strong> governed by the retention period you
+          set on your account, enforced nightly. Default 12 months, and 25 months is the
+          maximum we offer, which is the stated ceiling for audience-measurement data.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="text-lg font-semibold mb-3">5. Who else sees it</h2>
+      <p class="mb-3">
+        We do not sell your data, we do not share it for anyone else's marketing, and we do not
+        use it to train models.
+      </p>
+      <p class="mb-3">On the hosted service, these third parties process data on our behalf:</p>
+      <div class="card">
+        <% [["Hosting provider", "Runs the servers and the database."],
+            ["Resend", "Delivers transactional email: confirmations, password resets, service notices."],
+            ["Stripe", "Processes payments. Card details go to Stripe and never reach us."],
+            ["Sentry", "Receives error reports, which can incidentally include an IP address. Optional and disabled if unconfigured."]].each do |who, what| %>
+          <div class="px-5 py-3 border-b border-rule last:border-b-0">
+            <p class="text-sm font-medium"><%= who %></p>
+            <p class="text-[13px] text-ink-2 mt-1"><%= what %></p>
+          </div>
+        <% end %>
+      </div>
+      <p class="text-[13px] text-ink-2 mt-4">
+        <strong class="text-ink">On a self-hosted instance there are none of these</strong> unless
+        the operator configures them. The operator is the only party involved.
+      </p>
+    </section>
+
+    <section>
+      <h2 class="text-lg font-semibold mb-3">6. Your rights</h2>
+      <p class="mb-3">
+        Where the GDPR or UK GDPR applies you may request access, correction, erasure,
+        restriction, portability, or object to processing based on legitimate interest. Where the
+        CCPA applies you may request access and deletion, and may not be discriminated against for
+        doing so.
+      </p>
+      <p class="mb-3">
+        Most of these you can exercise yourself, immediately, without asking us: your email and
+        password are editable on the
+        <%= link_to "account page", account_path, class: "underline hover:text-signal" %>, and
+        deleting a site erases its measurement data irreversibly.
+      </p>
+      <p>
+        For anything else, write to <strong class="text-ink"><%= contact %></strong>. You also have
+        the right to complain to your data protection authority.
+      </p>
+    </section>
+
+    <section>
+      <h2 class="text-lg font-semibold mb-3">7. International transfers</h2>
+      <p>
+        Self-hosted: your data stays wherever you run it, so there is no transfer. Hosted: the
+        region is stated at signup, and any transfer outside it relies on the Standard Contractual
+        Clauses.
+      </p>
+    </section>
+
+    <section>
+      <h2 class="text-lg font-semibold mb-3">8. Changes</h2>
+      <p>
+        If we change this policy in a way that materially affects you, we will email account
+        holders rather than quietly editing the page and relying on you to notice.
+      </p>
+    </section>
+
+    <section class="rule pt-6 text-sm text-muted">
+      <p>
+<%# Never Date.current: that made every legal document claim it had been revised
+          today, on every single page load. A reader checking whether the terms changed
+          since they agreed to them was told "today" regardless. Unset renders nothing,
+          which is honest, rather than a date we invented. %>
+      <% if Tastatur.legal[:updated_on] %>Last updated <%= Tastatur.legal[:updated_on].to_fs(:long) %>.<% end %>
+        See also the <%= link_to "terms", terms_path, class: "underline" %>,
+        the <%= link_to "processor terms", dpa_path, class: "underline" %>, and
+        <%= link_to "what the product collects from visitors", privacy_path, class: "underline" %>.
+      </p>
+    </section>
+  </div>
+</div>

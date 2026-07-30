@@ -1,0 +1,71 @@
+# Caddy obtains and renews a Let's Encrypt certificate automatically, so long as
+# {$APP_DOMAIN} resolves to this host and ports 80 and 443 are reachable.
+
+{$APP_DOMAIN} {
+	encode zstd gzip
+
+	# The tracking script is served to every measured page, so it wants caching —
+	# but only for an hour, with a day of stale-while-revalidate behind it.
+	#
+	# It is NOT digest-stamped. public/t.js is served as-is with no build step, and
+	# the snippet embeds the bare path /t.js, so there is no filename to change and
+	# no way to invalidate a cache early. The short window IS the invalidation
+	# lever, which is why it matters that it is the value actually in force.
+	#
+	# `>Cache-Control`, not `Cache-Control`. A plain `header` directive writes to
+	# the ResponseWriter *before* the proxy runs, and `reverse_proxy` then ADDS the
+	# upstream's own header rather than replacing it. Rails sets
+	# `public, max-age=31556952` on everything under public/, so without the `>`
+	# the response carries two Cache-Control lines with conflicting max-age
+	# values — one year and one hour. RFC 9111 does not say which wins, so the
+	# effective policy varies by client and CDN. Verified against caddy 2.11.4:
+	# `>` defers the set until after the upstream headers are copied, collapsing it
+	# to a single correct line.
+	@tracker path /t.js
+	header @tracker {
+		>Cache-Control "public, max-age=3600, stale-while-revalidate=86400"
+		# The script is meant to be embedded from anywhere.
+		#
+		# Deliberately NOT deferred. rack-cors only matches /api/*, so Rails never
+		# sets this header on /t.js and there is nothing to shadow. Deferring it
+		# would risk emitting a duplicate on a CORS request, which browsers reject
+		# outright — a worse failure than the one above.
+		Access-Control-Allow-Origin "*"
+	}
+
+	# Ingest must never be cached, by anyone, anywhere.
+	#
+	# Deferred for the same reason as the tracker. Rails already sends `no-cache`
+	# here so the union of the two lines is still safe, but relying on that is
+	# relying on an accident.
+	@ingest path /api/event /api/pixel
+	header @ingest {
+		>Cache-Control "no-store, no-cache, must-revalidate, private"
+	}
+
+	# Drop an oversized beacon at the edge, before it occupies a Ruby thread.
+	#
+	# The largest body the ingest contract can legitimately accept is about 17 KB,
+	# so 64 KB is generous. Puma enforces the same ceiling with
+	# `http_content_length_limit` in case this proxy is not in front.
+	request_body @ingest {
+		max_size 64KB
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	reverse_proxy web:3000 {
+		# Rails reads the client address from these to compute the visitor hash
+		# and the country. Without them every visitor would appear to come from
+		# the Caddy container and collapse into a single visitor.
+		header_up X-Real-IP {remote_host}
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+	}
+}

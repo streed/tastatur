@@ -1,0 +1,85 @@
+name: Bug report
+description: Something behaves differently from how it is documented
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before you paste anything: please don't include real visitor data, a site
+        token, a `SECRET_KEY_BASE`, or a database URL. A token in a public issue
+        lets anyone write events into your site. If a token has already been
+        exposed, rotate it from the site's settings page.
+
+        If you think you have found a security vulnerability, close this and use
+        [SECURITY.md](https://github.com/streed/tastatur/blob/main/SECURITY.md) instead.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      placeholder: What you saw, and what you expected instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce it
+      description: >-
+        The smallest sequence you can find. If it only happens with particular
+        data — a specific date range, a filter combination, a funnel shape — that
+        detail is usually the whole answer.
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: How are you running it
+      options:
+        - Self-hosted with docker compose
+        - Self-hosted on Railway
+        - Self-hosted, some other way
+        - The hosted service at tastatur.app
+        - Local development checkout
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: The commit SHA, or a tag. `git rev-parse --short HEAD`
+    validations:
+      required: false
+
+  - type: textarea
+    id: numbers
+    attributes:
+      label: If a number looks wrong
+      description: >-
+        Reporting a metric that seems off is genuinely useful, and the fastest way
+        to get it fixed is a second number to compare against. If you can, say what
+        the dashboard showed, what you expected, and where the expectation came
+        from — another analytics tool, your server logs, a hand count.
+
+        One known trap worth ruling out first: unique visitor counts are not
+        additive across time buckets. Twenty-four hourly figures do not sum to the
+        day's uniques, because a returning visitor is counted once per hour they
+        were active. The dashboard queries each period directly for that reason, so
+        if you are comparing against a sum, that is likely the difference.
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log output
+      description: Redact anything identifying. Rendered as a code block, no backticks needed.
+      render: text
+    validations:
+      required: false

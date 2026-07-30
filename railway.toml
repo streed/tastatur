@@ -1,0 +1,35 @@
+# Railway configuration for the WEB service.
+#
+# Config-as-code overrides the dashboard, so this file is the source of truth for
+# anything it declares. Deploy the worker as a SECOND Railway service pointed at
+# the same repository with its own start command (see docs/self-hosting/railway.md).
+#
+# Ports: Railway injects PORT. bin/docker-entrypoint bridges it to Thruster's
+# HTTP_PORT, so nothing needs setting in the dashboard for the app to bind
+# correctly. Thruster then starts Puma on its own TARGET_PORT.
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+# The default CMD already runs Thruster in front of Puma, and the entrypoint runs
+# db:prepare first. There is no schema file by design, so that builds from
+# migrations. Concurrent replicas are safe: migrations take an advisory lock.
+startCommand = "./bin/thrust ./bin/rails server"
+
+# Railway waits for a 200 here before shifting traffic to a new deploy.
+#
+# /up checks PostgreSQL and BOTH Redis instances and returns 503 if any is down.
+# The privacy Redis is included deliberately: without it ingest cannot compute a
+# visitor identity at all, so a deploy that came up without it would accept
+# requests and quietly drop every event.
+healthcheckPath = "/up"
+healthcheckTimeout = 120
+
+# Analytics ingest is fire-and-forget from a beacon that cannot retry, so a
+# restart loop loses data rather than deferring it.
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+
+numReplicas = 1

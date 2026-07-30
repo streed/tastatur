@@ -1,0 +1,43 @@
+<%# The distinction that gets glossed over by every tool in this category, in
+    both directions: some claim "no cookies" while setting one on the measured
+    site, and some avoid the subject entirely because their own dashboard needs a
+    login. Both readings are wrong here, so both halves are stated plainly.
+
+    Rendered on the marketing page and on /privacy so a reader meets it wherever
+    they arrive. -%>
+<div class="grid md:grid-cols-2 gap-px bg-rule border border-rule">
+  <div class="bg-surface p-6">
+    <div class="flex items-center gap-2.5 mb-3">
+      <span class="w-2 h-2 bg-signal inline-block shrink-0" aria-hidden="true"></span>
+      <p class="label">On your visitors' devices</p>
+    </div>
+    <p class="figure text-[30px] mb-3">Nothing</p>
+    <p class="text-[13px] text-ink-2 leading-relaxed">
+      No cookie is set and none is read. Nothing is written to localStorage,
+      sessionStorage or IndexedDB. No identifier is stored on the device in any
+      form. This is the part that determines whether you need a consent banner
+      for Tastatur, and it is the promise the product is built around.
+    </p>
+  </div>
+
+  <div class="bg-surface p-6">
+    <div class="flex items-center gap-2.5 mb-3">
+      <span class="w-2 h-2 border border-rule-2 inline-block shrink-0" aria-hidden="true"></span>
+      <p class="label">On this dashboard, for you</p>
+    </div>
+    <p class="figure text-[30px] mb-3">One</p>
+    <p class="text-[13px] text-ink-2 leading-relaxed">
+      A first-party session cookie, set when <strong class="text-ink">you</strong>
+      sign in, so you stay signed in. A second if you tick "stay signed in". They
+      are strictly necessary for a login and exempt from consent on that basis.
+      They are set on <em>our</em> site, for <em>account holders</em>, and never
+      touch the sites you measure or the people who visit them.
+    </p>
+  </div>
+</div>
+
+<p class="text-[13px] text-muted mt-4 leading-relaxed">
+  We say this explicitly because "no cookies" is used loosely in this category.
+  A login needs a session cookie; pretending otherwise would be nonsense rather
+  than privacy. What matters is that nothing of ours reaches your visitors.
+</p>

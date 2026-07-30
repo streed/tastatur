@@ -1,0 +1,232 @@
+<% content_for :title, "Terms · Tastatur" %>
+<% entity = Tastatur.legal_value(:entity) %>
+<% contact = Tastatur.legal_value(:email) %>
+<% jurisdiction = Tastatur.legal_value(:jurisdiction) %>
+
+<div class="shell max-w-3xl">
+  <div class="pt-5 rule-heavy mb-8">
+    <p class="label mt-5 mb-3">Legal</p>
+    <h1 class="text-3xl font-semibold tracking-[-0.03em]">Terms and conditions</h1>
+    <p class="text-ink-2 mt-3 leading-relaxed">
+      The agreement between you and <%= entity %> for use of this Tastatur instance.
+    </p>
+  </div>
+
+  <%= render "compliance/unconfigured_banner" %>
+
+  <div class="notice mb-9">
+    <strong>Self-hosting? Most of this does not apply to you.</strong> The software itself is
+    licensed under the AGPL-3.0, which is the only agreement governing your use of the code. These
+    terms govern the <em>hosted service</em>. Section 9 covers the licence.
+  </div>
+
+  <div class="space-y-9 text-[15px] leading-relaxed">
+    <section>
+      <h2 class="text-lg font-semibold mb-3">1. Agreement</h2>
+      <p>
+        By creating an account you agree to these terms. If you are agreeing on behalf of an
+        organisation, you confirm you have authority to bind it.
+      </p>
+    </section>
+
+    <section>
+      <h2 class="text-lg font-semibold mb-3">2. The service</h2>
+      <p class="mb-3">
+        Tastatur is a web analytics service. It measures traffic to websites you control and
+        presents aggregate statistics.
+      </p>
+      <p>
+        We may change or add features. If we remove something you rely on, or make a change that
+        materially reduces the service, we will tell account holders by email before it takes
+        effect.
+      </p>
+    </section>
+
+    <section>
+      <h2 class="text-lg font-semibold mb-3">3. Your account</h2>
+      <div class="card card-body space-y-2.5 text-sm">
+        <p>You are responsible for keeping your credentials secure and for activity under your
+          account.</p>
+        <p>One person per login. Add colleagues as team members rather than sharing a password;
+          it is free and it means removing someone's access does not lock everyone out.</p>
+        <p>Provide an email address you can actually receive mail at. Confirmation and
+          password reset both depend on it, and we cannot verify your identity by any other means.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="text-lg font-semibold mb-3">4. What you must not do</h2>
+      <div class="card card-body space-y-2.5 text-sm">
+        <p><strong class="text-ink">Measure sites you do not control.</strong> Installing the
+          snippet on someone else's property, or pointing a site record at a domain that is not
+          yours, is a breach of these terms.</p>
+        <p><strong class="text-ink">Send personal data in custom event properties.</strong> That
+          field's contents are entirely yours, and nothing in the software can tell that an email
+          address should not have been put there.</p>
+        <p><strong class="text-ink">Attempt to re-identify individuals</strong> from the statistics,
+          or combine them with other data for that purpose.</p>
+        <p><strong class="text-ink">Abuse the ingest endpoint:</strong> no fabricated traffic, no
+          attempts to distort another customer's figures, no load testing against the hosted
+          service without asking first.</p>
+        <p><strong class="text-ink">Attempt to access other accounts' data,</strong> or to
+          circumvent the authorisation or suppression controls.</p>
+      </div>
+      <p class="text-[13px] text-ink-2 mt-4">
+        We may suspend an account that breaches this section. Where the breach is not deliberate we
+        will contact you first.
+      </p>
+    </section>
+
+    <section>
+      <h2 class="text-lg font-semibold mb-3">5. Your obligations as data controller</h2>
+      <p class="mb-3">
+        For measurement data you are the controller and we are your processor. That allocation is
+        not merely paperwork; it means specific things are your responsibility and not ours:
+      </p>
+      <div class="card card-body space-y-2.5 text-sm">
+        <p>Establishing a lawful basis for measuring your visitors, in every jurisdiction you
+          operate in.</p>
+        <p>Telling your visitors what you collect. You may link to
+          <%= link_to "our page describing it", privacy_path, class: "underline hover:text-signal" %>,
+          which exists for that purpose.</p>
+        <p>Deciding whether your configuration requires a consent banner.
+          <strong class="text-ink">We do not advise on this and we do not warrant any outcome.</strong>
+          Tastatur stores nothing on your visitors' devices, which is the relevant trigger under
+          ePrivacy Article 5(3) and its national implementations, but the answer depends on your
+          jurisdiction and on every other script on your site. Germany in particular is stricter
+          than this category's marketing generally admits.</p>
+        <p>Responding to your visitors' data subject requests. We assist by providing a
+          <%= link_to "self-service lookup", data_request_path, class: "underline hover:text-signal" %>
+          and immediate per-site erasure.</p>
+        <p>Setting a retention period appropriate to your obligations. The default is 12 months,
+          the maximum is 25 months, and either may be longer than you are permitted to keep.</p>
+      </div>
+      <p class="text-[13px] text-ink-2 mt-4">
+        Our corresponding obligations are in the
+        <%= link_to "processor terms", dpa_path, class: "underline hover:text-signal" %>, which form
+        part of this agreement.
+      </p>
+    </section>
+
+    <section>
+      <h2 class="text-lg font-semibold mb-3">6. Fees</h2>
+      <p class="mb-3">
+        Paid plans are billed in advance for the period shown at checkout. Fees exclude tax unless
+        stated. You can cancel at any time and keep access to the end of the period you have paid
+        for; we do not refund partial periods except where the law requires it.
+      </p>
+      <p>
+        If a payment fails we will tell you and give you a reasonable period to fix it before
+        restricting the account. We will not delete your data for non-payment without warning you
+        first and giving you a chance to export it.
+      </p>
+    </section>
+
+    <section>
+      <h2 class="text-lg font-semibold mb-3">7. Availability</h2>
+      <p>
+        We aim for continuous availability and do not guarantee it. There is no service level
+        agreement unless we have signed one with you separately. Analytics ingest is designed to
+        fail quietly on the customer's side, so an outage here will never break your website, and
+        the tracking script degrades to doing nothing.
+      </p>
+    </section>
+
+    <section>
+      <h2 class="text-lg font-semibold mb-3">8. Your data</h2>
+      <div class="card card-body space-y-2.5 text-sm">
+        <p>Your data remains yours. We claim no ownership of it and no licence to use it beyond
+          operating the service for you.</p>
+        <p>We do not pool raw measurement data across customers, and we do not use your data for
+          our own purposes: not for product analytics, not for benchmarking, not for
+          "industry average" features, and not for training models. These are constraints in the
+          software, not just in this document.</p>
+        <p>You can delete a site, and all its measurement data, at any time and irreversibly.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="text-lg font-semibold mb-3">9. The software licence</h2>
+      <p class="mb-3">
+        Tastatur is free software under the
+        <strong class="text-ink">GNU Affero General Public License v3.0</strong>. You may run,
+        study, modify and self-host it. If you offer a modified version to others over a network,
+        the AGPL requires you to publish your modifications.
+      </p>
+      <p>
+        These terms govern the hosted service. They do not restrict any right the AGPL grants you
+        over the software, and nothing here should be read as attempting to.
+      </p>
+    </section>
+
+    <section>
+      <h2 class="text-lg font-semibold mb-3">10. Warranties and liability</h2>
+      <p class="mb-3">
+        The service is provided as is. To the extent the law permits, we exclude implied warranties
+        of merchantability, fitness for a particular purpose and non-infringement.
+      </p>
+      <p class="mb-3">
+        <strong class="text-ink">Analytics figures are estimates.</strong> Cookieless measurement
+        involves documented trade-offs: visitors behind shared network addresses may be counted as
+        one, a visitor changing network mid-visit may be counted as two, returning visitors are
+        counted again the next day, and small breakdown rows are withheld. Do not use these numbers
+        where exactness matters, such as billing a third party.
+      </p>
+      <p>
+        To the extent the law permits, our total liability in any twelve-month period is limited to
+        the fees you paid us in that period, and we are not liable for indirect or consequential
+        loss, lost profits, or lost data. Nothing here limits liability that cannot lawfully be
+        limited, including for death or personal injury caused by negligence, or for fraud.
+      </p>
+    </section>
+
+    <section>
+      <h2 class="text-lg font-semibold mb-3">11. Ending the agreement</h2>
+      <p>
+        You may close your account at any time. We may terminate for a material breach of these
+        terms, or with reasonable notice for any other reason, in which case we will refund any
+        prepaid fees for the unused period. On termination you may export your data for a reasonable
+        period before it is deleted.
+      </p>
+    </section>
+
+    <section>
+      <h2 class="text-lg font-semibold mb-3">12. Changes to these terms</h2>
+      <p>
+        We may update these terms. For material changes we will email account holders at least 30
+        days beforehand. Continuing to use the service after a change takes effect means you accept
+        it; if you do not, close your account and we will refund the unused period.
+      </p>
+    </section>
+
+    <section>
+      <h2 class="text-lg font-semibold mb-3">13. Governing law</h2>
+      <p>
+        These terms are governed by the laws of <strong class="text-ink"><%= jurisdiction %></strong>,
+        and its courts have exclusive jurisdiction. If you are a consumer, this does not remove any
+        protection you have under the law of your own country of residence.
+      </p>
+    </section>
+
+    <section>
+      <h2 class="text-lg font-semibold mb-3">14. Contact</h2>
+      <p><strong class="text-ink"><%= contact %></strong></p>
+    </section>
+
+    <section class="rule pt-6 text-sm text-muted">
+      <p>
+<%# Never Date.current: that made every legal document claim it had been revised
+          today, on every single page load. A reader checking whether the terms changed
+          since they agreed to them was told "today" regardless. Unset renders nothing,
+          which is honest, rather than a date we invented. %>
+      <% if Tastatur.legal[:updated_on] %>Last updated <%= Tastatur.legal[:updated_on].to_fs(:long) %>.<% end %>
+        See also the <%= link_to "privacy policy", privacy_policy_path, class: "underline" %> and
+        the <%= link_to "processor terms", dpa_path, class: "underline" %>.
+      </p>
+      <p class="mt-2">
+        These are templates drafted to be accurate about what the software does. They are not legal
+        advice, and you should have your own counsel review them before relying on them.
+      </p>
+    </section>
+  </div>
+</div>

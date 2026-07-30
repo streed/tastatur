@@ -31,6 +31,27 @@ threads threads_count, threads_count
 # Specifies the `port` that Puma will listen on to receive requests; default is 3000.
 port ENV.fetch("PORT", 3000)
 
+# Refuse a request body larger than 64 KB.
+#
+# `POST /api/event` is unauthenticated and callable by anything, and it used to
+# accept a body of any size at all — a 5 MB beacon was measured being answered
+# 202. Every byte of that is read, parsed as JSON and held in memory by a thread
+# that could have been serving a real pageview, so an attacker gets a large
+# multiplier on their own bandwidth for free.
+#
+# 64 KB against a largest-legitimate beacon of ~17.4 KB, which is what the ingest
+# contract's own bounds allow: 2 x 2,048 for the URL and referrer, 120 for the
+# event name, and 24 properties of 60 + 500. That is 3.6x headroom.
+#
+# Safe to apply globally rather than per-path: this application has no file
+# uploads anywhere (no `file_field`, no `has_one_attached`), and every form post it
+# serves is a few hundred bytes. Adding an upload later means raising this, and the
+# symptom would be an obvious 413 rather than anything subtle.
+#
+# Caddy enforces the same limit at the edge for the ingest paths, so on the bundled
+# stack an oversized body is dropped before it reaches Ruby at all.
+http_content_length_limit 64 * 1024
+
 # Allow puma to be restarted by `bin/rails restart` command.
 plugin :tmp_restart
 

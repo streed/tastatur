@@ -1,0 +1,174 @@
+# Production self-hosting, in one command.
+#
+#   cp .env.production.example .env.production   # then edit it
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# Caddy terminates TLS and obtains a certificate from Let's Encrypt
+# automatically, so there is no certbot step and no renewal cron to forget.
+#
+# Everything is on the internal network except Caddy. The database and both Redis
+# instances publish no ports to the host.
+#
+# NOTE ON CONFIGURATION: every value comes from .env.production via `env_file`.
+# There is deliberately no `${VAR}` interpolation in this file — Compose resolves
+# those from the shell or from a file literally named `.env`, NOT from `env_file`,
+# so mixing the two produces a compose file that cannot be validated without
+# exporting the variables by hand.
+
+name: tastatur-prod
+
+x-app: &app
+  build:
+    context: .
+    dockerfile: Dockerfile
+  image: tastatur:latest
+  restart: unless-stopped
+  env_file: .env.production
+  environment:
+    RAILS_ENV: production
+    RAILS_LOG_TO_STDOUT: "1"
+  volumes:
+    # The country database, fetched once by `rails tastatur:geoip:download`.
+    - geoip:/rails/db/geoip
+  depends_on:
+    timescaledb:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+    redis-privacy:
+      condition: service_healthy
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    env_file: .env.production      # supplies APP_DOMAIN to the Caddyfile
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./config/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      web:
+        condition: service_healthy
+
+  timescaledb:
+    image: timescale/timescaledb:latest-pg17
+    restart: unless-stopped
+    env_file: .env.production      # supplies POSTGRES_PASSWORD
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: tastatur_production
+    volumes:
+      - pgdata:/home/postgres/pgdata/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  # The visitor salt and session map, and nothing else.
+  #
+  # PERSISTENCE IS OFF ON PURPOSE and no volume is declared here. The claim that
+  # stored analytics are unlinkable rests on yesterday's salt being destroyed, and
+  # a salt written to an AOF or RDB file is not destroyed: it sits in a backup
+  # next to the events it would de-anonymise, and a restore brings it back.
+  #
+  # Do not add a volume here. Do not include it in a backup.
+  #
+  # (The redis image declares VOLUME /data itself, so docker attaches an anonymous
+  # one anyway. It stays empty because of the flags below, which is where the
+  # guarantee actually comes from. Verify with: ls -1 /data | wc -l -> 0)
+  #
+  # Losing this container costs one session-timeout window of split visits. That
+  # is the intended trade. See docs/privacy/identity.md
+  redis-privacy:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --save
+      - ""
+      - --appendonly
+      - "no"
+      - --maxmemory-policy
+      - noeviction
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  web:
+    <<: *app
+    # db:prepare creates the database if absent and then migrates. There is no
+    # schema file to load by design, so this always builds from migrations.
+    command: >
+      bash -c "bin/rails db:prepare && bin/rails server -b 0.0.0.0 -p 3000"
+    expose:
+      - "3000"
+    # Caddy waits for this rather than merely for the container to exist.
+    #
+    # `depends_on: - web` is the short form, which means `service_started`, so Caddy
+    # bound :443 and began proxying while `db:prepare` was still running — a small
+    # window (measured at ~3.6 s on the real image against an empty database, and
+    # usually hidden behind ACME issuance on a first deploy) in which requests get a
+    # 502. A migration that takes real time widens it into unexplained errors.
+    #
+    # start_period is generous on purpose: a long migration must not be mistaken for
+    # an unhealthy container, because that would leave Caddy never started at all.
+    #
+    # One consequence worth knowing: /up checks Redis as well as PostgreSQL and
+    # returns 503 when Redis is down, so Caddy will not start during a Redis outage.
+    # That is the right trade here — with Redis down the app cannot serve a
+    # dashboard or accept an event anyway.
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:3000/up"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
+  worker:
+    <<: *app
+    command: bundle exec sidekiq
+    # Repeats the anchor's two variables on purpose. A YAML merge key does not
+    # deep-merge: declaring `environment` here replaces the one from *app outright,
+    # so anything omitted would simply be lost.
+    environment:
+      RAILS_ENV: production
+      RAILS_LOG_TO_STDOUT: "1"
+      # 0 disables the statement timeout for this process only.
+      #
+      # config/database.yml caps statements at 15s so one expensive dashboard query
+      # cannot hold a connection indefinitely. The worker is the opposite case:
+      # refresh_continuous_aggregate over a wide window and the nightly retention
+      # delete across compressed chunks both run for minutes by design. Aborting
+      # those would leave aggregates unreconciled after an erasure, which is a
+      # privacy claim rather than a slow page.
+      DB_STATEMENT_TIMEOUT: "0"
+    depends_on:
+      web:
+        condition: service_started
+
+volumes:
+  pgdata:
+  redisdata:
+  geoip:
+  caddy_data:
+  caddy_config:

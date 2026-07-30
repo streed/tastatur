@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title><%= content_for(:title) || "Shared dashboard — Tastatur" %></title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <%= csrf_meta_tags %>
+    <%= csp_meta_tag %>
+    <%# A shared dashboard is an unlisted URL. Keeping it out of search indexes
+        is the difference between "unlisted" and "public". %>
+    <meta name="robots" content="noindex, nofollow, noarchive">
+    <meta name="referrer" content="no-referrer">
+    <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48">
+    <link rel="icon" href="/icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="/icon.png">
+    <%= stylesheet_link_tag :app, "data-turbo-track": "reload" %>
+    <%= javascript_importmap_tags %>
+  </head>
+  <body class="min-h-screen flex flex-col">
+    <header class="border-b border-rule bg-surface">
+      <div class="shell flex items-center justify-between h-14">
+        <span class="label">Shared dashboard</span>
+        <a href="https://github.com/streed/tastatur" class="flex items-baseline gap-2" rel="noopener">
+          <span class="text-[13px] font-bold tracking-[0.24em] uppercase">Tastatur</span>
+          <span class="w-1.5 h-1.5 bg-signal inline-block" aria-hidden="true"></span>
+        </a>
+      </div>
+    </header>
+    <% if flash.any? %>
+      <div class="shell mt-6">
+        <% flash.each do |_type, message| %><div class="notice"><%= message %></div><% end %>
+      </div>
+    <% end %>
+    <main class="flex-1 py-8"><%= yield %></main>
+    <footer class="border-t border-rule mt-16">
+      <div class="shell py-6 flex flex-wrap justify-between gap-4 text-[12px] text-muted">
+        <span>Measured without cookies by Tastatur</span>
+        <%= link_to "What is collected", privacy_path, class: "hover:text-ink" %>
+      </div>
+    </footer>
+  </body>
+</html>

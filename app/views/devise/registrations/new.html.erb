@@ -1,0 +1,26 @@
+<% content_for :title, "Create an account · Tastatur" %>
+
+<%= render layout: "devise/shared/auth_card",
+           locals: { title: "Create an account",
+                     subtitle: "You will be measuring your first site a minute from now." } do %>
+  <%= form_for(resource, as: resource_name, url: registration_path(resource_name),
+               html: { class: "card card-body space-y-5" }) do |f| %>
+    <%= f.error_summary %>
+
+    <%= f.field :name, "Your name", autofocus: true, autocomplete: "name" %>
+    <%= f.field :email, "Email", as: :email_field, autocomplete: "email" %>
+    <%= f.field :password, "Password", as: :password_field, autocomplete: "new-password",
+                hint: "At least #{@minimum_password_length} characters." %>
+    <%= f.field :password_confirmation, "Confirm password", as: :password_field,
+                autocomplete: "new-password" %>
+
+    <div class="pt-1">
+      <%= f.submit "Create account", class: "btn btn-primary w-full justify-center" %>
+    </div>
+
+    <p class="text-[12px] text-muted">
+      We store your email so you can sign in, and nothing else about you.
+      <%= link_to "What we collect from your visitors", privacy_path, class: "underline hover:text-ink" %>.
+    </p>
+  <% end %>
+<% end %>

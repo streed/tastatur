@@ -1,0 +1,44 @@
+<%# The turbo-frame lives INSIDE this partial, not around it.
+
+    Turbo replaces a frame with the matching <turbo-frame> element from the
+    response. If the response contains no frame with the same id, Turbo empties
+    the frame instead — so a partial rendered bare made the "waiting" card
+    silently disappear on the first poll, with no data and no error. Keeping the
+    frame in the partial means the full page render and the polled render both
+    carry it. -%>
+<%= turbo_frame_tag "install_status" do %>
+  <% if site.receiving_data? %>
+    <div class="card border-signal">
+      <div class="card-body flex items-center gap-4">
+        <span class="w-2.5 h-2.5 bg-signal inline-block shrink-0" aria-hidden="true"></span>
+        <div>
+          <p class="font-semibold text-sm">Receiving data</p>
+          <p class="text-[13px] text-ink-2 mt-1">
+            First event at <%= site.first_event_at.in_time_zone(site.timezone).to_fs(:short) %>.
+            Everything is working.
+          </p>
+        </div>
+        <%= link_to "View dashboard", site_path(site), class: "btn btn-primary btn-sm ml-auto shrink-0" %>
+      </div>
+    </div>
+  <% else %>
+    <%# The success state above deliberately carries no poll controller, so
+        polling stops by virtue of the markup rather than by a flag anyone has to
+        remember to clear. -%>
+    <div class="card"
+         data-controller="poll"
+         data-poll-url-value="<%= site_installation_path(site) %>"
+         data-poll-interval-value="5000">
+      <div class="card-body flex items-center gap-4">
+        <span class="w-2.5 h-2.5 border border-rule-2 inline-block shrink-0 animate-pulse" aria-hidden="true"></span>
+        <div>
+          <p class="font-semibold text-sm">Waiting for your first pageview…</p>
+          <p class="text-[13px] text-ink-2 mt-1">
+            Load any page on <%= site.domain %> and this will update on its own.
+            Visits from localhost are ignored by design, so test from the real domain.
+          </p>
+        </div>
+      </div>
+    </div>
+  <% end %>
+<% end %>

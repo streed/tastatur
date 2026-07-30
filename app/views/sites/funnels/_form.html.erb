@@ -1,0 +1,59 @@
+<%= form_with model: [@site, @funnel],
+              url: @funnel.persisted? ? site_funnel_path(@site, @funnel) : site_funnels_path(@site),
+              class: "space-y-6" do |f| %>
+  <%= f.error_summary %>
+
+  <div class="card card-body space-y-6">
+    <%= f.field :name, "Funnel name", placeholder: "Signup flow", autofocus: true %>
+
+    <%= f.field :window_seconds, "Time to complete", as: :select,
+                choices: [["30 minutes", 1800], ["1 hour", 3600], ["6 hours", 21_600],
+                          ["24 hours (recommended)", 86_400], ["7 days", 604_800], ["30 days", 2_592_000]],
+                hint: "Visitor identifiers expire every 24 hours, so a window longer than a day will undercount anyone who crosses that boundary. The funnel view says so when it applies." %>
+  </div>
+
+  <div class="card"
+       data-controller="nested-form"
+       data-nested-form-max-value="<%= Funnel::MAX_STEPS %>"
+       data-nested-form-min-value="<%= Funnel::MIN_STEPS %>">
+    <div class="card-head">
+      <h2 class="text-sm font-semibold">Steps</h2>
+      <span class="label">
+        <span data-nested-form-target="count"><%= @funnel.funnel_steps.size %></span>
+        of <%= Funnel::MAX_STEPS %> · in order
+      </span>
+    </div>
+
+    <div class="card-body space-y-4" data-nested-form-target="rows">
+      <%= f.fields_for :funnel_steps do |step| %>
+        <%= render "sites/funnels/step_fields", step: step %>
+      <% end %>
+    </div>
+
+    <%# The prototype the Add button clones. A browser never submits the contents
+        of a <template>, so this blank row cannot reach the server on its own.
+        child_index gives it a placeholder the controller swaps for a unique one. -%>
+    <template data-nested-form-target="template">
+      <%= f.fields_for :funnel_steps,
+                       FunnelStep.new(kind: "pageview", match_type: "exact"),
+                       child_index: "NEW_RECORD" do |step| %>
+        <%= render "sites/funnels/step_fields", step: step %>
+      <% end %>
+    </template>
+
+    <div class="px-5 py-4 border-t border-rule flex items-center justify-between gap-4">
+      <button type="button" class="btn btn-sm"
+              data-action="nested-form#add" data-nested-form-target="addButton">
+        Add step
+      </button>
+      <p class="text-[12px] text-muted">
+        <%= Funnel::MIN_STEPS %> to <%= Funnel::MAX_STEPS %> steps. Visitors must reach them in
+        the order shown.
+      </p>
+    </div>
+  </div>
+
+  <%= f.actions @funnel.persisted? ? "Save funnel" : "Create funnel",
+                cancel_to: site_funnels_path(@site),
+                destructive: (@funnel.persisted? ? button_to("Delete funnel", site_funnel_path(@site, @funnel), method: :delete, class: "btn btn-quiet text-negative", form: { data: { turbo_confirm: "Delete this funnel?" } }) : nil) %>
+<% end %>

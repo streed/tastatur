@@ -1,0 +1,94 @@
+# Referrer host -> human-readable source name, plus the channel it belongs to.
+#
+# Hand-maintained rather than vendored from Matomo or Snowplow: those lists are
+# thousands of entries covering search engines that no longer exist, and they
+# carry their own licences. This covers the traffic sources a real site
+# actually sees, and unknown hosts fall through to "Referral" with the bare
+# hostname as the label, which is a perfectly good answer.
+#
+# Matching is on the registrable domain with any leading "www." removed, and
+# any subdomain also matches its parent entry (news.google.com -> google.com).
+
+search:
+  google.com: Google
+  google.co.uk: Google
+  google.de: Google
+  google.fr: Google
+  google.ca: Google
+  google.com.au: Google
+  google.co.in: Google
+  google.co.jp: Google
+  google.com.br: Google
+  google.es: Google
+  google.it: Google
+  google.nl: Google
+  bing.com: Bing
+  duckduckgo.com: DuckDuckGo
+  search.yahoo.com: Yahoo
+  yahoo.com: Yahoo
+  yandex.ru: Yandex
+  yandex.com: Yandex
+  baidu.com: Baidu
+  ecosia.org: Ecosia
+  startpage.com: Startpage
+  brave.com: Brave Search
+  search.brave.com: Brave Search
+  qwant.com: Qwant
+  kagi.com: Kagi
+  perplexity.ai: Perplexity
+  chatgpt.com: ChatGPT
+  chat.openai.com: ChatGPT
+  claude.ai: Claude
+  gemini.google.com: Gemini
+  copilot.microsoft.com: Copilot
+
+social:
+  twitter.com: X (Twitter)
+  x.com: X (Twitter)
+  t.co: X (Twitter)
+  facebook.com: Facebook
+  m.facebook.com: Facebook
+  l.facebook.com: Facebook
+  lm.facebook.com: Facebook
+  instagram.com: Instagram
+  l.instagram.com: Instagram
+  linkedin.com: LinkedIn
+  lnkd.in: LinkedIn
+  reddit.com: Reddit
+  out.reddit.com: Reddit
+  news.ycombinator.com: Hacker News
+  lobste.rs: Lobsters
+  youtube.com: YouTube
+  youtu.be: YouTube
+  pinterest.com: Pinterest
+  tiktok.com: TikTok
+  mastodon.social: Mastodon
+  bsky.app: Bluesky
+  threads.net: Threads
+  threads.com: Threads
+  t.me: Telegram
+  discord.com: Discord
+  whatsapp.com: WhatsApp
+  vk.com: VK
+  tumblr.com: Tumblr
+  quora.com: Quora
+  medium.com: Medium
+  substack.com: Substack
+  dev.to: DEV
+  stackoverflow.com: Stack Overflow
+  github.com: GitHub
+  gitlab.com: GitLab
+  producthunt.com: Product Hunt
+  slashdot.org: Slashdot
+  digg.com: Digg
+  xing.com: XING
+
+email:
+  mail.google.com: Gmail
+  outlook.live.com: Outlook
+  outlook.office.com: Outlook
+  outlook.office365.com: Outlook
+  mail.yahoo.com: Yahoo Mail
+  mail.proton.me: Proton Mail
+  superhuman.com: Superhuman
+  hey.com: HEY

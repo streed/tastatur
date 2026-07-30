@@ -1,0 +1,21 @@
+<% content_for :subject, "Your email address was changed" %>
+<% content_for :preheader, "A security notice, no action needed if this was you." %>
+
+<h1 style="margin:0 0 16px; font-size:21px; font-weight:600; letter-spacing:-0.4px; line-height:1.2; color:#16150f;">
+  Your email address was changed
+</h1>
+
+<p style="margin:0 0 16px; color:#57564e;">
+  <% if @resource.try(:unconfirmed_email?) %>
+    The address on your Tastatur account is being changed to
+    <strong style="color:#16150f;"><%= @resource.unconfirmed_email %></strong>.
+  <% else %>
+    The address on your Tastatur account is now
+    <strong style="color:#16150f;"><%= @email %></strong>.
+  <% end %>
+</p>
+
+<p style="margin:0; padding-top:20px; border-top:1px solid #e3e1d8; font-size:13px; color:#8c8a80;">
+  We send this to the previous address so a change cannot happen silently. If you
+  did not make it, reset your password immediately and contact us.
+</p>
