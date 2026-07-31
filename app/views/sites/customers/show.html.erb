@@ -69,19 +69,24 @@
   <% if @subscriptions.any? %>
     <div class="card mb-6">
       <div class="card-head"><h2 class="text-sm font-semibold">Subscriptions</h2></div>
-      <table class="w-full text-sm">
-        <tbody>
-          <% @subscriptions.each do |subscription| %>
-            <tr class="border-b border-rule last:border-b-0">
-              <td class="px-5 py-3 font-mono text-xs"><%= subscription.stripe_subscription_id %></td>
-              <td class="px-5 py-3"><span class="label"><%= subscription.status %></span></td>
-              <td class="px-5 py-3 text-right tabular-nums">
-                <%= money_amount(subscription.currency, subscription.mrr_cents) %> / mo
-              </td>
-            </tr>
-          <% end %>
-        </tbody>
-      </table>
+      <%# A Stripe subscription id is 28 unbreakable characters; the table
+          scrolls within the card rather than panning the page. Same wrapper
+          as customers/index. %>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <tbody>
+            <% @subscriptions.each do |subscription| %>
+              <tr class="border-b border-rule last:border-b-0">
+                <td class="px-5 py-3 font-mono text-xs"><%= subscription.stripe_subscription_id %></td>
+                <td class="px-5 py-3"><span class="label"><%= subscription.status %></span></td>
+                <td class="px-5 py-3 text-right tabular-nums">
+                  <%= money_amount(subscription.currency, subscription.mrr_cents) %> / mo
+                </td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
     </div>
   <% end %>
 
@@ -90,26 +95,28 @@
     <% if @revenue_events.empty? %>
       <div class="card-body text-sm text-ink-2">No revenue recorded for this customer yet.</div>
     <% else %>
-      <table class="w-full text-sm">
-        <tbody>
-          <% @revenue_events.each do |event| %>
-            <tr class="border-b border-rule last:border-b-0">
-              <td class="px-5 py-3 text-ink-2"><%= l(event.occurred_at, format: :long) %></td>
-              <td class="px-5 py-3"><span class="label"><%= event.kind.humanize %></span></td>
-              <td class="px-5 py-3 text-right tabular-nums">
-                <%= money_amount(event.currency, event.amount_cents) %>
-                <% unless event.converted? %>
-                  <%# Flagged per row rather than only in the total, so the one
-                      line that is missing from the summary is findable. -%>
-                  <span class="label" title="No rate available to convert into <%= @site.base_currency %>">
-                    not counted
-                  </span>
-                <% end %>
-              </td>
-            </tr>
-          <% end %>
-        </tbody>
-      </table>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <tbody>
+            <% @revenue_events.each do |event| %>
+              <tr class="border-b border-rule last:border-b-0">
+                <td class="px-5 py-3 text-ink-2"><%= l(event.occurred_at, format: :long) %></td>
+                <td class="px-5 py-3"><span class="label"><%= event.kind.humanize %></span></td>
+                <td class="px-5 py-3 text-right tabular-nums">
+                  <%= money_amount(event.currency, event.amount_cents) %>
+                  <% unless event.converted? %>
+                    <%# Flagged per row rather than only in the total, so the one
+                        line that is missing from the summary is findable. -%>
+                    <span class="label" title="No rate available to convert into <%= @site.base_currency %>">
+                      not counted
+                    </span>
+                  <% end %>
+                </td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
     <% end %>
   </div>
 </div>

@@ -11,7 +11,7 @@
         <span class="mx-2">·</span>joined <%= @user.created_at.to_date.to_fs(:long) %>
       </p>
     </div>
-    <div class="flex items-center gap-2">
+    <div class="flex flex-wrap items-center gap-2">
       <% unless @user.confirmed? %><span class="chip"><span class="chip-key">unconfirmed</span></span><% end %>
       <% if @user.locked? %><span class="chip"><span class="chip-key">locked</span></span><% end %>
       <% if @user.admin? %><span class="chip"><span class="chip-key">instance admin</span></span><% end %>
@@ -162,7 +162,7 @@
                 </p>
                 <%= form_with model: account, url: plan_admin_account_path(account), method: :patch,
                               data: { turbo_confirm: "Change the plan for #{account.name}? A paid plan set here grants its allowances without any payment." },
-                              class: "mt-3 flex items-end gap-3" do |f| %>
+                              class: "mt-3 flex flex-wrap items-end gap-3" do |f| %>
                   <%= f.field :plan, "Plan",
                               as: :select,
                               choices: Billing::Plan::OFFERED.map { |plan| ["#{plan.name} — $#{plan.price_display}/mo", plan.key] },

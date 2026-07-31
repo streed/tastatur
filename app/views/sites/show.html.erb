@@ -64,7 +64,7 @@
   </div>
 
   <% unless @site.receiving_data? %>
-    <div class="notice mb-6 flex items-center justify-between gap-4">
+    <div class="notice mb-6 flex flex-wrap items-center justify-between gap-4">
       <span>No data yet — this site has never received an event.</span>
       <%= link_to "Show me the snippet", site_installation_path(@site), class: "btn btn-primary btn-sm",
                   data: { analytics_event: "Install Snippet Viewed",

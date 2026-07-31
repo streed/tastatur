@@ -12,22 +12,26 @@
 
   <% if result.data.any? %>
     <div>
+      <%# Columns tighten below `sm`, same as sites/_dashboard's copy: at their
+          sm+ widths the three number columns alone are wider than a phone. This
+          partial renders on public shared dashboards too, so a phone reader is
+          the common case rather than the edge. %>
       <div class="bar-row label border-b border-rule">
         <span>Goal</span>
-        <span class="flex gap-8">
-          <span class="w-24 text-right">Visitors</span>
-          <span class="w-24 text-right">Conversions</span>
-          <span class="w-16 text-right">Rate</span>
+        <span class="flex gap-3 sm:gap-8">
+          <span class="w-14 sm:w-24 text-right"><span class="sm:hidden">Visit.</span><span class="hidden sm:inline">Visitors</span></span>
+          <span class="w-14 sm:w-24 text-right"><span class="sm:hidden">Conv.</span><span class="hidden sm:inline">Conversions</span></span>
+          <span class="w-12 sm:w-16 text-right">Rate</span>
         </span>
       </div>
       <% result.data.each do |row| %>
         <div class="bar-row">
           <span class="bar-fill" style="width: <%= row.conversion_rate.clamp(0, 100) %>%"></span>
           <span class="bar-label font-medium"><%= row.goal.name %></span>
-          <span class="flex gap-8 num">
-            <span class="w-24 text-right"><%= metric_number(row.visitors) %></span>
-            <span class="w-24 text-right"><%= metric_number(row.conversions) %></span>
-            <span class="w-16 text-right font-semibold"><%= row.conversion_rate %>%</span>
+          <span class="flex gap-3 sm:gap-8 num">
+            <span class="w-14 sm:w-24 text-right"><%= metric_number(row.visitors) %></span>
+            <span class="w-14 sm:w-24 text-right"><%= metric_number(row.conversions) %></span>
+            <span class="w-12 sm:w-16 text-right font-semibold"><%= row.conversion_rate %>%</span>
           </span>
         </div>
       <% end %>

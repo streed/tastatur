@@ -137,7 +137,7 @@ class TastaturFormBuilder < ActionView::Helpers::FormBuilder
   # Primary action plus an optional cancel link and an optional destructive
   # action, always in the same order and alignment.
   def actions(submit_label, cancel_to: nil, cancel_label: "Cancel", destructive: nil)
-    @template.tag.div(class: "flex items-center justify-between gap-3 pt-2") do
+    @template.tag.div(class: "flex flex-wrap items-center justify-between gap-3 pt-2") do
       @template.safe_join(
         [
           @template.tag.div(class: "flex items-center gap-3") do

@@ -13,15 +13,21 @@
             The builder's contract is a micro-label, a control and a hint stacked
             vertically, which is right for a form and wrong for a single search
             box sitting in a header row. -%>
+        <%# `field` with a width cap, not the never-defined `input input-sm` it
+            shipped with — that rendered a browser-default input, which iOS
+            Safari zooms into on focus. %>
         <input type="search" name="q" value="<%= params[:q] %>" placeholder="External or Stripe ID"
-               class="input input-sm" aria-label="Search customers">
+               class="field w-44 sm:w-56" aria-label="Search customers">
         <%= submit_tag "Search", class: "btn btn-sm", data: { disable_with: false } %>
       <% end %>
       <div class="segmented">
-        <%= link_to "All", site_customers_path(@site),
-                    class: "segmented-item #{'is-active' if params[:filter] != 'paying'}" %>
-        <%= link_to "Paying", site_customers_path(@site, filter: "paying"),
-                    class: "segmented-item #{'is-active' if params[:filter] == 'paying'}" %>
+        <%# `segment` + aria-current is the segmented control's real API (see
+            DashboardHelper#period_link); `segmented-item`/`is-active` were
+            never defined and rendered as bare run-together text. %>
+        <%= link_to "All", site_customers_path(@site), class: "segment",
+                    "aria-current": (params[:filter] != "paying").to_s %>
+        <%= link_to "Paying", site_customers_path(@site, filter: "paying"), class: "segment",
+                    "aria-current": (params[:filter] == "paying").to_s %>
       </div>
       <%= link_to "Attribution", site_attribution_path(@site), class: "btn btn-sm" %>
     </div>

@@ -15,6 +15,13 @@ module ChartHelper
 
   WIDTH = 960
   HEIGHT = 260
+  # The SVG scales uniformly to its container (see the viewBox note below), so
+  # everything in it — axis text included — shrinks by the same factor. On a
+  # phone that factor is ~0.3 and the axis becomes unreadable. The fix is a
+  # second SVG drawn at phone proportions, swapped in below the `sm`
+  # breakpoint, so the type lands near its designed size on both.
+  MOBILE_WIDTH = 400
+  MOBILE_HEIGHT = 230
   PAD = { top: 16, right: 16, bottom: 26, left: 44 }.freeze
 
   SERIES = {
@@ -30,42 +37,10 @@ module ChartHelper
   def timeseries_chart(points, interval:, volume_label: "Pageviews")
     return content_tag(:p, "No data in this period.", class: "text-sm text-muted py-12 text-center") if points.blank?
 
-    plot_w = WIDTH - PAD[:left] - PAD[:right]
-    plot_h = HEIGHT - PAD[:top] - PAD[:bottom]
-
-    # BOTH series bound the scale. Scaling to pageviews alone — which is what
-    # this used to do — drew the visitors line above the plot area whenever a
-    # bucket had more visitors than pageviews, and the viewBox then clipped it
-    # to nothing. That is every bucket on an event-filtered dashboard (its
-    # volume is matching events, its visitors the people who fired them), and
-    # it is reachable unfiltered too: a visitor whose only event in a bucket is
-    # a custom event counts toward visitors and adds no pageview.
-    max = [points.flat_map { |p| [p.visitors, p.pageviews] }.max.to_i, 1].max
-    ticks = axis_ticks(max)
-    scale_max = [ticks.last, 1].max
-
-    x = ->(i) { PAD[:left] + (points.size == 1 ? plot_w / 2.0 : (i.to_f / (points.size - 1)) * plot_w) }
-    y = ->(v) { PAD[:top] + plot_h - ((v.to_f / scale_max) * plot_h) }
-
     tag.div(class: "relative", data: { controller: "chart" }) do
       safe_join([
-        # Uniform scaling (the default "meet"), not preserveAspectRatio="none":
-        # stretching the viewBox horizontally would squash the axis labels and
-        # the end markers into ellipses. Scaling uniformly keeps text and marks
-        # proportional at any container width.
-        tag.svg(
-          viewBox: "0 0 #{WIDTH} #{HEIGHT}",
-          class: "w-full block h-auto",
-          role: "img",
-          aria: { label: chart_description(points, volume_label) }
-        ) do
-          safe_join([
-            gridlines(ticks, scale_max, x, y, plot_w),
-            series_path(points, :pageviews, x, y, plot_h),
-            series_path(points, :visitors, x, y, plot_h),
-            hover_targets(points, x, plot_h)
-          ])
-        end,
+        chart_svg(points, volume_label, WIDTH, HEIGHT, css: "hidden sm:block w-full h-auto"),
+        chart_svg(points, volume_label, MOBILE_WIDTH, MOBILE_HEIGHT, css: "sm:hidden block w-full h-auto"),
         tooltip_element(points, interval, volume_label),
         # The same numbers as a real table, visually hidden.
         #
@@ -84,6 +59,43 @@ module ChartHelper
   end
 
   private
+
+  def chart_svg(points, volume_label, width, height, css:)
+    plot_w = width - PAD[:left] - PAD[:right]
+    plot_h = height - PAD[:top] - PAD[:bottom]
+
+    # BOTH series bound the scale. Scaling to pageviews alone — which is what
+    # this used to do — drew the visitors line above the plot area whenever a
+    # bucket had more visitors than pageviews, and the viewBox then clipped it
+    # to nothing. That is every bucket on an event-filtered dashboard (its
+    # volume is matching events, its visitors the people who fired them), and
+    # it is reachable unfiltered too: a visitor whose only event in a bucket is
+    # a custom event counts toward visitors and adds no pageview.
+    max = [points.flat_map { |p| [p.visitors, p.pageviews] }.max.to_i, 1].max
+    ticks = axis_ticks(max)
+    scale_max = [ticks.last, 1].max
+
+    x = ->(i) { PAD[:left] + (points.size == 1 ? plot_w / 2.0 : (i.to_f / (points.size - 1)) * plot_w) }
+    y = ->(v) { PAD[:top] + plot_h - ((v.to_f / scale_max) * plot_h) }
+
+    # Uniform scaling (the default "meet"), not preserveAspectRatio="none":
+    # stretching the viewBox horizontally would squash the axis labels and
+    # the end markers into ellipses. Scaling uniformly keeps text and marks
+    # proportional at any container width.
+    tag.svg(
+      viewBox: "0 0 #{width} #{height}",
+      class: css,
+      role: "img",
+      aria: { label: chart_description(points, volume_label) }
+    ) do
+      safe_join([
+        gridlines(ticks, scale_max, x, y, plot_w),
+        series_path(points, :pageviews, x, y, plot_h),
+        series_path(points, :visitors, x, y, plot_h),
+        hover_targets(points, x, plot_h, plot_w)
+      ])
+    end
+  end
 
   # Round tick values so the axis reads 0 / 500 / 1,000 rather than 0 / 437 / 874.
   def axis_ticks(max, count: 4)
@@ -129,8 +141,8 @@ module ChartHelper
 
   # Invisible full-height bands, one per bucket — the hit target is the whole
   # column, not the 8px dot, so hovering is forgiving.
-  def hover_targets(points, x, plot_h)
-    band = points.size > 1 ? (x.call(1) - x.call(0)) : (WIDTH - PAD[:left] - PAD[:right])
+  def hover_targets(points, x, plot_h, plot_w)
+    band = points.size > 1 ? (x.call(1) - x.call(0)) : plot_w
 
     safe_join(
       points.each_with_index.map do |point, i|

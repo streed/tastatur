@@ -1,7 +1,7 @@
 <% content_for :title, "Goals · #{@site.domain}" %>
 
 <div class="shell max-w-4xl">
-  <div class="flex items-end justify-between gap-4 mb-8 pt-5 rule-heavy">
+  <div class="flex flex-wrap items-end justify-between gap-4 mb-8 pt-5 rule-heavy">
     <div class="mt-5">
       <h1 class="text-2xl font-semibold">Goals</h1>
       <p class="label mt-2"><%= @site.domain %><span class="mx-2">·</span><%= @period.label %></p>
@@ -20,7 +20,9 @@
       <div class="bar-row label border-b border-rule">
         <span>Goal</span>
         <span class="flex gap-3 sm:gap-6">
-          <span class="w-14 sm:w-24 text-right">Visitors</span>
+          <%# "VISITORS" at the label's tracking is a hair wider than w-14 and
+              collides with the next column, so the phone gets the short form. %>
+          <span class="w-14 sm:w-24 text-right"><span class="sm:hidden">Visit.</span><span class="hidden sm:inline">Visitors</span></span>
           <span class="w-14 sm:w-24 text-right">Conv.</span>
           <span class="w-12 sm:w-14 text-right">Rate</span>
           <span class="w-10 sm:w-20"></span>

@@ -37,8 +37,10 @@
 
     <% @memberships.each do |membership| %>
       <div class="flex items-center justify-between gap-4 px-5 py-3.5 border-b border-rule last:border-b-0">
-        <div>
-          <p class="text-sm font-medium"><%= membership.user.email %></p>
+        <%# min-w-0 + truncate so a long address clips instead of pushing the
+            Remove button off a phone screen — same shape as the API keys list. %>
+        <div class="min-w-0">
+          <p class="text-sm font-medium truncate"><%= membership.user.email %></p>
           <p class="label mt-0.5"><%= membership.role %></p>
         </div>
         <% if policy(membership).destroy? && @memberships.size > 1 %>

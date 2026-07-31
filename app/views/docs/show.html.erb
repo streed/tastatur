@@ -41,9 +41,15 @@
     </p>
   </div>
 
-  <div class="grid lg:grid-cols-12 gap-10">
+  <%# `lg:grid`, not `grid`: a bare `grid` with no column template lays the
+      body out in one implicit auto-sized track, and auto tracks size to their
+      content's min-content — here the widest unwrappable snippet line, ~450px.
+      The `overflow-x-auto` on each <pre> cannot save it, because intrinsic
+      sizing ignores scrollability, so every phone got a sideways-panning page.
+      As plain blocks below lg the snippets scroll inside themselves. %>
+  <div class="lg:grid lg:grid-cols-12 gap-10">
     <%# --- Contents. Sticky on wide screens, a plain list on narrow ones. -%>
-    <nav class="lg:col-span-3 lg:sticky lg:top-8 lg:self-start" aria-label="Contents">
+    <nav class="mb-10 lg:mb-0 lg:col-span-3 lg:sticky lg:top-8 lg:self-start" aria-label="Contents">
       <p class="label mb-3">Contents</p>
       <ul class="border-t border-rule">
         <% sections.each do |id, title| %>

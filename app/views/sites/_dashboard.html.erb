@@ -40,7 +40,11 @@
          ["Bounce rate",     "#{summary.bounce_rate}%",        delta_tag(summary, :bounce_rate, lower_is_better: true)],
          ["Visit duration",  summary.formatted_duration,       delta_tag(summary, :avg_duration)]
        ].each_with_index do |(label, value, delta), index| %>
-      <div class="px-5 py-5 <%= "grid-hairline" unless index.zero? %> border-t border-rule first:border-t-0 md:border-t-0">
+      <%# Top hairline on every row after the first, at every breakpoint: the
+          exempt set is the first N cells where N is that breakpoint's column
+          count (2 / 3 / all 5). `first:border-t-0` alone left a stray rule
+          above the second cell of the first row on phones. %>
+      <div class="px-4 sm:px-5 py-4 sm:py-5 <%= "grid-hairline" unless index.zero? %> border-t border-rule [&:nth-child(-n+2)]:border-t-0 md:[&:nth-child(-n+3)]:border-t-0 lg:border-t-0">
         <p class="label"><%= label %></p>
         <p class="figure mt-2.5"><%= value %></p>
         <p class="mt-1.5"><%= delta %></p>
@@ -85,22 +89,25 @@
                   data: { turbo_frame: "_top" } if drillable %>
     </div>
     <div>
+      <%# The three number columns are 320px at their sm+ widths — wider than a
+          phone's whole content column — so below sm they tighten and the
+          Visitors column gives its header the shorter word. %>
       <div class="bar-row label border-b border-rule">
         <span>Goal</span>
-        <span class="flex gap-8">
-          <span class="w-24 text-right">Visitors</span>
-          <span class="w-24 text-right">Conversions</span>
-          <span class="w-16 text-right">Rate</span>
+        <span class="flex gap-3 sm:gap-8">
+          <span class="w-14 sm:w-24 text-right"><span class="sm:hidden">Visit.</span><span class="hidden sm:inline">Visitors</span></span>
+          <span class="w-14 sm:w-24 text-right"><span class="sm:hidden">Conv.</span><span class="hidden sm:inline">Conversions</span></span>
+          <span class="w-12 sm:w-16 text-right">Rate</span>
         </span>
       </div>
       <% report.goals.each do |row| %>
         <div class="bar-row">
           <span class="bar-fill" style="width: <%= row.conversion_rate.clamp(0, 100) %>%"></span>
           <span class="bar-label font-medium"><%= row.goal.name %></span>
-          <span class="flex gap-8 num">
-            <span class="w-24 text-right"><%= metric_number(row.visitors) %></span>
-            <span class="w-24 text-right"><%= metric_number(row.conversions) %></span>
-            <span class="w-16 text-right font-semibold"><%= row.conversion_rate %>%</span>
+          <span class="flex gap-3 sm:gap-8 num">
+            <span class="w-14 sm:w-24 text-right"><%= metric_number(row.visitors) %></span>
+            <span class="w-14 sm:w-24 text-right"><%= metric_number(row.conversions) %></span>
+            <span class="w-12 sm:w-16 text-right font-semibold"><%= row.conversion_rate %>%</span>
           </span>
         </div>
       <% end %>
