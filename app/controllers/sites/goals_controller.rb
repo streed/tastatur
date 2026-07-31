@@ -1,6 +1,8 @@
 module Sites
   class GoalsController < ApplicationController
-    before_action :set_site
+    include SiteScoped
+    include OffersKnownValues
+
     before_action :set_goal, only: %i[edit update destroy]
 
     def index
@@ -46,10 +48,6 @@ module Sites
     end
 
     private
-
-    def set_site
-      @site = policy_scope(Site).find_by!(public_token: params[:site_public_token])
-    end
 
     def set_goal
       @goal = @site.goals.find_by_public_id!(params[:id])

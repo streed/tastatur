@@ -147,6 +147,7 @@ class SitesController < ApplicationController
   end
 
   def site_params
-    params.expect(site: %i[domain timezone k_anonymity_threshold extra_hostnames_list enforce_hostname])
+    params.expect(site: %i[domain timezone k_anonymity_threshold extra_hostnames_list enforce_hostname
+                           base_currency])
   end
 end

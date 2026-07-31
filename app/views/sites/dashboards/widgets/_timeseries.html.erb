@@ -1,0 +1,23 @@
+<%# The visitors/volume chart. Locals: site, report, result (data:
+    Array[Analytics::Timeseries::Point]). -%>
+<% widget = result.widget
+   label = volume_label(widget.saved_filters) %>
+
+<div class="card">
+  <div class="card-head">
+    <h2 class="text-sm font-semibold"><%= widget.display_title %></h2>
+    <%# Legend is always present for two series — identity must never depend on
+        colour-matching alone. -%>
+    <div class="flex items-center gap-5 text-[12px] text-ink-2">
+      <span class="flex items-center gap-2">
+        <span class="inline-block w-3 h-0.5 bg-signal" aria-hidden="true"></span>Visitors
+      </span>
+      <span class="flex items-center gap-2">
+        <span class="inline-block w-3 h-0.5 bg-petrol" aria-hidden="true"></span><%= label %>
+      </span>
+    </div>
+  </div>
+  <div class="card-body pt-6">
+    <%= timeseries_chart(result.data, interval: report.period.interval, volume_label: label) %>
+  </div>
+</div>

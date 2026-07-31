@@ -56,5 +56,39 @@ Stripe.max_network_retries = 2
 Rails.configuration.stripe = {
   publishable_key: ENV["STRIPE_PUBLISHABLE_KEY"],
   secret_key:      ENV["STRIPE_SECRET_KEY"],
-  webhook_secret:  ENV["STRIPE_WEBHOOK_SECRET"]
+  webhook_secret:  ENV["STRIPE_WEBHOOK_SECRET"],
+
+  # --- Stripe Connect: reading the CUSTOMER'S revenue ----------------------
+  #
+  # A SEPARATE INTEGRATION FROM EVERYTHING ABOVE, and it is worth being blunt
+  # about the difference because both halves are "Stripe" and they point in
+  # opposite directions. The three keys above take money FROM our customers. The
+  # two below read revenue data belonging TO our customers, read-only, from their
+  # own Stripe accounts.
+  #
+  # THE CONNECT APP MUST BE REGISTERED AS AN "EXTENSION", NOT A "PLATFORM", and
+  # this is the one decision here that cannot be undone without a Stripe support
+  # ticket. Only an Extension can request the `read_only` scope, and only an
+  # Extension can connect to an account that already has another platform
+  # attached — which most SaaS businesses do. Registering it as a Platform means
+  # discovering both of those facts from a customer who cannot connect.
+  #
+  # Set up at https://dashboard.stripe.com/settings/connect:
+  #   STRIPE_CONNECT_CLIENT_ID=ca_...        the OAuth client id
+  #   STRIPE_CONNECT_WEBHOOK_SECRET=whsec_...
+  #
+  # THE CONNECT WEBHOOK NEEDS ITS OWN ENDPOINT AND ITS OWN SECRET. In the Stripe
+  # dashboard a webhook endpoint is either "account" or "connect"; one endpoint
+  # cannot be both, and each has a distinct signing secret. Pointing Connect
+  # deliveries at /billing/stripe/webhook would fail every signature check, and —
+  # because that controller answers 400 on a bad signature — Stripe would disable
+  # the endpoint after three days, taking OUR OWN subscription webhooks down with
+  # it. Hence two routes, two secrets, two controllers.
+  #
+  # NO ACCESS TOKEN IS EVER STORED. The OAuth exchange is how the customer grants
+  # access and how we learn the account id; the token it returns is discarded, and
+  # every later call uses `secret_key` plus a `Stripe-Account` header. See
+  # StripeConnection and Revenue::StripeAccount.
+  connect_client_id:      ENV["STRIPE_CONNECT_CLIENT_ID"],
+  connect_webhook_secret: ENV["STRIPE_CONNECT_WEBHOOK_SECRET"]
 }

@@ -8,6 +8,13 @@ class Funnel < ApplicationRecord
   belongs_to :site
   has_many :funnel_steps, -> { order(:position) }, dependent: :destroy, inverse_of: :funnel
 
+  # Nullify, not destroy: deleting a funnel must not silently reshape a
+  # dashboard someone curated. The widget stays, with no funnel, and renders an
+  # explanatory empty state offering the dashboard's edit page. The FK's
+  # on_delete: :nullify is the backstop; this keeps in-memory associations
+  # agreeing with it.
+  has_many :dashboard_widgets, dependent: :nullify
+
   # The form renders spare blank rows so a step can be added without any
   # JavaScript. Those rows have to be ignored when left untouched, or every save
   # fails on the blank one — which is what happened before this: submitting the

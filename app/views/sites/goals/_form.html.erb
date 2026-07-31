@@ -6,10 +6,16 @@
     name on the customer's site, and `name` is whatever they chose to call it —
     both are theirs, and neither belongs in our analytics to satisfy a curiosity
     about which kind of goal is more popular. -%>
+<%# The value-picker controller goes on the form rather than on the field,
+    because the field and the two kind radios below are one question: which
+    column the value is compared against decides whether it is a path or an
+    event name, and the list has to swap with it. -%>
 <%= form_with model: [@site, @goal],
               url: @goal.persisted? ? site_goal_path(@site, @goal) : site_goals_path(@site),
               class: "card card-body space-y-6",
-              data: { analytics_event: ("Goal Created" unless @goal.persisted?) } do |f| %>
+              data: { analytics_event: ("Goal Created" unless @goal.persisted?),
+                      controller: "value-picker",
+                      value_picker_source_value: OffersKnownValues::KNOWN_VALUES_DOM_ID } do |f| %>
   <%= f.error_summary %>
 
   <%= f.field :name, "Name", placeholder: "Signup completed", autofocus: true %>
@@ -19,7 +25,9 @@
     <div class="space-y-2">
       <div class="border border-rule-2 p-3 hover:bg-surface-2">
         <label class="flex items-start gap-3 cursor-pointer">
-          <%= f.radio_button :kind, "pageview", class: "mt-1" %>
+          <%= f.radio_button :kind, "pageview", class: "mt-1",
+                             data: { value_picker_target: "kind",
+                                     action: "change->value-picker#kindChanged" } %>
           <span>
             <span class="font-medium text-sm">A page was viewed</span>
             <span class="block text-[12px] text-muted mt-0.5">Matches the request path, e.g. /pricing</span>
@@ -28,7 +36,9 @@
       </div>
       <div class="border border-rule-2 p-3 hover:bg-surface-2">
         <label class="flex items-start gap-3 cursor-pointer">
-          <%= f.radio_button :kind, "event", class: "mt-1" %>
+          <%= f.radio_button :kind, "event", class: "mt-1",
+                             data: { value_picker_target: "kind",
+                                     action: "change->value-picker#kindChanged" } %>
           <span>
             <span class="font-medium text-sm">A custom event fired</span>
             <span class="block text-[12px] text-muted mt-0.5">
@@ -41,16 +51,20 @@
   </div>
 
   <div class="grid sm:grid-cols-3 gap-4">
-    <%= f.field :match_value, "Path or event name", placeholder: "/pricing",
+    <%= f.field :match_value, "Path or event name", as: :combobox, placeholder: "/pricing",
                 wrapper: "sm:col-span-2" %>
     <%= f.field :match_type, "Match", as: :select,
                 choices: [["Exactly", "exact"], ["Starts with", "prefix"], ["Wildcard", "wildcard"]] %>
   </div>
 
-  <p class="text-[12px] text-muted -mt-2">
-    Wildcards: <code>*</code> matches within one path segment, <code>**</code> matches across
-    segments. <code>/blog/**</code> matches every post.
-  </p>
+  <div class="-mt-2 space-y-2">
+    <%= render "sites/known_values", known_values: known_values %>
+
+    <p class="text-[12px] text-muted">
+      Wildcards: <code>*</code> matches within one path segment, <code>**</code> matches across
+      segments. <code>/blog/**</code> matches every post.
+    </p>
+  </div>
 
   <div class="grid sm:grid-cols-3 gap-4 rule pt-6">
     <%= f.field :default_value_cents, "Value in minor units (optional)", as: :number_field,

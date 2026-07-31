@@ -1,0 +1,39 @@
+<% content_for :title, "Dashboards · #{@site.domain}" %>
+<div class="shell max-w-4xl">
+  <div class="flex items-end justify-between gap-4 mb-8 pt-5 rule-heavy">
+    <div class="mt-5">
+      <h1 class="text-2xl font-semibold">Dashboards</h1>
+      <p class="label mt-2"><%= @site.domain %></p>
+    </div>
+    <div class="flex gap-3">
+      <%= link_to "Dashboard", site_path(@site), class: "btn btn-quiet" %>
+      <%= link_to "New dashboard", new_site_dashboard_path(@site), class: "btn btn-primary" %>
+    </div>
+  </div>
+
+  <% if @dashboards.any? %>
+    <div class="card">
+      <% @dashboards.each do |dashboard| %>
+        <%= link_to site_dashboard_path(@site, dashboard),
+                    class: "flex items-center justify-between gap-4 px-5 py-4 border-b border-rule last:border-b-0 hover:bg-surface-2" do %>
+          <div>
+            <p class="font-semibold"><%= dashboard.name %></p>
+            <p class="label mt-1">
+              <%= dashboard.dashboard_widgets.map(&:display_title).join(" · ") %>
+            </p>
+          </div>
+          <span class="label shrink-0">View →</span>
+        <% end %>
+      <% end %>
+    </div>
+  <% else %>
+    <div class="card card-body text-center py-14">
+      <p class="font-semibold">No dashboards yet.</p>
+      <p class="text-sm text-ink-2 mt-2 max-w-md mx-auto">
+        A dashboard is your own arrangement of this site's reports — pick the stats, charts and
+        breakdowns that answer one question, save filters onto them, and share the result.
+      </p>
+      <div class="mt-6"><%= link_to "Build your first dashboard", new_site_dashboard_path(@site), class: "btn btn-primary" %></div>
+    </div>
+  <% end %>
+</div>

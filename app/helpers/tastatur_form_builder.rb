@@ -23,6 +23,8 @@ class TastaturFormBuilder < ActionView::Helpers::FormBuilder
         select(name, choices || [], {}, **default_options(name, options))
       when :text_area
         text_area(name, **default_options(name, options))
+      when :combobox
+        combobox(name, options)
       when :check_box
         return check_box_field(name, label_text, hint: hint, **options)
       else
@@ -37,6 +39,58 @@ class TastaturFormBuilder < ActionView::Helpers::FormBuilder
           field_errors(name),
           hint.present? ? @template.tag.p(hint, class: "text-[12px] text-muted mt-2") : nil
         ].compact
+      )
+    end
+  end
+
+  # A text field that can also be picked from, for the one kind of field in this
+  # application where the right answer is a string the customer's own website
+  # already produced: a goal's path, a funnel step's event name.
+  #
+  # `f.field :match_value, "Path or event name", as: :combobox`
+  #
+  # STILL A TEXT FIELD, and that is not a compromise. A goal is routinely created
+  # for a page that has not shipped yet, and `prefix` and `wildcard` matchers are
+  # patterns rather than paths — `/blog/**` will never appear in any list of
+  # things that happened. A <select> would refuse all three. So the list assists
+  # and never constrains, which also means the field degrades to exactly what it
+  # was before if the JavaScript never runs.
+  #
+  # The listbox is rendered empty. Its options are filled in client-side from one
+  # JSON payload shared by every picker on the page — see OffersKnownValues for
+  # why they are not rendered per field — by value_picker_controller.js, which
+  # must be on an ancestor element along with the `kind` control that decides
+  # which half of the payload applies.
+  def combobox(name, options)
+    list_id = "#{field_id(name)}_listbox"
+
+    control = text_field(name, **default_options(name, options.merge(
+      # A browser's own saved-value dropdown would cover this one, and it offers
+      # what was typed into a field of the same name on any form, which here is
+      # another site's paths.
+      autocomplete: "off",
+      spellcheck: "false",
+      role: "combobox",
+      aria: { expanded: false, controls: list_id, autocomplete: "list" },
+      data: {
+        value_picker_target: "input",
+        action: "input->value-picker#filter focus->value-picker#open keydown->value-picker#navigate"
+      }
+    )))
+
+    @template.tag.div(class: "combobox") do
+      @template.safe_join(
+        [
+          control,
+          # Rendered hidden and revealed by the controller on connect, so it is
+          # never a button that does nothing.
+          @template.tag.button("▾", type: "button", class: "combobox-toggle", tabindex: -1, hidden: true,
+                                    aria: { label: "Show suggestions" },
+                                    data: { value_picker_target: "toggle",
+                                            action: "mousedown->value-picker#toggle" }),
+          @template.tag.ul(nil, id: list_id, class: "combobox-list", role: "listbox", hidden: true,
+                                data: { value_picker_target: "list" })
+        ]
       )
     end
   end

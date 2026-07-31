@@ -1,0 +1,21 @@
+<%# The widget grid, shared by the owner's page and the public shared view.
+    Locals: site, report (Dashboards::Report), editable.
+
+    The turbo-frame lives INSIDE this partial, not around it — the same lesson
+    as sites/_dashboard.html.erb: dashboards#show answers a frame request by
+    rendering this partial alone, and Turbo replaces a frame with the matching
+    <turbo-frame> found in the RESPONSE.
+
+    Width is decided by kind rather than stored: the three table/chart kinds
+    read poorly at half width, and a column is one migration away if someone
+    asks for control. -%>
+<%= turbo_frame_tag "dashboard", data: { turbo_action: "advance" } do %>
+  <div class="grid md:grid-cols-2 gap-6 items-start">
+    <% report.widgets.each do |result| %>
+      <div class="<%= "md:col-span-2" if result.widget.kind.in?(%w[timeseries goals funnel]) %>">
+        <%= render "sites/dashboards/widget",
+                   site: site, report: report, result: result, editable: editable %>
+      </div>
+    <% end %>
+  </div>
+<% end %>

@@ -17,7 +17,12 @@ import { Controller } from "@hotwired/stimulus"
 //     nested records untouched — so the row would quietly come back.
 export default class extends Controller {
   static targets = ["rows", "template", "addButton", "count"]
-  static values = { max: { type: Number, default: 0 }, min: { type: Number, default: 0 } }
+  static values = {
+    max: { type: Number, default: 0 },
+    min: { type: Number, default: 0 },
+    // What a row is called in its position label — "Step 2", "Widget 2".
+    label: { type: String, default: "Step" }
+  }
 
   connect() {
     this.refresh()
@@ -59,7 +64,7 @@ export default class extends Controller {
   refresh() {
     this.visibleRows.forEach((row, index) => {
       const label = row.querySelector("[data-nested-form-position]")
-      if (label) label.textContent = `Step ${index + 1}`
+      if (label) label.textContent = `${this.labelValue} ${index + 1}`
 
       // Below the minimum there is nothing safe to remove, so the control is
       // hidden rather than offered and then rejected by the server.

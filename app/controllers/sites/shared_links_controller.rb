@@ -1,13 +1,16 @@
 module Sites
   class SharedLinksController < ApplicationController
-    before_action :set_site
+    include SiteScoped
 
     # Newest first, because the one you just made is the one you are here to copy.
     # Alphabetical put it wherever its label happened to sort, which on an account
     # with a dozen client links meant hunting for it.
     def index
-      @shared_links = policy_scope(SharedLink).where(site: @site).order(created_at: :desc)
-      @shared_link = SharedLink.new
+      @shared_links = policy_scope(SharedLink).where(site: @site).includes(:dashboard).order(created_at: :desc)
+      # A dashboard's own Share button arrives with ?dashboard=<public_id> so
+      # the form opens preselected to the thing being looked at. Resolved
+      # through @site's dashboards, so a foreign identifier preselects nothing.
+      @shared_link = SharedLink.new(dashboard: preselected_dashboard)
     end
 
     def create
@@ -34,12 +37,19 @@ module Sites
 
     private
 
-    def set_site
-      @site = policy_scope(Site).find_by!(public_token: params[:site_public_token])
+    # `is_a?(String)`: the same type guard as ApplicationController's
+    # account_slug — a crafted ?dashboard[x]=1 must not become a TypeError.
+    def preselected_dashboard
+      value = params[:dashboard]
+      return nil unless value.is_a?(String) && value.present?
+
+      @site.dashboards.find_by(public_id: value)
     end
 
+    # `dashboard_public_id`, never `dashboard_id` — a posted primary key must
+    # have no path into the model. See SharedLink#dashboard_public_id=.
     def shared_link_params
-      params.expect(shared_link: %i[name password expires_at])
+      params.expect(shared_link: %i[name password expires_at dashboard_public_id])
     end
   end
 end

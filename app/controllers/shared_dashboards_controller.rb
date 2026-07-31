@@ -36,6 +36,19 @@ class SharedDashboardsController < ApplicationController
     @period = Analytics::Period.parse(params[:period], site: @site)
 
     # Filters are deliberately not honoured here. See the class comment.
+    #
+    # A link can point at a custom dashboard, in which case that dashboard's
+    # widgets are exactly what the link exposes — no more. The filters those
+    # widgets carry were saved by the dashboard's AUTHOR, which is the opposite
+    # of a viewer-supplied filter: Dashboards::Render takes no filter input at
+    # all, so the no-viewer-filters rule holds by construction. k-anonymity
+    # still applies inside every widget, exactly as it does one branch down.
+    if (dashboard = @shared_link.dashboard)
+      @report = Dashboards::Render.call(dashboard: dashboard, period: @period).value!
+      @shared_link.record_view!
+      return render :custom
+    end
+
     @report = Analytics::Dashboard.call(site: @site, period: @period).value!
     @shared_link.record_view!
   end

@@ -1,0 +1,20 @@
+<%# One saved-filter row: a dimension and the value it must equal. Local: pair
+    (form builder over DashboardWidget::FilterPair).
+
+    The value-picker controller is per PAIR, exactly as it is per funnel step:
+    each pair has its own dimension, so each needs its own list. The dimension
+    options carry data-group so the picker knows whether values are paths,
+    event names, or something it has no payload for. -%>
+<div class="grid sm:grid-cols-[1fr_1fr_auto] gap-4 items-end" data-filter-pairs-row
+     data-controller="value-picker"
+     data-value-picker-source-value="<%= OffersKnownValues::KNOWN_VALUES_DOM_ID %>">
+  <%= pair.field :dimension, "Filter by", as: :select,
+                 choices: filter_dimension_choices,
+                 data: { value_picker_target: "kind",
+                         action: "change->value-picker#kindChanged" } %>
+  <%= pair.field :value, "Value", as: :combobox, placeholder: "/pricing" %>
+  <button type="button" class="btn btn-quiet btn-sm text-negative mb-0.5"
+          data-action="filter-pairs#remove">
+    Remove
+  </button>
+</div>

@@ -36,7 +36,20 @@ RSpec.configure do |config|
   config.before do
     Rails.configuration.stripe = Rails.configuration.stripe.merge(
       secret_key: "sk_test_suite",
-      webhook_secret: StripeWebhookHelpers::SECRET
+      webhook_secret: StripeWebhookHelpers::SECRET,
+
+      # Connect is configured for the same reason billing is: `Tastatur.revenue_enabled?`
+      # is false without these, and when it is false every revenue endpoint answers
+      # 404. A suite defaulting to the unconfigured state would pass by never
+      # reaching the code it claims to test.
+      #
+      # A SECOND, DIFFERENT SIGNING SECRET, not a copy of the one above. Stripe
+      # issues a distinct secret per endpoint and the two endpoints are separate by
+      # design — so a controller that read the wrong one would still verify every
+      # signature in a suite where both secrets were the same string, and would
+      # reject every real delivery in production.
+      connect_client_id: "ca_test_suite",
+      connect_webhook_secret: StripeWebhookHelpers::CONNECT_SECRET
     )
     # `blank?`, not `||=`. An empty string is truthy in Ruby, so `||=` would leave
     # `STRIPE_PRICE_PRO=` in place — and `Plan#stripe_price_id` calls `.presence`, so
@@ -48,6 +61,7 @@ end
 
 module StripeWebhookHelpers
   SECRET = "whsec_test_secret".freeze
+  CONNECT_SECRET = "whsec_test_connect_secret".freeze
 
   # A correctly signed webhook request body and header pair.
   #
@@ -72,6 +86,29 @@ module StripeWebhookHelpers
       created: Time.current.to_i,
       data: { object: object }
     }.to_json
+  end
+
+  # A Connect delivery. Identical to the above but for the `account` field, which
+  # is the ONLY thing telling the receiver which connected account — and therefore
+  # which of our sites — an event belongs to. A Connect event without it resolves
+  # to no site and is dropped, so a helper that omitted it would make every
+  # request spec assert on the wrong branch.
+  def stripe_connect_event_payload(type:, object:, account:, id: "evt_test_#{SecureRandom.hex(6)}",
+                                   created: Time.current.to_i)
+    {
+      id: id,
+      object: "event",
+      type: type,
+      account: account,
+      created: created,
+      data: { object: object }
+    }.to_json
+  end
+
+  def post_connect_webhook(payload)
+    post stripe_connect_webhook_path, params: payload,
+         headers: { "Stripe-Signature" => stripe_signature_header(payload, secret: CONNECT_SECRET),
+                    "Content-Type" => "application/json" }
   end
 end
 

@@ -1,0 +1,181 @@
+<% content_for :title, "Attribution · #{@site.domain}" %>
+
+<div class="shell">
+  <div class="flex flex-wrap items-end justify-between gap-4 mb-6">
+    <div>
+      <h1 class="text-2xl font-semibold">Attribution</h1>
+      <p class="label mt-2">
+        <%= @period.label %><span class="mx-2">·</span><%= @site.timezone %>
+        <% if @report[:stale_since] %>
+          <%# WHEN THIS WAS LAST COMPUTED, stated on the face of the screen.
+              A nightly rollup that quietly stops updating looks exactly like a
+              business that stopped growing — a flat line somebody tries to
+              explain rather than a bug somebody reports. -%>
+          <span class="mx-2">·</span>updated <%= time_ago_in_words(@report[:stale_since]) %> ago
+        <% end %>
+      </p>
+    </div>
+
+    <div class="flex flex-wrap items-center gap-3">
+      <%# NOT `period_link`, which is the dashboard's helper: it builds a
+          `site_path` URL and reads `@filters`, so using it here would both send
+          the reader back to the traffic dashboard and raise, because this screen
+          has no filters. Public shared dashboards ignore filters for a privacy
+          reason (§12); this screen has none for a simpler one — a revenue rollup
+          is precomputed per channel per day and there is nothing to filter it by. -%>
+      <div class="segmented">
+        <% %w[today 7d 30d 90d 12mo].each do |key| %>
+          <%= link_to Analytics::Period::PRESETS[key].sub("Last ", ""),
+                      site_attribution_path(@site, period: key, sort: @report[:sort]),
+                      class: "segmented-item #{'is-active' if @period.key == key}" %>
+        <% end %>
+      </div>
+      <%= link_to "Customers", site_customers_path(@site), class: "btn btn-sm" %>
+      <%= link_to "Dashboard", site_path(@site), class: "btn btn-sm" %>
+    </div>
+  </div>
+
+  <% if @connection.nil? %>
+    <%# The empty state that matters most on this screen. Without it the page is
+        a correct, empty table, which reads as "this feature is broken" rather
+        than "this feature is not switched on". -%>
+    <div class="card card-body">
+      <h2 class="text-sm font-semibold">Connect Stripe to see revenue here</h2>
+      <p class="text-sm text-ink-2 mt-2 max-w-2xl">
+        This table shows which acquisition channel produced paying customers, not just visitors.
+        The traffic half is already being measured. The revenue half needs a read-only connection
+        to your Stripe account — we ask for <code>read_only</code> scope and never write to it.
+      </p>
+      <div class="mt-4 flex items-center gap-3">
+        <% if Tastatur.revenue_enabled? && policy(StripeConnection.new(site: @site)).create? %>
+          <%= button_to "Connect Stripe", site_stripe_connection_path(@site), class: "btn btn-primary btn-sm",
+                        data: { analytics_event: "Stripe Connect Started" } %>
+        <% elsif !Tastatur.revenue_enabled? %>
+          <p class="text-sm text-ink-2">
+            Stripe Connect is not configured on this instance. An operator needs to set
+            <code>STRIPE_CONNECT_CLIENT_ID</code> and <code>STRIPE_CONNECT_WEBHOOK_SECRET</code>.
+          </p>
+        <% else %>
+          <p class="text-sm text-ink-2">Connecting Stripe is an admin action. Ask an account admin.</p>
+        <% end %>
+      </div>
+    </div>
+  <% else %>
+    <% if @connection.test_mode? %>
+      <div class="notice mb-6">
+        This Stripe account is connected in <strong>test mode</strong>. Everything below is test data,
+        not real revenue.
+      </div>
+    <% end %>
+
+    <%# Totals first: the two numbers somebody came for, before the table that
+        explains them. -%>
+    <div class="grid sm:grid-cols-4 gap-4 mb-6">
+      <div class="card card-body">
+        <p class="label">Net MRR movement</p>
+        <p class="text-2xl font-semibold mt-1"><%= money_amount(@site.base_currency, @report[:totals][:net_mrr_cents]) %></p>
+      </div>
+      <div class="card card-body">
+        <p class="label">New MRR</p>
+        <p class="text-2xl font-semibold mt-1"><%= money_amount(@site.base_currency, @report[:totals][:new_mrr_cents]) %></p>
+      </div>
+      <div class="card card-body">
+        <p class="label">Churned MRR</p>
+        <p class="text-2xl font-semibold mt-1"><%= money_amount(@site.base_currency, @report[:totals][:churned_mrr_cents]) %></p>
+      </div>
+      <div class="card card-body">
+        <p class="label">Conversions</p>
+        <p class="text-2xl font-semibold mt-1"><%= number_with_delimiter(@report[:totals][:conversions]) %></p>
+      </div>
+    </div>
+
+    <% if @report[:totals][:unconverted_events].positive? %>
+      <%# SAID OUT LOUD RATHER THAN FOLDED INTO THE TOTAL. Revenue we could not
+          convert into the site's base currency contributes nothing above, and a
+          report that silently under-reports is worse than one that admits its
+          own gap. See Revenue::Normalize. -%>
+      <div class="notice mb-6">
+        <%= pluralize(@report[:totals][:unconverted_events], "revenue event") %>
+        <%= @report[:totals][:unconverted_events] == 1 ? "was" : "were" %>
+        charged in a currency other than <%= @site.base_currency %> and are <strong>not included</strong>
+        in the figures above. Set this site's base currency to the one you actually bill in,
+        under Settings.
+      </div>
+    <% end %>
+
+    <div class="card">
+      <div class="card-head flex items-center justify-between gap-4">
+        <h2 class="text-sm font-semibold">Channels</h2>
+        <%# SORTED BY MONEY BY DEFAULT, and the control says so rather than
+            hiding it. Every other analytics tool sorts this by visitors, which
+            reliably puts the channel sending the most people at the top — and
+            that is very often the channel sending the fewest customers. -%>
+        <div class="segmented">
+          <% { "revenue" => "MRR", "lifetime" => "Lifetime", "visitors" => "Visitors",
+               "conversions" => "Conversions" }.each do |key, label| %>
+            <%= link_to label,
+                        site_attribution_path(@site, period: @period.key, sort: key),
+                        class: "segmented-item #{'is-active' if @report[:sort] == key}" %>
+          <% end %>
+        </div>
+      </div>
+
+      <% if @report[:rows].empty? %>
+        <div class="card-body text-sm text-ink-2">
+          Nothing to show for <%= @period.label.downcase %>.
+          <% unless @connection.backfilled? %>
+            Your Stripe history is still importing — this can take a few minutes on a large account.
+          <% end %>
+        </div>
+      <% else %>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left label border-b border-rule">
+                <th class="px-5 py-3">Channel</th>
+                <th class="px-5 py-3 text-right">Visitors</th>
+                <th class="px-5 py-3 text-right">Signups</th>
+                <th class="px-5 py-3 text-right">Trials</th>
+                <th class="px-5 py-3 text-right">Conversions</th>
+                <th class="px-5 py-3 text-right">Rate</th>
+                <th class="px-5 py-3 text-right">Net MRR</th>
+                <th class="px-5 py-3 text-right">Lifetime</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% @report[:rows].each do |row| %>
+                <tr class="border-b border-rule last:border-b-0">
+                  <td class="px-5 py-3 font-medium"><%= row.channel_label %></td>
+                  <td class="px-5 py-3 text-right tabular-nums"><%= number_with_delimiter(row.visitors) %></td>
+                  <td class="px-5 py-3 text-right tabular-nums"><%= number_with_delimiter(row.signups) %></td>
+                  <td class="px-5 py-3 text-right tabular-nums"><%= number_with_delimiter(row.trials) %></td>
+                  <td class="px-5 py-3 text-right tabular-nums"><%= number_with_delimiter(row.conversions) %></td>
+                  <td class="px-5 py-3 text-right tabular-nums text-ink-2">
+                    <%# An em dash, NOT "0%". A channel with conversions and no
+                        recorded visitors is not converting at zero — it is a
+                        channel whose traffic we did not see, which is what the
+                        Stripe backfill and every ad blocker produce. See
+                        Revenue::ChannelRow#conversion_rate. -%>
+                    <%= row.conversion_rate ? number_to_percentage(row.conversion_rate * 100, precision: 1) : "—" %>
+                  </td>
+                  <td class="px-5 py-3 text-right tabular-nums font-medium">
+                    <%= money_amount(@site.base_currency, row.net_mrr_cents) %>
+                  </td>
+                  <td class="px-5 py-3 text-right tabular-nums">
+                    <%= money_amount(@site.base_currency, row.lifetime_revenue_cents) %>
+                  </td>
+                </tr>
+              <% end %>
+            </tbody>
+          </table>
+        </div>
+
+        <% if @report[:truncated] %>
+          <div class="card-body text-sm text-ink-2 border-t border-rule">
+            Showing the top 100 channels. Narrow the period to see the rest.
+          </div>
+        <% end %>
+      <% end %>
+    </div>
+  <% end %>
+</div>

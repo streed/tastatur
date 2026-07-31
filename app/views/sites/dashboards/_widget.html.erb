@@ -1,0 +1,44 @@
+<%# One widget: dispatches to the per-kind partial, or renders the explanatory
+    state for a widget that can no longer answer (see Dashboards::WidgetResult).
+    Locals: site, report, result, editable.
+
+    `editable` gates the edit links, because this partial also renders on the
+    public shared dashboard, where offering an edit page to an anonymous
+    reader would be both useless and a map. -%>
+<% widget = result.widget %>
+
+<% if result.ok? %>
+  <%= render "sites/dashboards/widgets/#{widget.kind}",
+             site: site, report: report, result: result %>
+<% else %>
+  <div class="card">
+    <div class="card-head">
+      <h2 class="text-sm font-semibold"><%= widget.display_title %></h2>
+    </div>
+    <div class="px-5 py-10 text-center">
+      <p class="text-sm text-ink-2">
+        <% if result.status == :missing_funnel %>
+          The funnel this widget showed has been deleted.
+        <% else %>
+          This widget's configuration no longer matches anything that can be reported.
+        <% end %>
+      </p>
+      <% if editable %>
+        <p class="text-[12px] text-muted mt-2">
+          <%# `_top`: this renders inside the "dashboard" turbo-frame, and the
+              edit page has no frame of that name. %>
+          <%= link_to "Edit this dashboard", edit_site_dashboard_path(site, report.dashboard),
+                      class: "underline hover:text-ink", data: { turbo_frame: "_top" } %>
+          to <%= result.status == :missing_funnel ? "pick another funnel" : "reconfigure it" %> or remove the widget.
+        </p>
+      <% end %>
+    </div>
+  </div>
+<% end %>
+
+<%# The author's saved filters, stated on every widget that carries any. A
+    panel titled "Top pages" that is silently pinned to one source would
+    mislead exactly the reader a curated dashboard was built for. -%>
+<% if (note = widget_filter_summary(widget)) %>
+  <p class="text-[11px] text-muted mt-1.5"><%= note %></p>
+<% end %>

@@ -244,6 +244,73 @@
     box-shadow: inset 0 0 0 1px var(--color-ink);
   }
 
+  /* --- Combobox -----------------------------------------------------------
+     A text field with a list of real values under it. The list overlays the
+     content below it, which everywhere else in this interface would be a job
+     for elevation — there is none here, so the separation is the same hairline
+     the cards use, over an opaque paper surface. */
+
+  .combobox { position: relative; }
+
+  /* Room for the toggle, so a long path never runs underneath it. */
+  .combobox .field { padding-right: 34px; }
+
+  .combobox-toggle {
+    position: absolute;
+    top: 1px;
+    right: 1px;
+    bottom: 1px;
+    width: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    line-height: 1;
+    color: var(--color-muted);
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+  }
+  .combobox-toggle:hover { color: var(--color-ink); }
+
+  .combobox-list {
+    position: absolute;
+    z-index: 20;
+    top: calc(100% - 1px);
+    left: 0;
+    right: 0;
+    max-height: 260px;
+    overflow-y: auto;
+    background: var(--color-surface);
+    border: 1px solid var(--color-ink);
+  }
+
+  .combobox-option {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 7px 10px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .combobox-option + .combobox-option { border-top: 1px solid var(--color-rule); }
+  .combobox-option:hover,
+  .combobox-option.is-active { background: var(--color-surface-2); }
+
+  /* Paths are long and the middle of one is rarely what distinguishes it, so
+     the end is what gets cut. */
+  .combobox-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .combobox-count { flex-shrink: 0; font-size: 12px; color: var(--color-muted); }
+
+  .combobox-note {
+    padding: 8px 10px;
+    font-size: 12px;
+    color: var(--color-muted);
+    border-top: 1px solid var(--color-rule);
+  }
+  .combobox-note:only-child { border-top: 0; }
+
   /* --- Segmented control (date range) ------------------------------------ */
 
   .segmented { display: inline-flex; border: 1px solid var(--color-rule-2); }

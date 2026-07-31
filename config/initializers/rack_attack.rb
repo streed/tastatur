@@ -152,7 +152,16 @@ class Rack::Attack
   # signature check against STRIPE_WEBHOOK_SECRET, which is a stronger control
   # than a rate limit: an unsigned request is refused whatever its volume, and a
   # signed one came from Stripe. See Billing::StripeWebhooksController.
-  UNTHROTTLED_PATHS = (INGEST_PATHS + %w[/billing/stripe/webhook]).freeze
+  #
+  # BOTH STRIPE ENDPOINTS ARE LISTED, and the second one needs the exemption more
+  # than the first. `/billing/stripe/webhook` carries only OUR subscription events
+  # — a handful per customer per month. `/stripe/connect/webhook` carries every
+  # subscription, invoice, refund and dispute of every customer's ENTIRE BUSINESS,
+  # all arriving from the same small set of Stripe addresses and therefore sharing
+  # one throttle key across the whole instance. It would be the first thing to
+  # 429, at which point Stripe retries for three days and disables the endpoint,
+  # and the revenue screen silently stops advancing for everybody at once.
+  UNTHROTTLED_PATHS = (INGEST_PATHS + %w[/billing/stripe/webhook /stripe/connect/webhook]).freeze
 
   throttle("req/client", limit: 300, period: 5.minutes) do |req|
     client_key(req) unless UNTHROTTLED_PATHS.include?(req.path)

@@ -1,0 +1,8 @@
+<% content_for :title, "Edit dashboard · #{@site.domain}" %>
+<div class="shell max-w-2xl">
+  <div class="pt-5 rule-heavy mb-8">
+    <h1 class="text-2xl font-semibold mt-5">Edit dashboard</h1>
+    <p class="label mt-2"><%= @site.domain %></p>
+  </div>
+  <%= render "form" %>
+</div>

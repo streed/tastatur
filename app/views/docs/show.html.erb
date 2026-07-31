@@ -14,6 +14,7 @@
     ["options",      "Script options"],
     ["events",       "Custom events"],
     ["revenue",      "Revenue"],
+    ["attribution",  "Revenue attribution"],
     ["spa",          "Single-page apps"],
     ["goals",        "Goals"],
     ["funnels",      "Funnels"],
@@ -72,7 +73,7 @@
                            lede: "Paste this into your <head>. That is the entire installation, and nothing below is required to get numbers." } do %>
         <%= render "docs/snippet", code: %(<script defer data-site="#{token}" src="#{tracker}"></script>) %>
         <p class="text-[14px] text-ink-2 leading-relaxed">
-          <code>defer</code> keeps it off the critical path. The script is about 3.2 KB over the
+          <code>defer</code> keeps it off the critical path. The script is about 4.4 KB over the
           wire and makes one request per pageview. Visits from
           <code>localhost</code>, private network ranges and <code>file:</code> are ignored, so
           local development will not appear in your numbers.
@@ -145,6 +146,57 @@
           <code>amount</code> is in minor units, so 4900 is &euro;49.00. A currency is required
           whenever an amount is sent: without one, a total would silently mix euros and yen.
         </p>
+      <% end %>
+
+      <%= render layout: "docs/section",
+                 locals: { id: "attribution", title: "Revenue attribution",
+                           lede: "Connect Stripe and see which channel produced paying customers, not just visitors. Three steps, and the middle one is the only code you write." } do %>
+        <div class="card card-body space-y-2.5 text-[13px] text-ink-2">
+          <p><strong>Why it needs your help.</strong> The browser knows where somebody came from.
+            The payment happens somewhere else, possibly days later, possibly on another device.
+            We store nothing on the visitor's device, so there is no cookie to join those two
+            together — instead the attribution travels with the payment, inside it.</p>
+        </div>
+
+        <p class="text-[14px] text-ink-2 leading-relaxed">
+          <strong>1. Capture it on the landing page.</strong> This reads the current URL's
+          campaign tags and referrer. Store it in your own user record or form state — calling it
+          at the end of a signup funnel would read your own funnel as the source.
+        </p>
+        <%= render "docs/snippet", language: "JavaScript",
+                   code: %(const attribution = tastatur.attribution()\n// { source, medium, campaign, landing_path, referrer_host, first_seen_at }) %>
+
+        <p class="text-[14px] text-ink-2 leading-relaxed">
+          <strong>2. Send it when they sign up,</strong> from your server, with an API key from
+          your site's settings. The email is hashed on receipt and never stored.
+        </p>
+        <%= render "docs/snippet", language: "HTTP",
+                   code: %(POST #{Tastatur.base_url}/api/v1/identify\nAuthorization: Bearer tk_...\nContent-Type: application/json\n\n{\n  "external_id": "user_9182",\n  "email": "person@example.com",\n  "attribution": { "source": "reddit", "medium": "social", "landing_path": "/pricing" }\n}) %>
+
+        <p class="text-[14px] text-ink-2 leading-relaxed">
+          <strong>3. Attach it to Stripe Checkout.</strong> This is what makes attribution survive
+          a closed tab or a payment finished three days later on a phone.
+        </p>
+        <%= render "docs/snippet", language: "JavaScript",
+                   code: %(stripe.checkout.sessions.create({\n  mode: 'subscription',\n  line_items: [...],\n  client_reference_id: user.id,\n  metadata: tastatur.checkoutMetadata(attribution)\n})) %>
+
+        <div class="card card-body space-y-2.5 text-[13px] text-ink-2">
+          <p><code>checkoutMetadata()</code> returns a flat object with <code>tst_</code>-prefixed
+            keys, so it cannot collide with metadata of your own. Call it with no argument to use
+            the current page, or pass a first touch you saved earlier. If you build the object
+            yourself, the keys are <code>tst_source</code>, <code>tst_medium</code>,
+            <code>tst_campaign</code>, <code>tst_content</code>, <code>tst_term</code>,
+            <code>tst_landing_path</code>, <code>tst_referrer_host</code> and
+            <code>tst_first_seen_at</code>.</p>
+          <p><strong>First touch wins, and is never overwritten.</strong> Apps call identify on
+            every sign-in, so last-write-wins would re-attribute a customer you earned from a
+            Reddit post to whatever they searched months later — every paid channel would decay
+            towards zero on its own.</p>
+          <p><strong>Attribution is not anonymous, and is kept separately.</strong> Everything on
+            this page above it is. These endpoints carry data your own application already holds
+            about somebody who signed up for it, sent server-to-server under your own legal basis.
+            Nothing here is ever linked back to an anonymous visitor.</p>
+        </div>
       <% end %>
 
       <%= render layout: "docs/section",

@@ -1,0 +1,19 @@
+<%# A single stat tile. Locals: site, report, result (data:
+    Analytics::Summary::Metrics).
+
+    The pageviews label defers to volume_label, same as the default
+    dashboard's second tile: under an event filter the number IS the matching
+    events, and calling them "Pageviews" would misreport them. -%>
+<% widget = result.widget
+   metrics = result.data
+   label = widget.title.presence ||
+           (widget.metric == "pageviews" ? volume_label(widget.saved_filters) : widget.display_title) %>
+
+<div class="card card-body">
+  <p class="label"><%= label %></p>
+  <p class="figure mt-2.5"><%= stat_widget_value(metrics, widget.metric) %></p>
+  <p class="mt-1.5">
+    <%= delta_tag(metrics, DashboardWidget::METRIC_READERS.fetch(widget.metric),
+                  lower_is_better: widget.metric == "bounce_rate") %>
+  </p>
+</div>

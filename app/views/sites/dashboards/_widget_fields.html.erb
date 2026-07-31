@@ -1,0 +1,83 @@
+<%# One widget row. Rendered both for real rows and, with a placeholder index,
+    into the <template> the Add button clones. Locals: widget (form builder),
+    site.
+
+    widget-config shows the configuration section matching the chosen kind.
+    Without JavaScript every section stays visible and the model's
+    clear_irrelevant_config nulls whatever the chosen kind does not use — the
+    same submit works either way. -%>
+<div class="border border-rule p-4 space-y-4" data-nested-form-row
+     data-controller="widget-config">
+  <div class="flex items-center justify-between">
+    <span class="label" data-nested-form-position>Widget</span>
+
+    <%# The hidden _destroy field is what makes removal of a SAVED row work —
+        see sites/funnels/_step_fields.html.erb. -%>
+    <%= widget.hidden_field :_destroy, value: "0" %>
+
+    <button type="button" class="btn btn-quiet btn-sm text-negative"
+            data-action="nested-form#remove" data-nested-form-remove>
+      Remove
+    </button>
+  </div>
+
+  <div class="grid sm:grid-cols-2 gap-4">
+    <%= widget.field :kind, "Widget", as: :select,
+                     choices: [["Stat tile", "stat"], ["Traffic chart", "timeseries"],
+                               ["Breakdown", "breakdown"], ["Goal conversions", "goals"],
+                               ["Funnel", "funnel"]],
+                     data: { widget_config_target: "kind",
+                             action: "change->widget-config#kindChanged" } %>
+    <%= widget.field :title, "Title (optional)", placeholder: "Defaults to the widget's own name" %>
+  </div>
+
+  <div data-widget-config-target="section" data-kinds="stat">
+    <%= widget.field :metric, "Metric", as: :select,
+                     choices: DashboardWidget::METRIC_LABELS.map { |key, label| [label, key] },
+                     wrapper: "sm:w-1/2 sm:pr-2" %>
+  </div>
+
+  <div class="grid sm:grid-cols-2 gap-4" data-widget-config-target="section" data-kinds="breakdown">
+    <%= widget.field :dimension, "Dimension", as: :select,
+                     choices: Analytics::Filters::HUMAN_LABELS.map { |key, label| [label, key] } %>
+    <%= widget.field :row_limit, "Rows", as: :select, choices: [5, 10, 15, 25, 50] %>
+  </div>
+
+  <div data-widget-config-target="section" data-kinds="funnel">
+    <%= widget.field :funnel_public_id, "Funnel", as: :select,
+                     include_blank: "Choose a funnel",
+                     choices: site.funnels.ordered.map { |funnel| [funnel.name, funnel.public_id] },
+                     hint: (site.funnels.none? ? "This site has no funnels yet — build one first." : nil),
+                     wrapper: "sm:w-1/2 sm:pr-2" %>
+  </div>
+
+  <%# Filters apply to every kind, so no data-kinds gate. Pairs are value
+      objects rebuilt wholesale from each submission (see
+      DashboardWidget#filter_pairs_attributes=), which is why removal is plain
+      DOM removal and why the sentinel below must exist: it keeps the
+      parameter present even when every real pair is gone, so deleting the
+      last filter actually deletes it. -%>
+  <div class="pt-3 border-t border-rule" data-controller="filter-pairs">
+    <p class="label mb-3">Filters (optional) <span class="text-muted normal-case font-normal">— this widget reports only matching traffic</span></p>
+
+    <%= widget.fields_for :filter_pairs, DashboardWidget::FilterPair.new, index: "sentinel" do |pair| %>
+      <%= pair.hidden_field :dimension, value: "" %>
+    <% end %>
+
+    <div class="space-y-3" data-filter-pairs-target="rows">
+      <%= widget.fields_for :filter_pairs do |pair| %>
+        <%= render "sites/dashboards/filter_pair_fields", pair: pair %>
+      <% end %>
+    </div>
+
+    <template data-filter-pairs-target="template">
+      <%= widget.fields_for :filter_pairs, DashboardWidget::FilterPair.new, child_index: "NEW_PAIR" do |pair| %>
+        <%= render "sites/dashboards/filter_pair_fields", pair: pair %>
+      <% end %>
+    </template>
+
+    <button type="button" class="btn btn-quiet btn-sm mt-3" data-action="filter-pairs#add">
+      Add filter
+    </button>
+  </div>
+</div>

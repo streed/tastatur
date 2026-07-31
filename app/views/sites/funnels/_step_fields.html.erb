@@ -1,6 +1,13 @@
 <%# One funnel step row. Rendered both for real rows and, with a placeholder
-    index, into the <template> the Add button clones. -%>
-<div class="border border-rule p-4 space-y-4" data-nested-form-row>
+    index, into the <template> the Add button clones.
+
+    The value-picker controller is per ROW, not per form: each step has its own
+    kind, so each needs its own list. Stimulus connects a cloned row's
+    controller when the Add button inserts it, and disconnects it when a row is
+    removed, so nothing here has to be re-initialised by hand. -%>
+<div class="border border-rule p-4 space-y-4" data-nested-form-row
+     data-controller="value-picker"
+     data-value-picker-source-value="<%= OffersKnownValues::KNOWN_VALUES_DOM_ID %>">
   <div class="flex items-center justify-between">
     <span class="label" data-nested-form-position>Step</span>
 
@@ -18,11 +25,13 @@
   <div class="grid sm:grid-cols-2 gap-4">
     <%= step.field :name, "Label", placeholder: "Saw pricing" %>
     <%= step.field :kind, "Type", as: :select,
-                   choices: [["Pageview", "pageview"], ["Custom event", "event"]] %>
+                   choices: [["Pageview", "pageview"], ["Custom event", "event"]],
+                   data: { value_picker_target: "kind",
+                           action: "change->value-picker#kindChanged" } %>
   </div>
 
   <div class="grid sm:grid-cols-3 gap-4">
-    <%= step.field :match_value, "Path or event name", placeholder: "/pricing",
+    <%= step.field :match_value, "Path or event name", as: :combobox, placeholder: "/pricing",
                    wrapper: "sm:col-span-2" %>
     <%= step.field :match_type, "Match", as: :select,
                    choices: [["Exactly", "exact"], ["Starts with", "prefix"], ["Wildcard", "wildcard"]] %>

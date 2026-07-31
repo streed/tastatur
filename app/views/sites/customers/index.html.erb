@@ -1,0 +1,102 @@
+<% content_for :title, "Customers · #{@site.domain}" %>
+
+<div class="shell">
+  <div class="flex flex-wrap items-end justify-between gap-4 mb-6">
+    <div>
+      <h1 class="text-2xl font-semibold">Customers</h1>
+      <p class="label mt-2"><%= pluralize(@total, "customer") %></p>
+    </div>
+
+    <div class="flex flex-wrap items-center gap-3">
+      <%= form_with url: site_customers_path(@site), method: :get, class: "flex items-center gap-2" do %>
+        <%# Deliberately a bare input rather than TastaturFormBuilder's `field`.
+            The builder's contract is a micro-label, a control and a hint stacked
+            vertically, which is right for a form and wrong for a single search
+            box sitting in a header row. -%>
+        <input type="search" name="q" value="<%= params[:q] %>" placeholder="External or Stripe ID"
+               class="input input-sm" aria-label="Search customers">
+        <%= submit_tag "Search", class: "btn btn-sm", data: { disable_with: false } %>
+      <% end %>
+      <div class="segmented">
+        <%= link_to "All", site_customers_path(@site),
+                    class: "segmented-item #{'is-active' if params[:filter] != 'paying'}" %>
+        <%= link_to "Paying", site_customers_path(@site, filter: "paying"),
+                    class: "segmented-item #{'is-active' if params[:filter] == 'paying'}" %>
+      </div>
+      <%= link_to "Attribution", site_attribution_path(@site), class: "btn btn-sm" %>
+    </div>
+  </div>
+
+  <% if @connection.nil? && @total.zero? %>
+    <div class="card card-body text-sm text-ink-2">
+      Nobody here yet. Customers appear when your application calls
+      <code>POST /api/v1/identify</code>, or when you connect Stripe and we import your history.
+      <%= link_to "API keys", site_api_keys_path(@site), class: "link" %> ·
+      <%= link_to "Attribution", site_attribution_path(@site), class: "link" %>
+    </div>
+  <% elsif @customers.empty? %>
+    <div class="card card-body text-sm text-ink-2">No customers match that.</div>
+  <% else %>
+    <div class="card">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left label border-b border-rule">
+              <th class="px-5 py-3">Customer</th>
+              <th class="px-5 py-3">First touch</th>
+              <th class="px-5 py-3">Status</th>
+              <th class="px-5 py-3 text-right">MRR</th>
+              <th class="px-5 py-3 text-right">Lifetime</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% @customers.each do |customer| %>
+              <tr class="border-b border-rule last:border-b-0">
+                <td class="px-5 py-3">
+                  <%= link_to site_customer_path(@site, customer), class: "link font-medium" do %>
+                    <%# The external id is the customer's OWN identifier for this
+                        person, so it is what their support team recognises. The
+                        Stripe id is the fallback, and the public id — ours — is
+                        last, because it means nothing to anybody outside here. -%>
+                    <%= customer.external_id.presence || customer.stripe_customer_id.presence ||
+                        customer.public_id.first(8) %>
+                  <% end %>
+                </td>
+                <td class="px-5 py-3 text-ink-2"><%= customer.attribution[:source] %></td>
+                <td class="px-5 py-3">
+                  <% if customer.churned? %>
+                    <span class="label">Churned</span>
+                  <% elsif customer.current_mrr_cents.positive? %>
+                    <span class="label">Paying</span>
+                  <% elsif customer.converted? %>
+                    <span class="label">Lapsed</span>
+                  <% else %>
+                    <span class="label">Signed up</span>
+                  <% end %>
+                </td>
+                <td class="px-5 py-3 text-right tabular-nums">
+                  <%= money_amount(@site.base_currency, customer.current_mrr_cents) %>
+                </td>
+                <td class="px-5 py-3 text-right tabular-nums">
+                  <%= money_amount(@site.base_currency, customer.lifetime_revenue_cents) %>
+                </td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <% if @pages > 1 %>
+      <div class="flex items-center justify-between mt-4 text-sm">
+        <%= link_to_if @page > 1, "← Previous",
+                       site_customers_path(@site, page: @page - 1, q: params[:q], filter: params[:filter]),
+                       class: "btn btn-sm" %>
+        <span class="label">Page <%= @page %> of <%= @pages %></span>
+        <%= link_to_if @page < @pages, "Next →",
+                       site_customers_path(@site, page: @page + 1, q: params[:q], filter: params[:filter]),
+                       class: "btn btn-sm" %>
+      </div>
+    <% end %>
+  <% end %>
+</div>

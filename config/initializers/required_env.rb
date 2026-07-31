@@ -77,6 +77,29 @@ Rails.application.config.after_initialize do
     )
   end
 
+  # HALF-CONFIGURED CONNECT IS THE STATE WORTH SHOUTING ABOUT, because it is the
+  # only one that looks like it is working.
+  #
+  # With a client id and no signing secret, the OAuth flow succeeds, the customer
+  # sees "Stripe connected", the historical backfill runs and populates the
+  # charts — and then not one further dollar is ever recorded, because every
+  # delivery is refused. There is nothing on any screen to indicate it, and the
+  # symptom a customer eventually reports is "our revenue stopped in March".
+  #
+  # Not merged into `missing` above: a deployment that never wanted Connect is
+  # correct without any of these, and telling that operator to fix something is
+  # the mistake `billing_configured?` exists to avoid. Only the inconsistent
+  # combination is reported.
+  if ENV["STRIPE_CONNECT_CLIENT_ID"].present? && ENV["STRIPE_CONNECT_WEBHOOK_SECRET"].blank?
+    Rails.logger.error(
+      "[tastatur] STRIPE_CONNECT_CLIENT_ID is set but STRIPE_CONNECT_WEBHOOK_SECRET is not. " \
+      "Customers can connect Stripe and their history will import, but NO ONGOING REVENUE will " \
+      "ever be recorded — every Connect delivery is refused, and nothing on any screen says so. " \
+      "Note it is a DIFFERENT secret from STRIPE_WEBHOOK_SECRET: a Stripe webhook endpoint is " \
+      "either account or connect, never both. See docs/architecture/revenue.md"
+    )
+  end
+
   if missing.any?
     Rails.logger.error(
       "[tastatur] #{missing.size} required setting(s) missing. See docs/self-hosting/configuration.md"

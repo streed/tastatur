@@ -21,7 +21,7 @@ below is required to get numbers.
 <script defer data-site="<%= token %>" src="<%= tracker %>"></script>
 ```
 
-`defer` keeps it off the critical path. The script is about 3.2 KB over the
+`defer` keeps it off the critical path. The script is about 4.4 KB over the
 wire and makes one request per pageview. Visits from `localhost`, private
 network ranges and `file:` are ignored, so local development will not appear in
 your numbers.
@@ -96,6 +96,69 @@ tastatur('event', 'Purchase', {
 
 `amount` is in minor units, so 4900 is €49.00. A currency is required whenever
 an amount is sent: without one, a total would silently mix euros and yen.
+
+## Revenue attribution
+
+Connect Stripe and see which channel produced paying customers, not just
+visitors. Three steps, and the middle one is the only code you write.
+
+The browser knows where somebody came from. The payment happens somewhere else,
+possibly days later, possibly on another device. Tastatur stores nothing on the
+visitor's device, so there is no cookie to join those two together — instead the
+attribution travels with the payment, inside it.
+
+**1. Capture it on the landing page.** This reads the current URL's campaign tags
+and referrer. Store it in your own user record or form state; calling it at the
+end of a signup funnel would read your own funnel as the source.
+
+```javascript
+const attribution = tastatur.attribution()
+// { source, medium, campaign, landing_path, referrer_host, first_seen_at }
+```
+
+**2. Send it when they sign up,** from your server, with an API key from your
+site's settings. The email is hashed on receipt and never stored.
+
+```http
+POST <%= Tastatur.base_url %>/api/v1/identify
+Authorization: Bearer tk_...
+Content-Type: application/json
+
+{
+  "external_id": "user_9182",
+  "email": "person@example.com",
+  "attribution": { "source": "reddit", "medium": "social", "landing_path": "/pricing" }
+}
+```
+
+**3. Attach it to Stripe Checkout.** This is what makes attribution survive a
+closed tab or a payment finished three days later on a phone.
+
+```javascript
+stripe.checkout.sessions.create({
+  mode: 'subscription',
+  line_items: [...],
+  client_reference_id: user.id,
+  metadata: tastatur.checkoutMetadata(attribution)
+})
+```
+
+`checkoutMetadata()` returns a flat object with `tst_`-prefixed keys, so it
+cannot collide with metadata of your own. Call it with no argument to use the
+current page, or pass a first touch you saved earlier. If you build the object
+yourself, the keys are `tst_source`, `tst_medium`, `tst_campaign`,
+`tst_content`, `tst_term`, `tst_landing_path`, `tst_referrer_host` and
+`tst_first_seen_at`.
+
+**First touch wins, and is never overwritten.** Apps call identify on every
+sign-in, so last-write-wins would re-attribute a customer you earned from a
+Reddit post to whatever they searched months later — every paid channel would
+decay towards zero on its own.
+
+**Attribution is not anonymous, and is kept separately.** Everything above it on
+this page is. These endpoints carry data your own application already holds about
+somebody who signed up for it, sent server-to-server under your own legal basis.
+Nothing here is ever linked back to an anonymous visitor.
 
 ## Single-page apps
 

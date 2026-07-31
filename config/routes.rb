@@ -8,6 +8,19 @@ Rails.application.routes.draw do
     get  "event", to: "events#create"        # for beacons that cannot POST
     match "event", to: "events#options", via: :options
     get "pixel", to: "events#pixel"
+
+    # --- The authenticated server-to-server API -----------------------------
+    # Versioned, unlike the ingest routes above, and for a plain reason: those are
+    # baked into a script tag on pages we do not control and can never change,
+    # whereas this is called by code the customer deploys and can update. A
+    # version segment is only worth carrying where a v2 is actually possible.
+    #
+    # Authenticated by an ApiKey, NOT by the public site token — see the
+    # CreateApiKeys migration for why identity writes must not be forgeable by
+    # anyone who can view source on a customer's homepage.
+    namespace :v1 do
+      post "identify", to: "identify#create"
+    end
   end
 
   # Custom registrations controller so a new user is given an account to own at
@@ -49,7 +62,31 @@ Rails.application.routes.draw do
       resource :installation, only: %i[show]
       resources :goals, except: %i[show]
       resources :funnels
+      resources :dashboards
       resources :shared_links, only: %i[index create destroy]
+
+      # --- Revenue ----------------------------------------------------------
+      # The attribution screen is the product; customers is how you read one row
+      # of it. Both are reports and are open to viewers (see CustomerPolicy).
+      get "attribution", to: "attribution#show"
+      resources :customers, only: %i[index show], param: :public_id
+
+      resources :api_keys, only: %i[index create destroy], param: :public_id
+    end
+
+    # Admin-and-up. A singular resource because a site has at most one live
+    # connection, which a partial unique index enforces.
+    #
+    # POINTED AT `revenue/` RATHER THAN `sites/`, unlike everything in the block
+    # above, so that all four actions of the OAuth flow live in one controller.
+    # The callback below cannot be nested here — Stripe matches redirect URIs
+    # exactly, so it has to be one fixed path — and splitting "start the flow"
+    # from "finish the flow" across two controllers is how the CSRF state check
+    # ends up implemented in only one of them.
+    scope module: :revenue do
+      resource :stripe_connection, only: %i[create destroy] do
+        post :backfill, on: :collection
+      end
     end
   end
 
@@ -72,6 +109,24 @@ Rails.application.routes.draw do
   # unauthenticated and exempt from CSRF should be visible as such in the routing
   # table rather than hidden inside an authenticated resource.
   post "billing/stripe/webhook", to: "billing/stripe_webhooks#create", as: :stripe_webhook
+
+  # --- Stripe Connect (the CUSTOMER'S Stripe account) -----------------------
+  #
+  # A DIFFERENT STRIPE INTEGRATION FROM THE THREE ROUTES ABOVE, and the separation
+  # is deliberate rather than incidental. `/billing/*` is money flowing to us:
+  # our account, our subscription, our webhook secret. These are money flowing to
+  # our CUSTOMER: their account, read-only, reached through Connect. Two features
+  # that both say "Stripe" and mean opposite directions is exactly the confusion
+  # that puts a write into the wrong one, so they do not share a namespace, a
+  # controller, a webhook endpoint or a signing secret.
+  #
+  # BOTH OF THESE ARE FIXED PATHS, not nested under /sites/:token, because Stripe
+  # matches redirect URIs and webhook endpoints exactly — a per-site path would
+  # have to be registered per site, which is not a thing. Which site a callback
+  # belongs to travels in the OAuth `state` parameter; which site a webhook
+  # belongs to is resolved from the connected account id on the event.
+  get  "stripe/connect/callback", to: "revenue/stripe_connections#callback", as: :stripe_connect_callback
+  post "stripe/connect/webhook",  to: "revenue/connect_webhooks#create",     as: :stripe_connect_webhook
 
   # --- Public shared dashboards --------------------------------------------
   # Deliberately NOT nested under /sites: these are reached by unguessable slug

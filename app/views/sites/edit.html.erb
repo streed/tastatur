@@ -18,6 +18,9 @@
     <%= f.field :k_anonymity_threshold, "Privacy threshold", as: :number_field, min: 0, max: 10_000,
                 hint: "Breakdown rows below this many distinct visitors are withheld. If withholding one row would let you recover it by subtraction, a second is withheld too." %>
 
+    <%= f.field :base_currency, "Reporting currency", spellcheck: "false", maxlength: 3,
+                hint: "Three-letter ISO code. Every revenue figure is added up in this currency; anything charged in another is counted separately and reported as not included, rather than converted at a rate we would have to invent." %>
+
     <div class="rule pt-6 space-y-5">
       <div>
         <p class="label mb-2">Accepted hostnames</p>
@@ -144,6 +147,68 @@
       </div>
     </div>
   <% end %>
+
+  <%# --- Revenue -------------------------------------------------------------
+      Above the delete card and below everything else, because connecting Stripe
+      is a setup step somebody does once and then forgets — but disconnecting is
+      a thing they come looking for, and it should not be adjacent to the button
+      that destroys the site. -%>
+  <div class="card mt-8">
+    <div class="card-head">
+      <h2 class="text-sm font-semibold">Revenue</h2>
+      <%= link_to "API keys", site_api_keys_path(@site), class: "link text-xs" %>
+    </div>
+
+    <% connection = @site.stripe_connection %>
+    <div class="card-body space-y-4">
+      <% if !Tastatur.revenue_enabled? %>
+        <p class="text-sm text-ink-2">
+          Stripe Connect is not configured on this instance, so revenue attribution is unavailable.
+          An operator needs to set <code>STRIPE_CONNECT_CLIENT_ID</code> and
+          <code>STRIPE_CONNECT_WEBHOOK_SECRET</code>.
+        </p>
+      <% elsif connection.nil? %>
+        <p class="text-sm text-ink-2 max-w-2xl">
+          Connect Stripe to see which acquisition channel produced paying customers. We request
+          <code>read_only</code> scope and never write to your account.
+        </p>
+        <% if policy(StripeConnection.new(site: @site)).create? %>
+          <%= button_to "Connect Stripe", site_stripe_connection_path(@site), class: "btn btn-primary btn-sm",
+                        data: { analytics_event: "Stripe Connect Started",
+                                analytics_props: { source: "settings" } } %>
+        <% else %>
+          <p class="text-sm text-ink-2">Connecting Stripe is an admin action.</p>
+        <% end %>
+      <% else %>
+        <div class="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p class="text-sm font-medium">
+              Connected to <code><%= connection.stripe_account_id %></code>
+              <% if connection.test_mode? %><span class="label ml-2">Test mode</span><% end %>
+            </p>
+            <p class="label mt-1">
+              Connected <%= time_ago_in_words(connection.connected_at) %> ago ·
+              <%= connection.backfilled? ? "history imported" : "importing history…" %> ·
+              <%= connection.scope %>
+            </p>
+          </div>
+          <% if policy(connection).destroy? %>
+            <div class="flex items-center gap-2">
+              <%= button_to "Re-import history", backfill_site_stripe_connection_path(@site),
+                            class: "btn btn-sm" %>
+              <%# The consequence is spelled out because "Disconnect" reads like
+                  it might delete the revenue data, and somebody hesitating over
+                  that is somebody who leaves a connection they wanted gone. -%>
+              <%= button_to "Disconnect", site_stripe_connection_path(@site), method: :delete,
+                            class: "btn btn-sm",
+                            form: { data: { turbo_confirm: "Disconnect Stripe? New revenue stops being " \
+                                                           "recorded. Everything already recorded is kept." } } %>
+            </div>
+          <% end %>
+        </div>
+      <% end %>
+    </div>
+  </div>
 
   <div class="card mt-8 border-negative">
     <div class="card-head"><h2 class="text-sm font-semibold text-negative">Delete this site</h2></div>

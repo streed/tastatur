@@ -1,0 +1,93 @@
+<% content_for :title, "API keys · #{@site.domain}" %>
+
+<div class="shell max-w-3xl">
+  <div class="pt-5 rule-heavy mb-8">
+    <h1 class="text-2xl font-semibold mt-5">API keys for <%= @site.domain %></h1>
+    <p class="text-sm text-ink-2 mt-2">
+      Server-side credentials for <code>POST /api/v1/identify</code>. Different from the site token in
+      your snippet: that one is public by design, this one attaches a name to a person and must stay
+      secret.
+    </p>
+  </div>
+
+  <% if flash[:api_key] %>
+    <%# SHOWN EXACTLY ONCE, from the flash, and never again. The alternative — a
+        screen that can re-display a key — makes a database read equivalent to
+        holding the credential. -%>
+    <div class="notice mb-6" data-controller="clipboard">
+      <p class="text-sm font-semibold">Copy this now. It is not shown again.</p>
+      <div class="flex items-center gap-3 mt-3">
+        <code class="font-mono text-xs break-all" data-clipboard-target="source"><%= flash[:api_key] %></code>
+        <button type="button" class="btn btn-sm" data-action="clipboard#copy"
+                data-clipboard-target="label">Copy</button>
+      </div>
+    </div>
+  <% end %>
+
+  <% if policy(ApiKey.new(site: @site)).create? %>
+    <%= form_with model: @api_key, url: site_api_keys_path(@site), class: "card card-body space-y-6" do |f| %>
+      <%= f.error_summary %>
+      <h2 class="text-sm font-semibold">New key</h2>
+      <%= f.field :name, "Label", placeholder: "production",
+                  hint: "What uses it. A key nobody can identify is a key nobody dares revoke." %>
+      <%= f.actions "Create key", cancel_to: site_path(@site), cancel_label: "Back to dashboard" %>
+    <% end %>
+  <% else %>
+    <div class="card card-body text-sm text-ink-2">
+      Creating an API key is an admin action, because the key can assert that a visitor is a
+      particular person and can read every customer's revenue. Ask an account admin.
+    </div>
+  <% end %>
+
+  <% if @api_keys.any? %>
+    <div class="card mt-8">
+      <div class="card-head"><h2 class="text-sm font-semibold">Existing keys</h2></div>
+      <% @api_keys.each do |key| %>
+        <div class="px-5 py-4 border-b border-rule last:border-b-0 flex items-start justify-between gap-4">
+          <div class="min-w-0">
+            <p class="text-sm font-medium">
+              <%= key.name %>
+              <% if key.revoked? %><span class="label ml-2">Revoked</span><% end %>
+            </p>
+            <p class="label mt-1 font-mono"><%= key.masked %></p>
+            <p class="label mt-1">
+              <% if key.revoked? %>
+                Revoked <%= time_ago_in_words(key.revoked_at) %> ago
+              <% elsif key.last_used_at %>
+                Last used <%= time_ago_in_words(key.last_used_at) %> ago
+              <% else %>
+                Never used
+              <% end %>
+            </p>
+          </div>
+          <% if key.live? && policy(key).destroy? %>
+            <%= button_to "Revoke", site_api_key_path(@site, key), method: :delete, class: "btn btn-sm",
+                          form: { data: { turbo_confirm: "Revoke #{key.name}? Anything using it stops working immediately." } } %>
+          <% end %>
+        </div>
+      <% end %>
+    </div>
+  <% end %>
+
+  <div class="card mt-8">
+    <div class="card-head"><h2 class="text-sm font-semibold">Using it</h2></div>
+    <div class="card-body text-sm space-y-3">
+      <p class="text-ink-2">Call this from your server when somebody signs up:</p>
+<pre class="text-xs overflow-x-auto"><code>POST <%= Tastatur.base_url %>/api/v1/identify
+Authorization: Bearer tk_...
+Content-Type: application/json
+
+{
+  "external_id": "user_9182",
+  "email": "person@example.com",
+  "attribution": <%= raw JSON.pretty_generate({ source: "reddit", medium: "social",
+                                                landing_path: "/pricing" }).gsub("\n", "\n  ") %>
+}</code></pre>
+      <p class="text-ink-2">
+        Get the attribution in the browser with <code>tastatur.attribution()</code> on the landing
+        page, store it in your own user record, and send it here at signup. The email is hashed on
+        receipt and never stored.
+      </p>
+    </div>
+  </div>
+</div>

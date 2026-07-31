@@ -223,6 +223,28 @@ ActiveRecord model still gets the builder — give it an `ActiveModel` form obje
 (see `MemberInvitation`) rather than dropping to raw HTML, which is how a
 codebase ends up with four subtly different forms.
 
+**`as: :combobox` is a text field that can also be picked from,** and it is used
+by exactly one thing: the match value of a goal or a funnel step, which is a
+string compared against a column. A typo there saves cleanly and then reports 0%
+forever, which is indistinguishable from a page nobody converts on. Two halves
+that must both stay as they are:
+
+- **It stays free text.** A `<select>` would refuse a goal for a page that has
+  not shipped yet, and refuse `/blog/**` outright — a wildcard is a pattern, so
+  it will never appear in a list of things that happened.
+- **The options it offers are a breakdown, so §13's threshold applies.**
+  `Analytics::KnownValues` goes through `Analytics::Breakdown` for exactly that
+  reason. Replacing it with a cheaper `SELECT DISTINCT path` would publish, in a
+  form, the rows the Top pages panel withholds. The visible consequence is that a
+  quiet site's picker is empty; the forms say so, in the same voice
+  `spec/requests/breakdown_suppression_spec.rb` pins for the dashboard, rather
+  than looking broken.
+
+The picker needs the `kind` control and the field inside one
+`data-controller="value-picker"` element, and one payload per page rather than
+one per field — see `OffersKnownValues`, which is a `helper_method` and not a
+`before_action` so a save that redirects never pays for the scan.
+
 ### 10. Public identifiers are never primary keys
 
 Nothing routable is addressed by its `id`. Sequential integers in URLs tell
@@ -529,6 +551,63 @@ Four surfaces publish this instance to machines: `robots.txt` and `sitemap.xml`
   newline instead. And remember an ERB comment ends at the first closing delimiter
   inside it, so a comment showing an example tag prints its own remainder into the
   document (the trap already documented in `crawlers/sitemap.xml.erb`).
+
+### 18. Revenue attribution, and the one place identifiable data lives
+
+The revenue layer answers "which channel produced paying customers". It is the
+only part of this codebase that stores data about identifiable people, it is
+confined to five tables, and full reasoning is in `docs/architecture/revenue.md`.
+The rules an agent must not break:
+
+- **The two pipelines never join on a visitor.** There is no column linking a
+  `Customer` to a `visitor_hash` and there must not be. `customers` is written only
+  by `/api/v1/identify` and Stripe Connect webhooks — server-to-server,
+  authenticated, carrying data the customer's own app already holds under its own
+  basis. Adding a link would make the anonymous side retroactively identifiable and
+  falsify the §13 claim that visitor identifiers stop working after 24 hours. The
+  two halves meet only at `attribution_rollups`, on channel strings.
+- **`Revenue::Channel` is the single vocabulary,** and it exists because the report
+  is a join between a server-classified source (`Ingest::Referrer`) and one that
+  arrived from a browser. Two spellings of one channel produce two rows — all the
+  visitors on one, all the money on the other, nothing raised, and 0% conversion
+  shown for the channel that works. Sources are classified on WRITE; sentinels
+  (`Direct`, `(none)`, `(pre-install)`) are applied on READ only. A stored sentinel
+  is a bug: attribution is write-once, so it locks the column against the real
+  value forever.
+- **Attribution is first-touch and write-once**, enforced in one place
+  (`Revenue::IdentifyCustomer`). Apps call identify on every sign-in, so
+  last-write-wins re-attributes January's Reddit customer to March's brand-name
+  search and decays every paid channel to zero on its own. Only two things may
+  overwrite: `first_seen_at` moving EARLIER, and `(pre-install)` being replaced
+  once by a real value.
+- **`revenue_events.kind` holds two families.** `new/expansion/contraction/churn/
+  reactivation` carry an MRR delta; `payment/one_time/refund/dispute` carry cash.
+  Never sum across them — an annual plan writes both a 4,000 `new` and a 48,000
+  `payment`, and adding them yields a number that does not exist. Amounts are
+  signed.
+- **`attribution_rollups.lifetime_revenue_cents` is a snapshot, never summed across
+  days.** It appears in full on every day's row, so a 30-day sum multiplies the
+  business by thirty and looks plausible. Same trap as §8's distinct counts.
+- **Stripe Connect is a SEPARATE integration from `Billing::`** — their money
+  versus ours. Its own endpoint, its own signing secret, `read_only` scope, and an
+  app registered as an **Extension** (irreversible without a support ticket).
+  **No access token is stored**: the platform key plus `Stripe-Account` reaches the
+  same data, so there is no third-party credential on disk. On the webhook, the
+  missing-secret 503 must be checked BEFORE `Tastatur.revenue_enabled?`, or that
+  gate — which requires the secret — makes the 503 unreachable and Stripe discards
+  the delivery against a 404.
+- **`Tastatur.revenue_enabled?` is the only gate, and is NOT gated on billing.**
+  Billing is whether we can charge; this is whether a customer can connect their
+  own processor. Refusing it on a self-hosted install would remove the point of the
+  product from the deployment most likely to be evaluating it.
+- **Revenue never appears on a public shared dashboard.** Publishing MRR to an
+  unguessable-but-public URL is not something anybody should be one checkbox away
+  from.
+- **API keys are not the site token.** The site token is public by construction
+  (§12) and everything it authorizes is harmless to forge. An API key attaches a
+  NAME to a person, so it is bcrypt-digested, prefix-indexed (one comparison per
+  request, or the endpoint is a bcrypt DoS), shown once, and revoked rather than
+  deleted.
 
 ## Testing rules
 
