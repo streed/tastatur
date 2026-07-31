@@ -1,6 +1,6 @@
 {
   "$schema": "https://stripe.com/stripe-app.schema.json",
-  "id": "dev.tastatur.revenue",
+  "id": "dev.tastatur.attribution",
   "name": "Tastatur",
   "version": "0.0.1",
   "icon": "./icon_32.png",
