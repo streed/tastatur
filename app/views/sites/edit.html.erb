@@ -174,7 +174,10 @@
           never writes to your account.
         </p>
         <% if policy(StripeConnection.new(site: @site)).create? %>
+          <%# `turbo: false`: the response is a redirect to marketplace.stripe.com,
+              which Turbo's fetch cannot follow cross-origin — §12. %>
           <%= button_to "Connect Stripe", site_stripe_connection_path(@site), class: "btn btn-primary btn-sm",
+                        form: { data: { turbo: false } },
                         data: { analytics_event: "Stripe Connect Started",
                                 analytics_props: { source: "settings" } } %>
         <% else %>

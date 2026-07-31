@@ -51,7 +51,12 @@
       </p>
       <div class="mt-4 flex items-center gap-3">
         <% if Tastatur.revenue_enabled? && policy(StripeConnection.new(site: @site)).create? %>
+          <%# `turbo: false` for the same reason every billing button carries it
+              (§12): this POST answers with a redirect to marketplace.stripe.com,
+              and Turbo following it with fetch dies on Stripe's CORS policy —
+              console error, button that does nothing, nothing to see server-side. %>
           <%= button_to "Connect Stripe", site_stripe_connection_path(@site), class: "btn btn-primary btn-sm",
+                        form: { data: { turbo: false } },
                         data: { analytics_event: "Stripe Connect Started" } %>
         <% elsif !Tastatur.revenue_enabled? %>
           <p class="text-sm text-ink-2">
