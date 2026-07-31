@@ -9,16 +9,17 @@ class StripeConnection < ApplicationRecord
   include PubliclyIdentified
   public_identifier
 
-  # Read-only, always. Registering the Connect app as an EXTENSION rather than a
-  # Platform is what makes this scope available at all — and it is also what lets
-  # us connect to accounts that already have another platform attached, which most
-  # SaaS businesses do. Changing the app type later requires a Stripe support
-  # ticket, so it is decided once, before any of this ships.
+  # What the Stripe App token exchange reports as `scope`, kept on the row as a
+  # record of what was granted. The *_read-only-ness* no longer lives in a scope
+  # string: a Stripe App declares a permission list in
+  # stripe-app/stripe-app.json, Stripe's review approves it, and the customer
+  # sees it item by item on the install screen. Every permission there ends in
+  # `_read`, and keeping it that way is the point.
   #
   # There is no code path in this application that writes to a connected account,
   # and there must not be. An analytics tool holding write access to its
   # customers' payment processor is a liability with no matching benefit.
-  SCOPE = "read_only".freeze
+  SCOPE = "stripe_apps".freeze
 
   belongs_to :site
   has_many :connect_events, through: :site

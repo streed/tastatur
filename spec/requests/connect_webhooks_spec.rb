@@ -163,6 +163,25 @@ RSpec.describe "Stripe Connect webhooks", type: :request do
       expect(site.revenue_events.find_by(kind: RevenueEvent::REFUND).amount_cents).to eq(-2_000)
     end
 
+    # A REAL dispute payload names a charge and carries NO customer field — the
+    # shape that used to fail with :no_customer and burn a day of retries. The
+    # customer is resolved by reading the named charge through the same wrapper
+    # the backfill uses.
+    it "records a dispute by resolving the customer through its charge" do
+      create(:customer, site: site, stripe_customer_id: "cus_1", external_id: nil)
+      allow(Revenue::StripeAccount).to receive(:retrieve)
+        .with(Stripe::Charge, anything, "ch_1")
+        .and_return({ id: "ch_1", customer: "cus_1" })
+      payload = stripe_connect_event_payload(
+        type: "charge.dispute.created",
+        object: { id: "dp_1", charge: "ch_1", currency: "usd", amount: 4_000 },
+        account: "acct_1"
+      )
+      deliver(payload)
+
+      expect(site.revenue_events.find_by(kind: RevenueEvent::DISPUTE).amount_cents).to eq(-4_000)
+    end
+
     # A failed payment is not churn and not a refund — Stripe retries for about
     # two weeks and most succeed. A negative row here plus a positive one on the
     # eventual success puts a spike and a trough into every chart for an event
@@ -230,6 +249,59 @@ RSpec.describe "Stripe Connect webhooks", type: :request do
 
     it "still throttles an ordinary path, so the exemption is specific" do
       expect(throttle_key_for("/dashboard")).to be_present
+    end
+  end
+
+  # Uninstalling the app from the customer's own Stripe dashboard is a
+  # disconnect performed at the other end, and it must land exactly where our
+  # Disconnect button lands: connection revoked, recorded revenue kept.
+  describe "the customer uninstalling the app" do
+    def deauthorized_payload(id: "evt_test_#{SecureRandom.hex(6)}")
+      stripe_connect_event_payload(type: "account.application.deauthorized",
+                                   object: { id: "ca_app", object: "application" },
+                                   account: "acct_1", id: id)
+    end
+
+    it "revokes the connection and keeps recorded revenue" do
+      create(:revenue_event, site: site)
+
+      deliver(deauthorized_payload)
+
+      expect(response).to have_http_status(:ok)
+      expect(connection.reload).to be_revoked
+      expect(site.revenue_events.count).to eq(1)
+    end
+
+    # Stripe retries, and the first delivery already revoked the connection —
+    # which also means `site_for` no longer resolves it. 200 without storage is
+    # the contract for events that can never become ours again.
+    it "answers 200 to a retry after the connection is already revoked" do
+      connection.revoke!
+
+      deliver(deauthorized_payload)
+
+      expect(response).to have_http_status(:ok)
+      expect(site.connect_events).to be_empty
+    end
+
+    # The stale-deauth race: a deauthorization that failed to apply stays in
+    # the 24-hour retry sweep, and disconnect-then-reconnect is the documented
+    # remedy for most problems — so without the superseded guard, the sweep
+    # would revoke a reconnection made AFTER the uninstall it describes, and
+    # recording would stop with nothing raised.
+    it "does not let a stale deauthorization revoke a newer reconnection" do
+      stale = create(:connect_event, site: site,
+                     event_type: "account.application.deauthorized",
+                     occurred_at: 2.hours.ago,
+                     payload: { "id" => "evt_stale", "type" => "account.application.deauthorized",
+                                "account" => "acct_1", "data" => { "object" => { "object" => "application" } } })
+      connection.update!(connected_at: 1.hour.ago)
+
+      result = Revenue::ApplyConnectEvent.call(connect_event: stale)
+
+      expect(result).to be_success
+      expect(connection.reload).to be_live
+      expect(stale.reload).to be_processed
     end
   end
 

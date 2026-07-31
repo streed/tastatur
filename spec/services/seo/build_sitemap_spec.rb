@@ -18,6 +18,7 @@ RSpec.describe Seo::BuildSitemap do
       "https://analytics.example.org/docs",
       "https://analytics.example.org/faq",
       "https://analytics.example.org/about",
+      "https://analytics.example.org/revenue",
       "https://analytics.example.org/pricing",
       "https://analytics.example.org/privacy",
       "https://analytics.example.org/privacy-policy",

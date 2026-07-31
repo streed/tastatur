@@ -1,5 +1,5 @@
 class PagesController < ApplicationController
-  skip_before_action :authenticate_user!, only: %i[home about faq llms]
+  skip_before_action :authenticate_user!, only: %i[home about faq revenue llms]
   # The landing page is genuinely public and touches no records, so there is
   # nothing to authorize. Noted explicitly because CLAUDE.md requires a stated
   # reason whenever Pundit verification is skipped.
@@ -9,9 +9,20 @@ class PagesController < ApplicationController
   # first-run setup, like the other informational pages. The root path
   # deliberately does NOT: on a fresh self-hosted install, sending the operator
   # to the setup wizard is the helpful thing to do.
-  always_reachable only: %i[about faq llms]
+  always_reachable only: %i[about faq revenue llms]
 
   def about; end
+
+  # The revenue-attribution page: what the feature is, how the three
+  # integration points work, and what it deliberately will not do. Public in
+  # both formats like the FAQ — the reader deciding whether to adopt this is
+  # increasingly an agent reading on somebody's behalf.
+  def revenue
+    respond_to do |format|
+      format.html
+      format.md
+    end
+  end
 
   # The FAQ. Public, and public in both formats for the same reason the docs
   # are: the most common reason somebody reads it is to decide whether to use

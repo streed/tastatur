@@ -169,10 +169,17 @@ from our customers; this one reads revenue belonging to them. Two features that
 both say "Stripe" and mean opposite directions do not share a namespace, a
 controller, a webhook endpoint or a signing secret.
 
-- **The Connect app must be registered as an Extension, not a Platform.** Only an
-  Extension can request `read_only`, and only an Extension can connect to an
-  account that already has another platform attached — which most SaaS businesses
-  do. Changing this later needs a Stripe support ticket.
+- **The integration is a Stripe App, not a Connect "platform".** It was designed
+  for the legacy Connect *Extension* registration — the only kind that could
+  request `read_only` and connect accounts already attached to another platform —
+  but Stripe closed new Extension registrations when Stripe Apps replaced them
+  (2022); the Connect settings page now offers only Platform/Marketplace, and
+  neither fits. The app in `stripe-app/` is the successor: read-only-ness lives in
+  its manifest's permission list (every permission ends in `_read`), Stripe review
+  approves that list, and the customer sees it item by item at install. Customers
+  authorize through the app's OAuth install link
+  (`marketplace.stripe.com/oauth/v2/authorize`), which works for accounts that
+  already belong to another platform.
 - **No access token is stored.** Stripe returns one; we discard it. Every call
   uses the platform secret key plus a `Stripe-Account` header, which reaches the
   same data — so there is no long-lived third-party credential on disk to encrypt,
@@ -191,10 +198,65 @@ controller, a webhook endpoint or a signing secret.
 ### Configuration
 
 ```
-STRIPE_SECRET_KEY=sk_...                # also used by billing
-STRIPE_CONNECT_CLIENT_ID=ca_...
+STRIPE_SECRET_KEY=sk_...                # also used by billing; makes the Stripe-Account calls
+STRIPE_CONNECT_CLIENT_ID=...            # the Stripe App's OAuth client id (app details page)
 STRIPE_CONNECT_WEBHOOK_SECRET=whsec_... # a DIFFERENT secret from STRIPE_WEBHOOK_SECRET
 ```
+
+### Operating the Stripe App
+
+The app is defined by `stripe-app/stripe-app.json` — id `dev.tastatur.revenue`,
+OAuth authentication, public distribution, and seven read permissions matching
+exactly what `Revenue::ApplyConnectEvent` consumes. To set it up on a Stripe
+account (once per mode):
+
+1. `stripe login` (interactive), then `stripe plugin install apps`.
+2. From `stripe-app/`: `stripe apps upload`. The first upload registers the app;
+   the dashboard's **Developers → Apps** page then shows it.
+3. The OAuth client id and pre-review **External test** authorize links live on
+   the app's details page. The public install links only work after app review;
+   external-test links work immediately and with other accounts, which is how the
+   integration is exercised before publishing.
+4. Create the Connect webhook endpoint (dashboard → Webhooks → "Listen to events
+   on Connected accounts") pointing at `/stripe/connect/webhook`, subscribed to
+   the `ConnectEvent::HANDLED` list; its signing secret is
+   `STRIPE_CONNECT_WEBHOOK_SECRET`. For local work,
+   `stripe listen --forward-connect-to localhost:3000/stripe/connect/webhook`
+   prints an equivalent secret.
+5. Submitting for review (needed before outside customers can install from the
+   marketplace) starts from the same details page; the install URL to give review
+   is the site's Attribution screen, which initiates the OAuth flow.
+
+**The exchange key must match the install link's mode.** The code is exchanged
+with this instance's own `STRIPE_SECRET_KEY`, and Stripe requires the key for
+the link's mode: a live link needs the live key, a test link the test key, a
+sandbox install the managed sandbox's key. An instance running on a live key
+therefore cannot complete a sandbox install — the customer sees "Stripe refused
+the connection" — which also means the "connected in TEST MODE" branch is only
+reachable where the instance's own key is a test key (development, mostly).
+
+**The open question the live external test must answer** (task list; also in
+CLAUDE.md §18): whether platform-key + `Stripe-Account` reads are honoured for
+an account that installed an oauth-type app, or whether Stripe insists on the
+access/refresh tokens its docs describe. The sandbox proved the negative case
+(no install → refused, "application access") but a self-install cannot prove
+the positive one. If Stripe refuses, the "no token stored" invariant needs a
+decision, not a workaround — stop and take it to the owner.
+
+Two things learned the hard way, both invisible until they refuse you:
+
+- **An account with a Connect *platform* registration cannot own this app** —
+  upload fails with "you cannot choose the public distribution at this time",
+  and the registration is not self-serve removable. Clicking through the
+  Connect onboarding while exploring the dashboard is how an account acquires
+  one, so the app should be uploaded from an account that never touched
+  Settings → Connect.
+- **External testing (the pre-review OAuth install links) only works from a
+  live account.** In a sandbox the External test tab renders and its "Set
+  version" button silently does nothing. A sandbox can build, upload and
+  self-install the app — enough to verify webhooks and the platform-key read
+  path — but minting an install link another account can use requires the app
+  uploaded to a live account.
 
 `Tastatur.revenue_enabled?` is the only gate. It is deliberately **not** gated on
 `billing_enabled?`: billing is about whether *we* can charge, this is about whether

@@ -66,15 +66,18 @@ Rails.configuration.stripe = {
   # two below read revenue data belonging TO our customers, read-only, from their
   # own Stripe accounts.
   #
-  # THE CONNECT APP MUST BE REGISTERED AS AN "EXTENSION", NOT A "PLATFORM", and
-  # this is the one decision here that cannot be undone without a Stripe support
-  # ticket. Only an Extension can request the `read_only` scope, and only an
-  # Extension can connect to an account that already has another platform
-  # attached — which most SaaS businesses do. Registering it as a Platform means
-  # discovering both of those facts from a customer who cannot connect.
+  # THE INTEGRATION IS A STRIPE APP (stripe-app/stripe-app.json), NOT A CONNECT
+  # "PLATFORM". The legacy Connect Extension this was designed for — the only
+  # registration kind that could request `read_only` and connect accounts already
+  # attached to another platform — stopped being registrable when Stripe Apps
+  # replaced it, and the Platform/Marketplace choices on the Connect settings
+  # page are for routing payments, not reading them. What the app may read is its
+  # manifest's permission list (all `_read`), fixed by Stripe's app review and
+  # shown to the customer at install.
   #
-  # Set up at https://dashboard.stripe.com/settings/connect:
-  #   STRIPE_CONNECT_CLIENT_ID=ca_...        the OAuth client id
+  # Set up by uploading the app (see docs/architecture/revenue.md, "Operating
+  # the Stripe App"); the client id is on the app's details page:
+  #   STRIPE_CONNECT_CLIENT_ID=...           the app's OAuth client id
   #   STRIPE_CONNECT_WEBHOOK_SECRET=whsec_...
   #
   # THE CONNECT WEBHOOK NEEDS ITS OWN ENDPOINT AND ITS OWN SECRET. In the Stripe

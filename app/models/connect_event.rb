@@ -13,6 +13,11 @@ class ConnectEvent < ApplicationRecord
   # `checkout.session.completed` is what carries the attribution metadata the SDK
   # attaches, which is why it is here even though the subscription events that
   # follow it carry the money.
+  #
+  # `account.application.deauthorized` is the customer uninstalling the app from
+  # their own Stripe dashboard — a disconnect performed at the other end. It is
+  # stored and applied like the money events, or revenue would keep flowing into
+  # a site whose owner watched themselves disconnect it.
   HANDLED = %w[
     customer.created
     customer.updated
@@ -24,6 +29,7 @@ class ConnectEvent < ApplicationRecord
     invoice.payment_failed
     charge.refunded
     charge.dispute.created
+    account.application.deauthorized
   ].freeze
 
   # How many times a failed event is retried by the sweep before it is left alone.
