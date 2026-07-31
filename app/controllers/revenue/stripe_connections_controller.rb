@@ -6,6 +6,10 @@ module Revenue
   # be one fixed path for the whole instance — and which site the callback belongs
   # to therefore has to travel in the `state` parameter and come back.
   class StripeConnectionsController < ApplicationController
+    # Where a published app's install link lives. See `authorize_url` for the
+    # other shape and why this is overridable.
+    DEFAULT_INSTALL_URL = "https://marketplace.stripe.com/oauth/v2/authorize".freeze
+
     # Only the three nested actions get a site from the URL. `callback` derives
     # its site from the signed state instead, which is the entire security
     # question on that action.
@@ -133,19 +137,51 @@ module Revenue
       "Stripe refused the connection: #{params[:error_description].presence || params[:error]}"
     end
 
+    # The Stripe App install link the customer is sent to.
+    #
+    # No `scope` parameter: what they are asked to grant is the permission list
+    # in stripe-app/stripe-app.json, which Stripe's review approves and the
+    # consent screen renders item by item. Read-only, always — nothing in this
+    # application writes to a connected account and nothing may start, so every
+    # permission in that manifest ends in `_read`.
+    #
+    # THE BASE IS CONFIGURABLE BECAUSE STRIPE ISSUES TWO SHAPES OF THIS LINK,
+    # and the public one does not work until the app is published:
+    #
+    #   published:  marketplace.stripe.com/oauth/v2/authorize
+    #   pre-review: marketplace.stripe.com/oauth/v2/chnlink_.../authorize
+    #
+    # The second is the External test link, the only way to install the app
+    # before app review, and its channel id is not derivable from anything we
+    # hold. Sending the published form at an unpublished app is answered with
+    # "The provided OAuth link is invalid", which names nothing and is why this
+    # cost an afternoon. Set STRIPE_CONNECT_INSTALL_URL to the External test
+    # link until the app is published, then drop it.
     def authorize_url(state)
-      # The Stripe App install link. No `scope` parameter: what the customer is
-      # asked to grant is the permission list in stripe-app/stripe-app.json,
-      # which Stripe reviewed and renders on the consent screen. Read-only,
-      # always — nothing in this application writes to a connected account and
-      # nothing may start, so every permission in that manifest ends in `_read`.
       query = {
         client_id: Rails.configuration.stripe[:connect_client_id],
         redirect_uri: stripe_connect_callback_url,
         state: state
       }
 
-      "https://marketplace.stripe.com/oauth/v2/authorize?#{query.to_query}"
+      "#{install_url_base}?#{query.to_query}"
+    end
+
+    # Any query string on the configured link is DISCARDED. Stripe's dashboard
+    # hands the operator a complete URL with client_id and redirect_uri already
+    # on it, and pasting that verbatim is the obvious thing to do — so take the
+    # path and rebuild the parameters, rather than emitting a URL with two of
+    # each and a `state` that may or may not survive.
+    def install_url_base
+      configured = Rails.configuration.stripe[:connect_install_url].presence
+      return DEFAULT_INSTALL_URL if configured.nil?
+
+      uri = URI.parse(configured)
+      uri.query = nil
+      uri.fragment = nil
+      uri.to_s
+    rescue URI::InvalidURIError
+      DEFAULT_INSTALL_URL
     end
 
     def set_site

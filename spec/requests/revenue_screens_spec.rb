@@ -206,6 +206,26 @@ RSpec.describe "Revenue screens", type: :request do
       expect(site.stripe_connections.count).to eq(1)
     end
 
+    # Before the app is published, the only working install link is the
+    # External test one, whose path carries a channel id nothing here can
+    # derive — so the base is configurable, and the query Stripe's dashboard
+    # already put on it is discarded rather than duplicated.
+    it "uses the configured install link and rebuilds its parameters" do
+      Rails.configuration.stripe = Rails.configuration.stripe.merge(
+        connect_install_url: "https://marketplace.stripe.com/oauth/v2/chnlink_abc123/authorize" \
+                             "?client_id=ca_stale&redirect_uri=https%3A%2F%2Fwrong.example"
+      )
+      sign_in_as("admin")
+
+      post site_stripe_connection_path(site)
+
+      expect(response.location).to start_with("https://marketplace.stripe.com/oauth/v2/chnlink_abc123/authorize?")
+      expect(response.location).to include("client_id=ca_test_suite")
+      expect(response.location).not_to include("ca_stale")
+      expect(response.location).not_to include("wrong.example")
+      expect(response.location).to match(/state=[^&]+/)
+    end
+
     # The state is a CSRF token and a routing slip at once. Without the random
     # half, anyone could send a victim a crafted callback URL and attach their own
     # Stripe account to the victim's site.

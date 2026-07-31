@@ -93,5 +93,11 @@ Rails.configuration.stripe = {
   # every later call uses `secret_key` plus a `Stripe-Account` header. See
   # StripeConnection and Revenue::StripeAccount.
   connect_client_id:      ENV["STRIPE_CONNECT_CLIENT_ID"],
-  connect_webhook_secret: ENV["STRIPE_CONNECT_WEBHOOK_SECRET"]
+  connect_webhook_secret: ENV["STRIPE_CONNECT_WEBHOOK_SECRET"],
+
+  # Optional, and only until the app is published: the External test install
+  # link, whose path carries a channel id we cannot derive. The published
+  # link's shape is the default. See
+  # Revenue::StripeConnectionsController#authorize_url.
+  connect_install_url:    ENV["STRIPE_CONNECT_INSTALL_URL"]
 }

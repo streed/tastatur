@@ -192,6 +192,7 @@ every entry of which ends in `_read`. The step-by-step runbook is in
 | Variable | Default | Notes |
 |---|---|---|
 | `STRIPE_CONNECT_CLIENT_ID` | unset | the OAuth client id from the app's details page |
+| `STRIPE_CONNECT_INSTALL_URL` | the published link's URL | Only needed before the app is published. Stripe's **External test** tab issues a link of the form `marketplace.stripe.com/oauth/v2/chnlink_…/authorize`, and it is the only one that installs an unpublished app — the published form answers "The provided OAuth link is invalid". Paste the whole link; its query string is discarded and rebuilt |
 | `STRIPE_CONNECT_WEBHOOK_SECRET` | unset | `whsec_…`, from a **Connect** webhook endpoint at `https://APP_HOST/stripe/connect/webhook`. **A different secret from `STRIPE_WEBHOOK_SECRET`** — a Stripe endpoint is either "account" or "connect", never both, and each has its own. **The one whose absence fails invisibly**: connecting succeeds, the historical backfill runs and fills the charts, and then no ongoing revenue is ever recorded because every delivery is refused. `required_env.rb` logs an error at boot for the half-configured combination |
 
 `STRIPE_SECRET_KEY` is shared with billing above and is required here too: every
