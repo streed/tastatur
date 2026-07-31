@@ -17,11 +17,14 @@ module Revenue
 
     # Per-request options identifying which connected account to act on.
     #
-    # `stripe_account` is what makes the platform's own secret key read a
+    # `stripe_account` is what makes the app owner's own secret key read a
     # customer's data, and it is why no access token is stored anywhere. See the
-    # StripeConnection model.
+    # StripeConnection model. The key is passed explicitly rather than relying
+    # on the global `Stripe.api_key`, because the account that owns the Stripe
+    # App is not necessarily the billing account whose key the global holds —
+    # see Tastatur.stripe_connect_key.
     def options(connection)
-      { stripe_account: connection.stripe_account_id }
+      { api_key: Tastatur.stripe_connect_key, stripe_account: connection.stripe_account_id }
     end
 
     # `Stripe::Subscription.list` and friends, scoped to a connected account.

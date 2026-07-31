@@ -192,6 +192,7 @@ every entry of which ends in `_read`. The step-by-step runbook is in
 | Variable | Default | Notes |
 |---|---|---|
 | `STRIPE_CONNECT_CLIENT_ID` | unset | the OAuth client id from the app's details page |
+| `STRIPE_CONNECT_SECRET_KEY` | falls back to `STRIPE_SECRET_KEY` | only needed when the Stripe App is owned by a **different** account than billing's — every Connect call (the code exchange, the backfill, connected-account reads) is made with the app owner's key. A single-account setup leaves this unset |
 | `STRIPE_CONNECT_WEBHOOK_SECRET` | unset | `whsec_…`, from a **Connect** webhook endpoint at `https://APP_HOST/stripe/connect/webhook`. **A different secret from `STRIPE_WEBHOOK_SECRET`** — a Stripe endpoint is either "account" or "connect", never both, and each has its own. **The one whose absence fails invisibly**: connecting succeeds, the historical backfill runs and fills the charts, and then no ongoing revenue is ever recorded because every delivery is refused. `required_env.rb` logs an error at boot for the half-configured combination |
 
 `STRIPE_SECRET_KEY` is shared with billing above and is required here too: every

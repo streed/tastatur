@@ -54,7 +54,9 @@ module Revenue
       http.read_timeout = Stripe.read_timeout
 
       request = Net::HTTP::Post.new(uri.path)
-      request.basic_auth(Rails.configuration.stripe[:secret_key].to_s, "")
+      # The APP OWNER's key, which is not necessarily billing's — see
+      # Tastatur.stripe_connect_key for why they can differ.
+      request.basic_auth(Tastatur.stripe_connect_key.to_s, "")
       request.set_form_data(grant_type: "authorization_code", code: code)
 
       http.request(request)
