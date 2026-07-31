@@ -1,45 +1,6 @@
 <%# The options behind every picker on this page, and the sentence explaining
-    where they came from.
-
-    ONE COPY, by id. A funnel form holds up to eight pickers over the same
-    couple of hundred paths; rendering the list into each field would put the
-    same tens of kilobytes on the page nine times. See OffersKnownValues.
-
-    `json_escape` rather than trusting the JSON encoder's escaping config: these
-    strings are paths and event names from a customer's website, they are going
-    inside a <script> element, and a literal "</script>" in one of them would
-    end the element early and put the rest of the payload into the document as
-    markup. escape_html_entities_in_json defaults to on and would also prevent
-    that, but it is an application-wide setting that something else could turn
-    off, and this is not a decision that should be reachable from an initializer. -%>
-<%= tag.script json_escape(known_values.payload.to_json).html_safe,
-               type: "application/json",
-               id: OffersKnownValues::KNOWN_VALUES_DOM_ID %>
-
-<p class="text-[12px] text-muted">
-  <% if known_values.any? %>
-    Pick from the
-    <%= pluralize(known_values.paths.size, "page") %> and
-    <%= pluralize(known_values.events.size, "custom event") %>
-    recorded in the last <%= pluralize(known_values.days, "day") %>,
-    or type anything else — including a page you have not launched yet.
-  <% else %>
-    Nothing recorded in the last <%= pluralize(known_values.days, "day") %>,
-    so there is nothing to pick from yet. Type the path or event name you are going to send:
-    both goals and funnels are matched against history, so this will start reporting
-    as soon as the data arrives.
-  <% end %>
-
-  <%# Said plainly rather than left as a silently short list. On a quiet site at
-      the default threshold every row is withheld and the picker is empty, which
-      without this sentence reads as "we have no data" — the same misreading
-      spec/requests/breakdown_suppression_spec.rb exists to prevent on the
-      dashboard. -%>
-  <% if known_values.withheld? %>
-    <%= pluralize(known_values.withheld, "value") %>
-    <%= known_values.withheld == 1 ? "is" : "are" %> not listed because
-    <%= known_values.withheld == 1 ? "it was" : "they were" %> seen by fewer than
-    <%= known_values.threshold %> visitors, this site's privacy threshold.
-    Typing <%= known_values.withheld == 1 ? "it" : "them" %> in still works.
-  <% end %>
-</p>
+    where they came from — the pair, for a form that wants both together. A
+    custom dashboard needs them in different places and renders the two halves
+    itself. -%>
+<%= render "sites/known_values_payload", known_values: known_values %>
+<%= render "sites/known_values_note", known_values: known_values %>

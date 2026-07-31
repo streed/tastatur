@@ -144,5 +144,12 @@
         </nav>
       </div>
     </footer>
+
+    <%# Forms that belong to a control rendered inside ANOTHER form, associated
+        with it by the HTML `form` attribute. A <form> nested in a <form> is
+        invalid HTML and browsers discard the inner one, which is why the delete
+        button on every edit screen used to save the record instead. Emitted here
+        so they are outside every form on the page. See TastaturFormBuilder#actions. -%>
+    <%= yield :detached_forms %>
   </body>
 </html>

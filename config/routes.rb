@@ -62,7 +62,15 @@ Rails.application.routes.draw do
       resource :installation, only: %i[show]
       resources :goals, except: %i[show]
       resources :funnels
-      resources :dashboards
+      # No `edit`: a dashboard is configured on the dashboard itself, so there
+      # is no second page to render. `update` remains — it is what the inline
+      # rename posts to.
+      resources :dashboards, except: %i[edit] do
+        # `show` is not a page anybody navigates to — it is what a widget's
+        # frame fetches to put the widget back after a save or a cancel.
+        resources :widgets, only: %i[show create edit update destroy],
+                            controller: "dashboard_widgets"
+      end
       resources :shared_links, only: %i[index create destroy]
 
       # --- Revenue ----------------------------------------------------------

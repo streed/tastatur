@@ -1,0 +1,15 @@
+<%# One widget, on its own — what the frame gets back after a save or a cancel.
+    The partial emits the <turbo-frame> itself, which is what makes this a
+    valid frame response. Reached as a whole page only by someone following the
+    URL directly; the shell keeps that case looking like a page. -%>
+<div class="shell">
+  <% unless turbo_frame_request? %>
+    <p class="label pt-5 mb-4">
+      <%= link_to "← #{@dashboard.name}", site_dashboard_path(@site, @dashboard),
+                  class: "underline hover:text-ink" %>
+    </p>
+  <% end %>
+
+  <%= render "sites/dashboards/widget", site: @site, report: @report,
+             result: @result, editable: true %>
+</div>

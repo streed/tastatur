@@ -1,17 +1,22 @@
 module Sites
   class DashboardsController < ApplicationController
     include SiteScoped
-    # Feeds the filter-value comboboxes on the editor form. Lazy (a helper
-    # method, not a callback), so a successful save that redirects never pays
-    # for the thirty-day scan.
+    # Feeds the filter-value comboboxes on the widget configuration panels.
+    # Lazy (a helper method, not a callback), so a period click or a successful
+    # save never pays for the thirty-day scan.
     include OffersKnownValues
 
-    before_action :set_dashboard, only: %i[show edit update destroy]
+    before_action :set_dashboard, only: %i[show update destroy]
 
     def index
       @dashboards = policy_scope(Dashboard).where(site: @site).includes(:dashboard_widgets).ordered
     end
 
+    # The dashboard IS the editor. Everything that used to live on a separate
+    # page — the name, each widget's configuration, adding and removing widgets
+    # — happens here, against the real numbers rather than against a list of
+    # select boxes. `editable` is what the widgets partial gates all of that on,
+    # and it is false on the public shared copy, which renders the same partial.
     def show
       authorize @dashboard
 
@@ -24,42 +29,43 @@ module Sites
       return unless turbo_frame_request?
 
       render partial: "sites/dashboards/widgets",
-             locals: { site: @site, report: @report, editable: policy(@dashboard).update? }
+             locals: { site: @site, report: @report, editable: policy(@dashboard).update?,
+                       configuring: params[:configure] }
     end
 
     def new
       @dashboard = @site.dashboards.new
-      # Open with one concrete widget rather than an empty list: the form's
-      # minimum is MIN_WIDGETS, and a stat tile is the cheapest thing to
-      # understand and delete.
-      @dashboard.dashboard_widgets.build(kind: "stat", metric: "visitors")
       authorize @dashboard
     end
 
+    # The form asks for a name and nothing else — widgets are chosen on the
+    # dashboard itself. A dashboard cannot be saved without one
+    # (Dashboard::MIN_WIDGETS), so it opens with the same tile the Add button
+    # creates, and the author configures it in place.
     def create
       @dashboard = @site.dashboards.new(dashboard_params)
+      @dashboard.dashboard_widgets.build(Dashboards::AddWidget::DEFAULTS)
       authorize @dashboard
 
       if @dashboard.save
-        redirect_to site_dashboard_path(@site, @dashboard), notice: "Dashboard created."
+        redirect_to site_dashboard_path(@site, @dashboard, configure: @dashboard.dashboard_widgets.first.public_id),
+                    notice: "Dashboard created."
       else
-        ensure_minimum_rows
         render :new, status: :unprocessable_entity
       end
     end
 
-    def edit
-      authorize @dashboard
-    end
-
+    # The inline rename in the dashboard header. Nothing else posts here — a
+    # widget's configuration is its own resource now.
     def update
       authorize @dashboard
 
       if @dashboard.update(dashboard_params)
-        redirect_to site_dashboard_path(@site, @dashboard), notice: "Dashboard updated."
+        redirect_to site_dashboard_path(@site, @dashboard), notice: "Dashboard renamed."
       else
-        ensure_minimum_rows
-        render :edit, status: :unprocessable_entity
+        @period = Analytics::Period.parse(params[:period], site: @site)
+        @report = Dashboards::Render.call(dashboard: @dashboard, period: @period).value!
+        render :show, status: :unprocessable_entity
       end
     end
 
@@ -75,28 +81,8 @@ module Sites
       @dashboard = @site.dashboards.find_by_public_id!(params[:id])
     end
 
-    # After a failed save the submitted rows are re-rendered as-is. If the user
-    # had removed rows down below the minimum, top the form back up so they are
-    # not left with a form they cannot submit. Same as Sites::FunnelsController.
-    def ensure_minimum_rows
-      missing = Dashboard::MIN_WIDGETS -
-                @dashboard.dashboard_widgets.reject(&:marked_for_destruction?).size
-      missing.clamp(0, Dashboard::MAX_WIDGETS).times do
-        @dashboard.dashboard_widgets.build(kind: "stat", metric: "visitors")
-      end
-    end
-
-    # `funnel_public_id`, never `funnel_id`: a posted primary key must have no
-    # path into the model. See DashboardWidget#funnel_public_id=.
     def dashboard_params
-      params.expect(
-        dashboard: [:name,
-                    { dashboard_widgets_attributes: [
-                      [:id, :position, :kind, :title, :metric, :dimension, :row_limit,
-                       :funnel_public_id, :_destroy,
-                       { filter_pairs_attributes: [%i[dimension value]] }]
-                    ] }]
-      )
+      params.expect(dashboard: [:name])
     end
   end
 end

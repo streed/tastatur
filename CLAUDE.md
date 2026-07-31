@@ -223,6 +223,23 @@ ActiveRecord model still gets the builder — give it an `ActiveModel` form obje
 (see `MemberInvitation`) rather than dropping to raw HTML, which is how a
 codebase ends up with four subtly different forms.
 
+**A `button_to` must never be rendered inside a form,** and `f.actions` takes
+`destroy_to:` — a URL — rather than a rendered button so that it cannot be. This
+is not tidiness. `button_to` emits a `<form>`, so passing one in nested a form
+inside a form; that is invalid HTML and the parser **discards the inner start
+tag**, which leaves the delete button owned by the surrounding edit form and its
+`data-turbo-confirm` attached to an element that no longer exists. Every delete
+button on every edit screen therefore ran `update`: measured on the wire, Turbo
+sent `_method=patch`, the record was SAVED, and the redirect landed back on it
+looking like nothing had happened. Nothing raises, nothing logs, and no request
+spec can catch it, because a request spec issues the clean DELETE that no
+browser was ever going to send — `spec/requests/destructive_buttons_spec.rb`
+scans the delivered markup instead. The builder emits the delete form into
+`content_for(:detached_forms)`, which the layout yields outside every other
+form, and associates the button with it by the HTML `form` attribute. The one
+place `destroy_to:` still may not be used is a form rendered into a turbo frame:
+Turbo extracts the frame and drops the rest, taking the detached form with it.
+
 **`as: :combobox` is a text field that can also be picked from,** and it is used
 by exactly one thing: the match value of a goal or a funnel step, which is a
 string compared against a column. A typo there saves cleanly and then reports 0%

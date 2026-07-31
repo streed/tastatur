@@ -74,5 +74,6 @@
 
   <%= f.actions @goal.persisted? ? "Save goal" : "Create goal",
                 cancel_to: site_goals_path(@site),
-                destructive: (@goal.persisted? ? button_to("Delete", site_goal_path(@site, @goal), method: :delete, class: "btn btn-quiet text-negative", form: { data: { turbo_confirm: "Delete this goal? Its historical conversions stay in the raw data." } }) : nil) %>
+                destroy_to: (site_goal_path(@site, @goal) if @goal.persisted?),
+                destroy_confirm: "Delete this goal? Its historical conversions stay in the raw data." %>
 <% end %>

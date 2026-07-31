@@ -73,6 +73,14 @@ module DashboardHelper
     end
   end
 
+  # The turbo-frame a widget lives in, and the reason it is not `dom_id`:
+  # `dom_id(widget)` is built from the primary key, and §10 keeps sequential
+  # integers out of anything a page hands to a reader. Both the widget and the
+  # panel that replaces it name this frame, so it is derived in one place.
+  def widget_frame_id(widget)
+    "widget-#{widget.public_id}"
+  end
+
   # The delete confirm says what else the deletion revokes: share links
   # pointing at this dashboard are destroyed with it — deliberately, rather
   # than widened back to the default dashboard (see Dashboard#shared_links).

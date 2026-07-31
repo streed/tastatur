@@ -1,71 +1,17 @@
-<%# As with goals and funnels: creating is reported, editing is not, and none
-    of the widget fields travel with it — titles and filter values hold the
-    customer's own vocabulary. -%>
-<%= form_with model: [@site, @dashboard],
-              url: @dashboard.persisted? ? site_dashboard_path(@site, @dashboard) : site_dashboards_path(@site),
-              class: "space-y-6",
-              data: { analytics_event: ("Dashboard Created" unless @dashboard.persisted?) } do |f| %>
+<%# Creating a dashboard asks for a name and nothing else. The widgets are
+    chosen on the dashboard itself, against real numbers, which is a better
+    place to decide "is this the panel I meant" than a list of select boxes
+    over a dashboard that does not exist yet.
+
+    As with goals and funnels: creating is reported, and no field travels with
+    it — a dashboard's name is the customer's own vocabulary. -%>
+<%= form_with model: [@site, @dashboard], url: site_dashboards_path(@site),
+              class: "card card-body space-y-6",
+              data: { analytics_event: "Dashboard Created" } do |f| %>
   <%= f.error_summary %>
 
-  <div class="card card-body space-y-6">
-    <%= f.field :name, "Dashboard name", placeholder: "Marketing overview", autofocus: true %>
-  </div>
+  <%= f.field :name, "Dashboard name", placeholder: "Marketing overview", autofocus: true,
+              hint: "It opens with one stat tile. Add the rest on the dashboard." %>
 
-  <div class="card"
-       data-controller="nested-form"
-       data-nested-form-max-value="<%= Dashboard::MAX_WIDGETS %>"
-       data-nested-form-min-value="<%= Dashboard::MIN_WIDGETS %>"
-       data-nested-form-label-value="Widget">
-    <div class="card-head">
-      <h2 class="text-sm font-semibold">Widgets</h2>
-      <span class="label">
-        <span data-nested-form-target="count"><%= @dashboard.dashboard_widgets.size %></span>
-        of <%= Dashboard::MAX_WIDGETS %> · in order
-      </span>
-    </div>
-
-    <div class="card-body space-y-4" data-nested-form-target="rows">
-      <%= f.fields_for :dashboard_widgets do |widget| %>
-        <%= render "sites/dashboards/widget_fields", widget: widget, site: @site %>
-      <% end %>
-    </div>
-
-    <%# The prototype the Add button clones. A browser never submits the
-        contents of a <template>, so this blank row cannot reach the server on
-        its own. -%>
-    <template data-nested-form-target="template">
-      <%= f.fields_for :dashboard_widgets,
-                       DashboardWidget.new(kind: "stat", metric: "visitors"),
-                       child_index: "NEW_RECORD" do |widget| %>
-        <%= render "sites/dashboards/widget_fields", widget: widget, site: @site %>
-      <% end %>
-    </template>
-
-    <%# Once for the whole form, outside the <template> above: every filter
-        value picker on the page reads this one payload by id. -%>
-    <div class="px-5 pb-4">
-      <%= render "sites/known_values", known_values: known_values %>
-    </div>
-
-    <div class="px-5 py-4 border-t border-rule flex items-center justify-between gap-4">
-      <button type="button" class="btn btn-sm"
-              data-action="nested-form#add" data-nested-form-target="addButton"
-              data-analytics-event="Dashboard Widget Added"
-              data-analytics-props="<%= { context: @dashboard.persisted? ? "edit" : "new" }.to_json %>">
-        Add widget
-      </button>
-      <p class="text-[12px] text-muted">
-        Up to <%= Dashboard::MAX_WIDGETS %> widgets, shown in this order. Stats and breakdowns
-        sit two to a row; charts, goals and funnels take the full width.
-      </p>
-    </div>
-  </div>
-
-  <%= f.actions @dashboard.persisted? ? "Save dashboard" : "Create dashboard",
-                cancel_to: site_dashboards_path(@site),
-                destructive: (if @dashboard.persisted?
-                                button_to("Delete dashboard", site_dashboard_path(@site, @dashboard),
-                                          method: :delete, class: "btn btn-quiet text-negative",
-                                          form: { data: { turbo_confirm: delete_dashboard_confirmation(@dashboard) } })
-                              end) %>
+  <%= f.actions "Create dashboard", cancel_to: site_dashboards_path(@site) %>
 <% end %>

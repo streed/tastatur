@@ -18,85 +18,61 @@ RSpec.describe "Custom dashboards", type: :request do
   describe "CRUD" do
     before { sign_in_as("owner") }
 
-    it "creates a dashboard from nested widget rows, including saved filters" do
-      post site_dashboards_path(site), params: {
-        dashboard: {
-          name: "Marketing",
-          dashboard_widgets_attributes: {
-            "0" => { position: 1, kind: "stat", metric: "visitors", title: "",
-                     filter_pairs_attributes: {
-                       "sentinel" => { dimension: "", value: "" },
-                       "0" => { dimension: "source", value: "Google" }
-                     } },
-            "1" => { position: 2, kind: "breakdown", dimension: "page", row_limit: 10 }
-          }
-        }
-      }
+    # A dashboard is created from a name alone and opens with one working tile.
+    # It cannot be created empty — Dashboard::MIN_WIDGETS — so "name only" and
+    # "starts with a widget" are one requirement, not two.
+    it "creates a dashboard from a name and opens it on its first widget" do
+      post site_dashboards_path(site), params: { dashboard: { name: "Marketing" } }
 
       dashboard = site.dashboards.find_by!(name: "Marketing")
-      expect(response).to redirect_to(site_dashboard_path(site, dashboard))
+      widget = dashboard.dashboard_widgets.sole
 
-      stat, breakdown = dashboard.dashboard_widgets.to_a
-      expect(stat.filters).to eq("source" => "Google")
-      expect(breakdown.dimension).to eq("page")
+      expect(widget).to have_attributes(kind: "stat", metric: "visitors", position: 1)
+      expect(response).to redirect_to(
+        site_dashboard_path(site, dashboard, configure: widget.public_id)
+      )
     end
 
-    it "creates a funnel widget through the funnel's public id" do
-      funnel = create(:funnel, site: site)
-
-      post site_dashboards_path(site), params: {
-        dashboard: { name: "Conversion",
-                     dashboard_widgets_attributes: {
-                       "0" => { position: 1, kind: "funnel", funnel_public_id: funnel.public_id }
-                     } }
-      }
-
-      expect(site.dashboards.find_by!(name: "Conversion").dashboard_widgets.first.funnel).to eq(funnel)
-    end
-
-    it "refuses another site's funnel even by public id" do
-      foreign = create(:funnel)
-
-      post site_dashboards_path(site), params: {
-        dashboard: { name: "Sneaky",
-                     dashboard_widgets_attributes: {
-                       "0" => { position: 1, kind: "funnel", funnel_public_id: foreign.public_id }
-                     } }
-      }
-
-      expect(response).to have_http_status(:unprocessable_entity)
-      expect(site.dashboards.count).to be_zero
-    end
-
-    it "re-renders an invalid submission with the error summary and a usable form" do
-      post site_dashboards_path(site), params: {
-        dashboard: { name: "", dashboard_widgets_attributes: {
-          "0" => { position: 1, kind: "stat", metric: "visitors" }
-        } }
-      }
+    it "re-renders an invalid submission with the error summary" do
+      post site_dashboards_path(site), params: { dashboard: { name: "" } }
 
       expect(response).to have_http_status(:unprocessable_entity)
       expect(response.body).to include("This could not be saved")
-      expect(response.body).to include("dashboard_widgets_attributes")
+      expect(site.dashboards.count).to be_zero
     end
 
-    it "updates widgets, removing and adding in one submission" do
-      dashboard = create(:dashboard, site: site)
-      existing = dashboard.dashboard_widgets.first
+    it "renames a dashboard from the dashboard itself" do
+      dashboard = create(:dashboard, site: site, name: "Old")
 
-      patch site_dashboard_path(site, dashboard), params: {
-        dashboard: {
-          name: dashboard.name,
-          dashboard_widgets_attributes: {
-            "0" => { id: existing.id, _destroy: "1", position: 1, kind: existing.kind,
-                     metric: existing.metric },
-            "1" => { position: 2, kind: "timeseries" }
-          }
-        }
-      }
+      patch site_dashboard_path(site, dashboard), params: { dashboard: { name: "New" } }
 
       expect(response).to redirect_to(site_dashboard_path(site, dashboard))
-      expect(dashboard.reload.dashboard_widgets.map(&:kind)).to eq(["timeseries"])
+      expect(dashboard.reload.name).to eq("New")
+    end
+
+    # The rename is in the dashboard's own header, so a rejected one has to come
+    # back as the dashboard rather than as a form on its own page.
+    it "re-renders the dashboard when a rename is rejected" do
+      create(:dashboard, site: site, name: "Taken")
+      dashboard = create(:dashboard, site: site, name: "Mine")
+
+      patch site_dashboard_path(site, dashboard), params: { dashboard: { name: "Taken" } }
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response.body).to include("has already been taken")
+      expect(dashboard.reload.name).to eq("Mine")
+    end
+
+    it "ignores a widget attribute smuggled into the rename" do
+      dashboard = create(:dashboard, site: site)
+      widget = dashboard.dashboard_widgets.sole
+
+      patch site_dashboard_path(site, dashboard), params: {
+        dashboard: { name: dashboard.name,
+                     dashboard_widgets_attributes: { "0" => { id: widget.id, kind: "timeseries" } } }
+      }
+
+      expect(widget.reload.kind).to eq("stat")
     end
 
     it "deletes a dashboard" do
@@ -175,7 +151,9 @@ RSpec.describe "Custom dashboards", type: :request do
 
       expect(response).to have_http_status(:ok)
       expect(response.body).to include("has been deleted")
-      expect(response.body).to include(edit_site_dashboard_path(site, dashboard))
+      expect(response.body).to include(
+        edit_site_dashboard_widget_path(site, dashboard, dashboard.dashboard_widgets.sole)
+      )
     end
   end
 
@@ -211,13 +189,29 @@ RSpec.describe "Custom dashboards", type: :request do
       get site_dashboard_path(site, dashboard)
       expect(response).to have_http_status(:ok)
 
-      post site_dashboards_path(site), params: {
-        dashboard: { name: "Nope", dashboard_widgets_attributes: {
-          "0" => { position: 1, kind: "stat", metric: "visitors" }
-        } }
-      }
+      post site_dashboards_path(site), params: { dashboard: { name: "Nope" } }
       expect(response).to have_http_status(:redirect)
       expect(site.dashboards.where(name: "Nope")).to be_empty
+    end
+
+    # The widget endpoints authorize the DASHBOARD rather than the widget, so
+    # the check has to be shown to actually happen there.
+    it "refuses a viewer every widget action" do
+      sign_in_as("viewer")
+      dashboard = create(:dashboard, site: site)
+      widget = dashboard.dashboard_widgets.sole
+
+      post site_dashboard_widgets_path(site, dashboard)
+      expect(response).to have_http_status(:redirect)
+
+      patch site_dashboard_widget_path(site, dashboard, widget),
+            params: { dashboard_widget: { kind: "timeseries" } }
+      expect(response).to have_http_status(:redirect)
+
+      delete site_dashboard_widget_path(site, dashboard, widget)
+      expect(response).to have_http_status(:redirect)
+
+      expect(dashboard.reload.dashboard_widgets.map(&:kind)).to eq(["stat"])
     end
   end
 end

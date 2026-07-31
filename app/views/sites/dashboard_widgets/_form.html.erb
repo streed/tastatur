@@ -1,0 +1,92 @@
+<%# The configuration panel for one widget, rendered in place of the widget
+    inside its own turbo frame. Locals: site, widget, report (may be nil when
+    this is a direct visit rather than a panel opened on the dashboard).
+
+    This is the old editor's widget row, minus everything that only made sense
+    inside a twelve-row nested form: no position (order is the dashboard's
+    business), no _destroy (removing is its own action, on the widget's card),
+    and no <template> to clone. What is left is one record's own form.
+
+    widget-config shows the configuration section matching the chosen kind.
+    Without JavaScript every section stays visible and the model's
+    clear_irrelevant_config nulls whatever the chosen kind does not use — the
+    same submit works either way. -%>
+<% report = local_assigns.fetch(:report, nil)
+   period = report&.period&.key %>
+
+<%= form_with model: widget,
+              url: site_dashboard_widget_path(site, widget.dashboard, widget, period: period),
+              class: "card card-body space-y-4",
+              data: { controller: "widget-config" } do |f| %>
+  <%= f.error_summary %>
+
+  <div class="grid sm:grid-cols-2 gap-4">
+    <%= f.field :kind, "Widget", as: :select,
+                choices: [["Stat tile", "stat"], ["Traffic chart", "timeseries"],
+                          ["Breakdown", "breakdown"], ["Goal conversions", "goals"],
+                          ["Funnel", "funnel"]],
+                data: { widget_config_target: "kind",
+                        action: "change->widget-config#kindChanged" } %>
+    <%= f.field :title, "Title (optional)", placeholder: "Defaults to the widget's own name" %>
+  </div>
+
+  <div data-widget-config-target="section" data-kinds="stat">
+    <%= f.field :metric, "Metric", as: :select,
+                choices: DashboardWidget::METRIC_LABELS.map { |key, label| [label, key] },
+                wrapper: "sm:w-1/2 sm:pr-2" %>
+  </div>
+
+  <div class="grid sm:grid-cols-2 gap-4" data-widget-config-target="section" data-kinds="breakdown">
+    <%= f.field :dimension, "Dimension", as: :select,
+                choices: Analytics::Filters::HUMAN_LABELS.map { |key, label| [label, key] } %>
+    <%= f.field :row_limit, "Rows", as: :select, choices: [5, 10, 15, 25, 50] %>
+  </div>
+
+  <div data-widget-config-target="section" data-kinds="funnel">
+    <%= f.field :funnel_public_id, "Funnel", as: :select,
+                include_blank: "Choose a funnel",
+                choices: site.funnels.ordered.map { |funnel| [funnel.name, funnel.public_id] },
+                hint: (site.funnels.none? ? "This site has no funnels yet — build one first." : nil),
+                wrapper: "sm:w-1/2 sm:pr-2" %>
+  </div>
+
+  <%# Filters apply to every kind, so no data-kinds gate. Pairs are value
+      objects rebuilt wholesale from each submission (see
+      DashboardWidget#filter_pairs_attributes=), which is why removing one is
+      plain DOM removal — there is no child record and so no _destroy.
+      Submitting none of them means none, which the controller has to say
+      explicitly; see the comment on widget_params for why the blank sentinel
+      row this used to carry could never do that job. -%>
+  <div class="pt-3 border-t border-rule" data-controller="filter-pairs">
+    <p class="label mb-3">Filters (optional) <span class="text-muted normal-case font-normal">— this widget reports only matching traffic</span></p>
+
+    <div class="space-y-3" data-filter-pairs-target="rows">
+      <%= f.fields_for :filter_pairs do |pair| %>
+        <%= render "sites/dashboards/filter_pair_fields", pair: pair %>
+      <% end %>
+    </div>
+
+    <template data-filter-pairs-target="template">
+      <%= f.fields_for :filter_pairs, DashboardWidget::FilterPair.new, child_index: "NEW_PAIR" do |pair| %>
+        <%= render "sites/dashboards/filter_pair_fields", pair: pair %>
+      <% end %>
+    </template>
+
+    <button type="button" class="btn btn-quiet btn-sm mt-3" data-action="filter-pairs#add">
+      Add filter
+    </button>
+
+    <%# The payload these pickers read lives on the dashboard, once. This is
+        only the sentence explaining it, which belongs next to the field being
+        read. See OffersKnownValues. -%>
+    <div class="mt-3"><%= render "sites/known_values_note", known_values: known_values %></div>
+  </div>
+
+  <%# `cancel_to` is the widget's own GET, so cancelling swaps this panel back
+      for the widget inside the same frame rather than reloading the page.
+      Deliberately NO `destroy_to:` — the detached form that keyword emits
+      lands outside the frame and is discarded on a frame response, leaving a
+      button that does nothing. Removing a widget is the ✕ on its card. -%>
+  <%= f.actions "Save widget",
+                cancel_to: site_dashboard_widget_path(site, widget.dashboard, widget, period: period) %>
+<% end %>
