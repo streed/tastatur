@@ -1,0 +1,21 @@
+<%# The options behind every picker on this page.
+
+    ONE COPY, by id. A funnel form holds up to eight pickers over the same
+    couple of hundred paths; rendering the list into each field would put the
+    same tens of kilobytes on the page nine times. See OffersKnownValues.
+
+    Split from the sentence that explains it (see _known_values_note) because a
+    custom dashboard needs the two in different places: the payload sits on the
+    dashboard, where it is loaded once, while the note belongs inside the one
+    widget panel that happens to be open.
+
+    `json_escape` rather than trusting the JSON encoder's escaping config: these
+    strings are paths and event names from a customer's website, they are going
+    inside a <script> element, and a literal "</script>" in one of them would
+    end the element early and put the rest of the payload into the document as
+    markup. escape_html_entities_in_json defaults to on and would also prevent
+    that, but it is an application-wide setting that something else could turn
+    off, and this is not a decision that should be reachable from an initializer. -%>
+<%= tag.script json_escape(known_values.payload.to_json).html_safe,
+               type: "application/json",
+               id: OffersKnownValues::KNOWN_VALUES_DOM_ID %>

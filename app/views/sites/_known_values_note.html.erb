@@ -1,0 +1,30 @@
+<%# Where a picker's options came from, in prose. Separate from the payload it
+    describes (see _known_values_payload) so the two can sit in different places
+    on a custom dashboard. -%>
+<p class="text-[12px] text-muted">
+  <% if known_values.any? %>
+    Pick from the
+    <%= pluralize(known_values.paths.size, "page") %> and
+    <%= pluralize(known_values.events.size, "custom event") %>
+    recorded in the last <%= pluralize(known_values.days, "day") %>,
+    or type anything else — including a page you have not launched yet.
+  <% else %>
+    Nothing recorded in the last <%= pluralize(known_values.days, "day") %>,
+    so there is nothing to pick from yet. Type the path or event name you are going to send:
+    both goals and funnels are matched against history, so this will start reporting
+    as soon as the data arrives.
+  <% end %>
+
+  <%# Said plainly rather than left as a silently short list. On a quiet site at
+      the default threshold every row is withheld and the picker is empty, which
+      without this sentence reads as "we have no data" — the same misreading
+      spec/requests/breakdown_suppression_spec.rb exists to prevent on the
+      dashboard. -%>
+  <% if known_values.withheld? %>
+    <%= pluralize(known_values.withheld, "value") %>
+    <%= known_values.withheld == 1 ? "is" : "are" %> not listed because
+    <%= known_values.withheld == 1 ? "it was" : "they were" %> seen by fewer than
+    <%= known_values.threshold %> visitors, this site's privacy threshold.
+    Typing <%= known_values.withheld == 1 ? "it" : "them" %> in still works.
+  <% end %>
+</p>

@@ -70,5 +70,7 @@
 
   <%= f.actions @funnel.persisted? ? "Save funnel" : "Create funnel",
                 cancel_to: site_funnels_path(@site),
-                destructive: (@funnel.persisted? ? button_to("Delete funnel", site_funnel_path(@site, @funnel), method: :delete, class: "btn btn-quiet text-negative", form: { data: { turbo_confirm: "Delete this funnel?" } }) : nil) %>
+                destroy_to: (site_funnel_path(@site, @funnel) if @funnel.persisted?),
+                destroy_label: "Delete funnel",
+                destroy_confirm: "Delete this funnel?" %>
 <% end %>

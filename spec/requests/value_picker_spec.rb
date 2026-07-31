@@ -72,10 +72,16 @@ RSpec.describe "Picking a goal or funnel step value", type: :request do
     end
   end
 
-  describe "the dashboard form" do
+  # A widget's filters are configured on the dashboard itself, in a panel that
+  # replaces the widget. The payload belongs to the DASHBOARD and the panels
+  # read it by id — twelve widgets opening in turn must not each ship their own
+  # copy of the same couple of hundred paths.
+  describe "the widget configuration panel" do
+    let(:dashboard) { create(:dashboard, site: site) }
+
     before do
       create_event(site, path: "/pricing", visitor: "v1", at: 1.hour.ago)
-      get "/sites/#{site.to_param}/dashboards/new"
+      get site_dashboard_path(site, dashboard, configure: dashboard.dashboard_widgets.sole.public_id)
     end
 
     it "renders one payload and dimension options tagged with their value group" do
@@ -89,6 +95,28 @@ RSpec.describe "Picking a goal or funnel step value", type: :request do
 
     it "renders the filter value as a combobox" do
       expect(response.body).to include('role="combobox"')
+    end
+
+    # The panel arrives through a turbo frame, which is extracted from the
+    # response and dropped into a page that already has the payload. A second
+    # copy under the same id is what the split into two partials prevents.
+    it "does not carry a second payload when fetched into the widget's frame" do
+      widget = dashboard.dashboard_widgets.sole
+
+      get edit_site_dashboard_widget_path(site, dashboard, widget),
+          headers: { "Turbo-Frame" => "widget-#{widget.public_id}" }
+
+      expect(response.body).to include('role="combobox"')
+      expect(response.body.scan('id="known-values"').size).to eq(0)
+    end
+
+    # ...and a direct visit has no dashboard around it, so it must.
+    it "carries the payload when the panel is the whole page" do
+      widget = dashboard.dashboard_widgets.sole
+
+      get edit_site_dashboard_widget_path(site, dashboard, widget)
+
+      expect(response.body.scan('id="known-values"').size).to eq(1)
     end
   end
 

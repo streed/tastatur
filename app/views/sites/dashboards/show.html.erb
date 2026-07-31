@@ -1,10 +1,25 @@
 <% content_for :title, "#{@dashboard.name} · #{@site.domain}" %>
+<% editable = policy(@dashboard).update? %>
 
 <div class="shell">
   <div class="flex flex-wrap items-end justify-between gap-4 mb-6 pt-5 rule-heavy">
     <div class="mt-5">
       <div class="flex items-center gap-3">
-        <h1 class="text-2xl font-semibold"><%= @dashboard.name %></h1>
+        <%# The name is edited where it is read. A pencil that opens a modal to
+            change one string is three interactions for one word; a field that
+            saves on submit is one. Read-only for a viewer, who gets the
+            heading this always was. -%>
+        <% if editable %>
+          <%= form_with model: @dashboard, url: site_dashboard_path(@site, @dashboard),
+                        class: "flex items-center gap-2" do |f| %>
+            <%= f.text_field :name, class: "field text-2xl font-semibold !py-1 max-w-md",
+                             aria: { label: "Dashboard name" } %>
+            <%= f.submit "Rename", class: "btn btn-sm" %>
+          <% end %>
+        <% else %>
+          <h1 class="text-2xl font-semibold"><%= @dashboard.name %></h1>
+        <% end %>
+
         <% if @report.realtime.positive? %>
           <span class="flex items-center gap-2 label" title="Visitors active in the last 5 minutes">
             <span class="w-1.5 h-1.5 bg-signal inline-block" aria-hidden="true"></span>
@@ -12,6 +27,11 @@
           </span>
         <% end %>
       </div>
+
+      <% if editable && @dashboard.errors.any? %>
+        <p class="text-[12px] text-negative mt-2"><%= @dashboard.errors.full_messages.first %></p>
+      <% end %>
+
       <p class="label mt-2">
         <%= @site.domain %><span class="mx-2">·</span><%= @period.label %>
         <span class="mx-2">·</span><%= @site.timezone %>
@@ -32,9 +52,6 @@
         <% end %>
       </div>
       <%= link_to "All dashboards", site_dashboards_path(@site), class: "btn btn-sm" %>
-      <% if policy(@dashboard).update? %>
-        <%= link_to "Edit", edit_site_dashboard_path(@site, @dashboard), class: "btn btn-sm" %>
-      <% end %>
       <%# Sharing what is on screen is a thought you have while looking at it —
           same reasoning as the site dashboard's header. The dashboard's
           public_id travels along so the share form preselects it. %>
@@ -44,9 +61,26 @@
                     data: { analytics_event: "Share Links Opened",
                             analytics_props: { source: "custom_dashboard_header" } } %>
       <% end %>
+      <%# A plain button_to, and it must stay outside every form on this page:
+          nested forms are discarded by the parser and this button would then
+          submit the rename above. See TastaturFormBuilder#actions. -%>
+      <% if editable && policy(@dashboard).destroy? %>
+        <%= button_to "Delete dashboard", site_dashboard_path(@site, @dashboard),
+                      method: :delete, class: "btn btn-sm text-negative",
+                      form: { data: { turbo_confirm: delete_dashboard_confirmation(@dashboard) } } %>
+      <% end %>
     </div>
   </div>
 
   <%= render "sites/dashboards/widgets", site: @site, report: @report,
-             editable: policy(@dashboard).update? %>
+             editable: editable, configuring: params[:configure] %>
+
+  <%# The options behind every filter picker on this page, rendered ONCE and
+      outside the dashboard frame: the configuration panels are loaded into
+      widget frames one at a time and each would otherwise carry its own copy of
+      the same tens of kilobytes under the same DOM id. The sentence that
+      explains them travels with the panel instead, where it is being read. -%>
+  <% if editable %>
+    <%= render "sites/known_values_payload", known_values: known_values %>
+  <% end %>
 </div>

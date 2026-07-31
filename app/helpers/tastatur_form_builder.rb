@@ -136,7 +136,37 @@ class TastaturFormBuilder < ActionView::Helpers::FormBuilder
 
   # Primary action plus an optional cancel link and an optional destructive
   # action, always in the same order and alignment.
-  def actions(submit_label, cancel_to: nil, cancel_label: "Cancel", destructive: nil)
+  #
+  # `destroy_to:` is a URL, NOT a rendered button, and that is the whole point.
+  # The obvious way to write this call site — passing a `button_to` in — was how
+  # this worked, and it silently broke every delete button in the application.
+  # `button_to` renders a <form>, so the result was a <form> inside the <form>
+  # this row belongs to. Nested forms are invalid HTML: the parser DISCARDS the
+  # inner start tag, which leaves the delete button owned by the surrounding
+  # edit form and its `data-turbo-confirm` attached to an element that no longer
+  # exists. Clicking "Delete" then submitted the edit form — measured on the
+  # wire, Turbo sent `_method=patch` — so Rails ran `update`, the record was
+  # SAVED rather than destroyed, and the redirect landed back on the record
+  # looking like nothing had happened. Nothing raises, nothing logs, and the
+  # request spec passes because it issues a clean DELETE that no browser ever
+  # sends. `spec/requests/destructive_buttons_spec.rb` parses the rendered HTML
+  # for nesting so it cannot come back.
+  #
+  # So the delete form is emitted OUT OF BAND — into `content_for(:detached_forms)`,
+  # which the layout yields just before </body>, outside every other form — and
+  # the button that lives in this row is associated with it by the HTML `form`
+  # attribute. That keeps one visible arrangement, keeps the POST semantics
+  # button_to exists for (it still works with JavaScript off), and leaves the
+  # caller one line with no id to keep in sync.
+  #
+  # THE ONE PLACE `destroy_to:` MUST NOT BE USED is a form rendered into a
+  # turbo-frame — the widget configuration panel, say. Turbo extracts the
+  # matching <turbo-frame> from the response and throws the rest away, and the
+  # detached form is by construction outside it, so the button would survive
+  # and the form it names would not. Put the destructive action on the page
+  # around the frame instead.
+  def actions(submit_label, cancel_to: nil, cancel_label: "Cancel",
+              destroy_to: nil, destroy_label: "Delete", destroy_confirm: nil)
     @template.tag.div(class: "flex flex-wrap items-center justify-between gap-3 pt-2") do
       @template.safe_join(
         [
@@ -148,13 +178,35 @@ class TastaturFormBuilder < ActionView::Helpers::FormBuilder
               ].compact
             )
           end,
-          destructive
+          destroy_to ? destroy_button(destroy_to, destroy_label, destroy_confirm) : nil
         ].compact
       )
     end
   end
 
   private
+
+  # The visible half of the destructive action, plus the detached form it
+  # submits. Both halves derive their id from the same object, so there is no
+  # string for a caller to mistype into a button that does nothing.
+  def destroy_button(url, label, confirm)
+    form_id = destroy_form_id
+
+    @template.content_for(:detached_forms) do
+      @template.form_with(url: url, method: :delete, id: form_id, class: "hidden",
+                          data: { turbo_confirm: confirm }.compact) { "" }
+    end
+
+    @template.tag.button(label, type: "submit", form: form_id,
+                                class: "btn btn-quiet text-negative")
+  end
+
+  # `dom_id` would put the primary key in the markup, which §10 keeps out of
+  # anything public-facing. The routed identifier is what `to_param` already
+  # returns.
+  def destroy_form_id
+    "delete-#{object.model_name.param_key}-#{object.to_param}"
+  end
 
   def default_options(name, options)
     classes = ["field", options.delete(:class)].compact.join(" ")

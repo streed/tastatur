@@ -1,0 +1,31 @@
+<% content_for :title, "#{@widget.display_title} · #{@dashboard.name}" %>
+
+<%# Normally fetched into the widget's frame on the dashboard, where everything
+    around it stays put. The wrapper matters only for the other case — someone
+    following this URL directly, or a browser with no JavaScript, which gets a
+    perfectly ordinary page with one form on it. -%>
+<div class="shell max-w-2xl">
+  <% unless turbo_frame_request? %>
+    <div class="pt-5 rule-heavy mb-8">
+      <h1 class="text-2xl font-semibold mt-5">Configure widget</h1>
+      <p class="label mt-2">
+        <%= link_to @dashboard.name, site_dashboard_path(@site, @dashboard),
+                    class: "underline hover:text-ink" %>
+        <span class="mx-2">·</span><%= @site.domain %>
+      </p>
+    </div>
+  <% end %>
+
+  <%= turbo_frame_tag widget_frame_id(@widget) do %>
+    <%= render "sites/dashboard_widgets/form", site: @site, widget: @widget, report: nil %>
+  <% end %>
+
+  <%# The pickers read one payload by id. On the dashboard it is already there;
+      this is the direct-visit case, where nothing else has rendered it. Outside
+      the frame on purpose — a frame response is extracted from here and this
+      must not travel with it, or the dashboard ends up with two copies under
+      one id. -%>
+  <% unless turbo_frame_request? %>
+    <%= render "sites/known_values_payload", known_values: known_values %>
+  <% end %>
+</div>

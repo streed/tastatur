@@ -1,44 +1,81 @@
-<%# One widget: dispatches to the per-kind partial, or renders the explanatory
-    state for a widget that can no longer answer (see Dashboards::WidgetResult).
-    Locals: site, report, result, editable.
+<%# One widget: its controls, then either the live widget or the configuration
+    panel that replaces it in place.
+    Locals: site, report, result, editable, configuring (optional).
 
-    `editable` gates the edit links, because this partial also renders on the
-    public shared dashboard, where offering an edit page to an anonymous
-    reader would be both useless and a map. -%>
-<% widget = result.widget %>
+    THE FRAME IS THE EDITOR. Configure loads the panel into this widget's own
+    <turbo-frame>, so the rest of the dashboard — every other widget's numbers,
+    the period, the scroll position — stays exactly as it was. Saving renders
+    the widget back into the same frame with fresh data under the new
+    configuration, which is the whole point of editing here rather than on a
+    page of select boxes: you see what you changed.
 
-<% if result.ok? %>
-  <%= render "sites/dashboards/widgets/#{widget.kind}",
-             site: site, report: report, result: result %>
-<% else %>
-  <div class="card">
-    <div class="card-head">
-      <h2 class="text-sm font-semibold"><%= widget.display_title %></h2>
-    </div>
-    <div class="px-5 py-10 text-center">
-      <p class="text-sm text-ink-2">
-        <% if result.status == :missing_funnel %>
-          The funnel this widget showed has been deleted.
-        <% else %>
-          This widget's configuration no longer matches anything that can be reported.
-        <% end %>
-      </p>
-      <% if editable %>
-        <p class="text-[12px] text-muted mt-2">
-          <%# `_top`: this renders inside the "dashboard" turbo-frame, and the
-              edit page has no frame of that name. %>
-          <%= link_to "Edit this dashboard", edit_site_dashboard_path(site, report.dashboard),
-                      class: "underline hover:text-ink", data: { turbo_frame: "_top" } %>
-          to <%= result.status == :missing_funnel ? "pick another funnel" : "reconfigure it" %> or remove the widget.
-        </p>
-      <% end %>
-    </div>
-  </div>
-<% end %>
+    `editable` gates all of it, because this partial also renders on the public
+    shared dashboard, where offering an edit control to an anonymous reader
+    would be both useless and a map. -%>
+<% widget = result.widget
+   editable = local_assigns.fetch(:editable, false)
+   configuring = local_assigns.fetch(:configuring, nil) %>
 
-<%# The author's saved filters, stated on every widget that carries any. A
-    panel titled "Top pages" that is silently pinned to one source would
-    mislead exactly the reader a curated dashboard was built for. -%>
-<% if (note = widget_filter_summary(widget)) %>
-  <p class="text-[11px] text-muted mt-1.5"><%= note %></p>
+<%= turbo_frame_tag widget_frame_id(widget) do %>
+  <% if editable && configuring.to_s == widget.public_id %>
+    <%= render "sites/dashboard_widgets/form", site: site, report: report, widget: widget %>
+  <% else %>
+    <% if editable %>
+      <div class="flex items-center justify-end gap-1 mb-1.5">
+        <%# Both are frame-scoped by default and must not be: Configure replaces
+            this frame (so it stays here), Remove changes the grid (so it goes
+            to _top). -%>
+        <%= link_to "⚙",
+                    edit_site_dashboard_widget_path(site, report.dashboard, widget,
+                                                    period: report.period.key),
+                    class: "btn btn-quiet btn-sm", title: "Configure this widget",
+                    aria: { label: "Configure #{widget.display_title}" } %>
+        <%= button_to "✕", site_dashboard_widget_path(site, report.dashboard, widget),
+                      method: :delete, class: "btn btn-quiet btn-sm text-negative",
+                      title: "Remove this widget",
+                      aria: { label: "Remove #{widget.display_title}" },
+                      form: { data: { turbo_frame: "_top",
+                                      turbo_confirm: "Remove #{widget.display_title} from this dashboard?" } } %>
+      </div>
+    <% end %>
+
+    <% if result.ok? %>
+      <%= render "sites/dashboards/widgets/#{widget.kind}",
+                 site: site, report: report, result: result %>
+    <% else %>
+      <div class="card">
+        <div class="card-head">
+          <h2 class="text-sm font-semibold"><%= widget.display_title %></h2>
+        </div>
+        <div class="px-5 py-10 text-center">
+          <p class="text-sm text-ink-2">
+            <% if result.status == :missing_funnel %>
+              The funnel this widget showed has been deleted.
+            <% else %>
+              This widget's configuration no longer matches anything that can be reported.
+            <% end %>
+          </p>
+          <% if editable %>
+            <p class="text-[12px] text-muted mt-2">
+              <%# No turbo_frame override: this link SHOULD load the panel into
+                  this frame, which is where the fix is made. %>
+              <%= link_to "Configure this widget",
+                          edit_site_dashboard_widget_path(site, report.dashboard, widget,
+                                                          period: report.period.key),
+                          class: "underline hover:text-ink" %>
+              to <%= result.status == :missing_funnel ? "pick another funnel" : "reconfigure it" %>,
+              or remove it above.
+            </p>
+          <% end %>
+        </div>
+      </div>
+    <% end %>
+
+    <%# The author's saved filters, stated on every widget that carries any. A
+        panel titled "Top pages" that is silently pinned to one source would
+        mislead exactly the reader a curated dashboard was built for. -%>
+    <% if (note = widget_filter_summary(widget)) %>
+      <p class="text-[11px] text-muted mt-1.5"><%= note %></p>
+    <% end %>
+  <% end %>
 <% end %>

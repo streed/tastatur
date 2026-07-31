@@ -8,6 +8,9 @@
 # column set can enumerate. `normalize_filters` below is what keeps that one
 # open-shaped column honest.
 class DashboardWidget < ApplicationRecord
+  include PubliclyIdentified
+  public_identifier
+
   KINDS = %w[stat timeseries breakdown goals funnel].freeze
 
   # Widget vocabulary => Analytics::Summary::Metrics reader. The widget speaks

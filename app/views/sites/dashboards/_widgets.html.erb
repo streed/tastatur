@@ -1,5 +1,6 @@
 <%# The widget grid, shared by the owner's page and the public shared view.
-    Locals: site, report (Dashboards::Report), editable.
+    Locals: site, report (Dashboards::Report), editable, configuring
+    (the public_id of a widget whose configuration panel should open, or nil).
 
     The turbo-frame lives INSIDE this partial, not around it — the same lesson
     as sites/_dashboard.html.erb: dashboards#show answers a frame request by
@@ -9,12 +10,50 @@
     Width is decided by kind rather than stored: the three table/chart kinds
     read poorly at half width, and a column is one migration away if someone
     asks for control. -%>
+<% configuring = local_assigns.fetch(:configuring, nil) %>
 <%= turbo_frame_tag "dashboard", data: { turbo_action: "advance" } do %>
   <div class="grid md:grid-cols-2 gap-6 items-start">
     <% report.widgets.each do |result| %>
       <div class="<%= "md:col-span-2" if result.widget.kind.in?(%w[timeseries goals funnel]) %>">
         <%= render "sites/dashboards/widget",
-                   site: site, report: report, result: result, editable: editable %>
+                   site: site, report: report, result: result, editable: editable,
+                   configuring: configuring %>
+      </div>
+    <% end %>
+
+    <%# The Add tile ends the grid rather than sitting in the header, because
+        that is where the next widget will appear. Half width so it never
+        disturbs the two-column rhythm above it, and only for someone who can
+        actually save.
+
+        At the cap it becomes a sentence instead of vanishing: a button that
+        silently stops being there reads as a bug in the page. -%>
+    <% if editable %>
+      <div>
+        <% if report.widgets.size < Dashboard::MAX_WIDGETS %>
+          <%# turbo_frame: "_top" — this button lives inside the "dashboard"
+              frame, and adding a widget changes the shape of the grid rather
+              than the contents of one tile. -%>
+          <%= button_to site_dashboard_widgets_path(site, report.dashboard),
+                        class: "card w-full px-5 py-8 text-center hover:bg-surface-2 block",
+                        form: { data: { turbo_frame: "_top" } },
+                        params: { period: report.period.key },
+                        data: { analytics_event: "Dashboard Widget Added",
+                                analytics_props: { context: "dashboard" } } do %>
+            <span class="text-2xl leading-none" aria-hidden="true">+</span>
+            <span class="block font-semibold mt-2">Add widget</span>
+            <span class="block text-[12px] text-muted mt-1">
+              <%= pluralize(report.widgets.size, "widget") %> of <%= Dashboard::MAX_WIDGETS %>
+            </span>
+          <% end %>
+        <% else %>
+          <div class="card px-5 py-8 text-center">
+            <p class="text-sm text-ink-2">
+              This dashboard is full at <%= Dashboard::MAX_WIDGETS %> widgets.
+              Remove one to add another.
+            </p>
+          </div>
+        <% end %>
       </div>
     <% end %>
   </div>

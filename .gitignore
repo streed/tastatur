@@ -61,3 +61,4 @@
 # monthly, so a committed copy would ship stale forever.
 /db/geoip/*.mmdb
 
+stripe-app/.build/
