@@ -53,3 +53,29 @@ reconcile_subscriptions:
     delivering, or that arrived while the endpoint was misconfigured — both of
     which leave an account on the wrong plan with nothing raised. 04:41, well
     after retention enforcement, so the two nightly sweeps do not overlap.
+
+rollup_attribution:
+  cron: "51 3 * * *"
+  class: "RollupAttributionJob"
+  queue: within_1_hour
+  description: >
+    Recomputes the attribution rollups — the table behind the revenue screen —
+    for the last three site-local days of every site that has revenue. Three days
+    rather than one because Stripe retries a failed delivery for that long, so a
+    payment can legitimately arrive on Thursday for a Tuesday invoice and belongs
+    on Tuesday's row. 03:51, after retention enforcement at 03:23 and before
+    subscription reconciliation at 04:41, so the three nightly sweeps do not
+    overlap.
+
+retry_connect_events:
+  cron: "*/7 * * * *"
+  class: "RetryConnectEventsJob"
+  queue: within_5_minutes
+  description: >
+    Re-applies Stripe Connect deliveries that were stored and failed to process.
+    ApplyConnectEventJob records failures on the row rather than raising, so
+    nothing else would ever retry them — and an unapplied event is a customer's
+    revenue screen being quietly wrong, which is the one failure of this feature
+    that surfaces nowhere. Every seven minutes: often enough that a transient
+    Stripe blip self-heals before anyone looks, odd enough not to land on the
+    same tick as every other cron entry.

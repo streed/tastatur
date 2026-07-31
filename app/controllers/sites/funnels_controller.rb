@@ -1,6 +1,8 @@
 module Sites
   class FunnelsController < ApplicationController
-    before_action :set_site
+    include SiteScoped
+    include OffersKnownValues
+
     before_action :set_funnel, only: %i[show edit update destroy]
 
     def index
@@ -66,10 +68,6 @@ module Sites
     end
 
     private
-
-    def set_site
-      @site = policy_scope(Site).find_by!(public_token: params[:site_public_token])
-    end
 
     # After a failed save the submitted rows are re-rendered as-is. If the user
     # had removed rows down below the minimum, top the form back up so they are

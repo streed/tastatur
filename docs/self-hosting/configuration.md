@@ -166,6 +166,47 @@ application noticing.
 The full design, including what happens when an account passes its monthly
 allowance, is in [../architecture/billing.md](../architecture/billing.md).
 
+## Revenue attribution (Stripe Connect)
+
+A **different Stripe integration from the one above**, pointing the other way. The
+variables above let this instance charge *its* customers. These let a customer
+connect *their own* Stripe account, read-only, so the attribution screen can show
+which acquisition channel produced paying customers.
+
+**This works on a self-hosted install.** `Tastatur.revenue_enabled?` is
+deliberately not gated on billing: billing is about whether this instance can
+charge, and this is about whether a site owner can see their own revenue. Leave
+these unset and the feature is simply absent — no screens, no endpoints, and the
+attribution page says so rather than looking broken.
+
+Set it up at <https://dashboard.stripe.com/settings/connect>.
+
+**Register the app as an Extension, not a Platform.** This is the one decision
+here that cannot be undone without a Stripe support ticket. Only an Extension can
+request the `read_only` scope, and only an Extension can connect to an account that
+already has another platform attached — which most SaaS businesses do. Registering
+it as a Platform means discovering both facts from a customer who cannot connect.
+
+| Variable | Default | Notes |
+|---|---|---|
+| `STRIPE_CONNECT_CLIENT_ID` | unset | `ca_…`, the OAuth client id of your Connect app |
+| `STRIPE_CONNECT_WEBHOOK_SECRET` | unset | `whsec_…`, from a **Connect** webhook endpoint at `https://APP_HOST/stripe/connect/webhook`. **A different secret from `STRIPE_WEBHOOK_SECRET`** — a Stripe endpoint is either "account" or "connect", never both, and each has its own. **The one whose absence fails invisibly**: connecting succeeds, the historical backfill runs and fills the charts, and then no ongoing revenue is ever recorded because every delivery is refused. `required_env.rb` logs an error at boot for the half-configured combination |
+
+`STRIPE_SECRET_KEY` is shared with billing above and is required here too: every
+call into a connected account is made with it plus a `Stripe-Account` header. **No
+access token is stored** — the one Stripe returns during OAuth is discarded, so
+there is no long-lived third-party credential on disk to encrypt, rotate or leak in
+a backup.
+
+Subscribe the Connect endpoint to: `customer.created`, `customer.updated`,
+`customer.subscription.created|updated|deleted`, `checkout.session.completed`,
+`invoice.paid`, `invoice.payment_failed`, `charge.refunded`,
+`charge.dispute.created`.
+
+The full design — including why `customers` is the one identifiable table, how
+attribution survives a payment, and the two families of `revenue_events.kind` — is
+in [../architecture/revenue.md](../architecture/revenue.md).
+
 ## Trusted proxies
 
 Rails computes `request.remote_ip` from `X-Forwarded-For`, and that value feeds

@@ -3,8 +3,9 @@ module Sites
   # promise in a single view, so it also polls for the first event and tells
   # the user the moment data arrives.
   class InstallationsController < ApplicationController
+    include SiteScoped
+
     def show
-      @site = policy_scope(Site).find_by!(public_token: params[:site_public_token])
       authorize @site, :show?
 
       # A site installed on an account that has already used its monthly events

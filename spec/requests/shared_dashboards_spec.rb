@@ -116,6 +116,87 @@ RSpec.describe "Shared dashboards", type: :request do
     end
   end
 
+  describe "a link pointing at a custom dashboard" do
+    let(:dashboard) do
+      create(:dashboard, site: site, name: "Client view",
+                         widgets: [{ kind: "stat", metric: "visitors", title: "Only this stat" },
+                                   { kind: "breakdown", dimension: "page" }])
+    end
+    let(:custom_link) { create(:shared_link, site: site, dashboard: dashboard) }
+
+    it "renders the dashboard's own widgets, not the default panels" do
+      get "/share/#{custom_link.slug}"
+
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to include("Client view")
+      expect(response.body).to include("Only this stat")
+      expect(response.body).not_to include("Sources")
+      expect(response.body).not_to include("Countries")
+    end
+
+    it "still ignores filter parameters" do
+      get "/share/#{custom_link.slug}?country=XX&page=/nothing"
+
+      # 30 visitors on "/" from the file-wide setup: a honoured page filter
+      # would empty the pages panel and it would read "No data."
+      expect(response).to have_http_status(:ok)
+      expect(response.body).not_to include("No data.")
+    end
+
+    it "still applies the site's suppression threshold inside widgets" do
+      create_events(site, count: 2, path: "/secret", visitor_prefix: "s", at: 2.days.ago)
+
+      get "/share/#{custom_link.slug}"
+
+      expect(response.body).not_to include("/secret")
+    end
+
+    it "still enforces the password on the custom branch" do
+      locked = create(:shared_link, :with_password, site: site, dashboard: dashboard)
+
+      get "/share/#{locked.slug}"
+
+      expect(response).to have_http_status(:unauthorized)
+      expect(response.body).not_to include("Only this stat")
+    end
+
+    it "counts the view" do
+      expect { get "/share/#{custom_link.slug}" }.to change { custom_link.reload.view_count }.by(1)
+    end
+
+    it "offers no edit or management links" do
+      funnel = create(:funnel, site: site)
+      dashboard.dashboard_widgets.create!(position: 3, kind: "funnel", funnel: funnel)
+      funnel.destroy!
+
+      get "/share/#{custom_link.slug}"
+
+      # The deleted-funnel state explains itself but must not offer the edit
+      # page to an anonymous reader.
+      expect(response.body).to include("has been deleted")
+      expect(response.body).not_to include("/dashboards/")
+      expect(response.body).not_to include("Filter by")
+    end
+
+    # Deleting the dashboard destroys the link rather than widening it to the
+    # default dashboard — an already-distributed URL must never start showing
+    # MORE than the person who shared it chose.
+    it "404s once the dashboard is deleted" do
+      slug = custom_link.slug
+      dashboard.destroy!
+
+      get "/share/#{slug}"
+
+      expect(response).to have_http_status(:not_found)
+    end
+
+    it "leaves links without a dashboard rendering the default dashboard" do
+      get "/share/#{link.slug}"
+
+      expect(response.body).to include("Sources")
+    end
+  end
+
   describe "isolation" do
     it "shows only the linked site's data" do
       other_site = create(:site, domain: "other.example.com")

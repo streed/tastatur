@@ -1,0 +1,39 @@
+<%# The step-by-step bars of a funnel report, shared by the funnel's own page
+    and the funnel widget on a custom dashboard. Local: report
+    (Analytics::FunnelReport::Report).
+
+    Horizontal bars on a shared baseline, each step a darker step of one hue —
+    the validated ordinal ramp, so magnitude reads even in greyscale. A 2px
+    surface gap separates the bars; nothing is outlined. -%>
+<% max = [report.entered, 1].max %>
+<% report.steps.each_with_index do |row, index| %>
+  <% stage = [index + 1, 5].min %>
+  <div>
+    <div class="flex items-baseline justify-between gap-4 mb-2">
+      <p class="text-sm">
+        <span class="label mr-2"><%= index + 1 %></span>
+        <span class="font-medium"><%= row.step.name %></span>
+        <span class="text-muted text-[12px] ml-2">
+          <%= row.step.pageview? ? row.step.match_value : "event: #{row.step.match_value}" %>
+        </span>
+      </p>
+      <p class="num text-sm shrink-0">
+        <span class="font-semibold"><%= metric_number(row.visitors) %></span>
+        <span class="text-muted ml-2"><%= row.conversion_rate %>%</span>
+      </p>
+    </div>
+
+    <div class="h-6 bg-surface-2 relative">
+      <div class="h-full absolute inset-y-0 left-0"
+           style="width: <%= ((row.visitors.to_f / max) * 100).round(2) %>%;
+                  background: var(--color-stage-<%= stage %>)"></div>
+    </div>
+
+    <% if index.positive? && row.dropoff.positive? %>
+      <p class="text-[12px] text-muted mt-1.5">
+        −<%= metric_number(row.dropoff) %> from previous step
+        (<%= row.dropoff_rate %>% drop-off)
+      </p>
+    <% end %>
+  </div>
+<% end %>

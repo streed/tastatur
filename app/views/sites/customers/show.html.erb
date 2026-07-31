@@ -1,0 +1,115 @@
+<% content_for :title, "Customer · #{@site.domain}" %>
+
+<div class="shell max-w-4xl">
+  <div class="pt-5 rule-heavy mb-8">
+    <h1 class="text-2xl font-semibold mt-5">
+      <%= @customer.external_id.presence || @customer.stripe_customer_id.presence || @customer.public_id.first(8) %>
+    </h1>
+    <p class="label mt-2">
+      <%= link_to "All customers", site_customers_path(@site), class: "link" %>
+    </p>
+  </div>
+
+  <%# --- First touch ----------------------------------------------------
+      THE PROVENANCE, NOT JUST THE CONCLUSION. This page exists so somebody can
+      answer "is this attribution actually right?" — an attribution number
+      nobody can audit is a number nobody trusts for long, and the first thing
+      they will want is the landing page and the timestamp, not the channel
+      name they already saw in the table. -%>
+  <div class="card mb-6">
+    <div class="card-head"><h2 class="text-sm font-semibold">First touch</h2></div>
+    <div class="card-body grid sm:grid-cols-2 gap-4 text-sm">
+      <div><p class="label">Source</p><p class="mt-1"><%= @customer.attribution[:source] %></p></div>
+      <div><p class="label">Medium</p><p class="mt-1"><%= @customer.attribution[:medium] %></p></div>
+      <div><p class="label">Campaign</p><p class="mt-1"><%= @customer.attribution[:campaign] %></p></div>
+      <div>
+        <p class="label">Landing page</p>
+        <p class="mt-1"><%= @customer.attribution_landing_path.presence || "—" %></p>
+      </div>
+      <div>
+        <p class="label">First seen</p>
+        <p class="mt-1"><%= @customer.first_seen_at ? l(@customer.first_seen_at, format: :long) : "—" %></p>
+      </div>
+      <div>
+        <p class="label">Identified</p>
+        <p class="mt-1"><%= @customer.identified_at ? l(@customer.identified_at, format: :long) : "—" %></p>
+      </div>
+    </div>
+    <div class="card-body border-t border-rule text-sm text-ink-2">
+      <%# Stated on every one of these pages, because it is the single most
+          common support question this feature will generate. -%>
+      First touch is written once and never overwritten — a later sign-in that arrives
+      via a brand-name search does not re-attribute this customer.
+      <% if @customer.attribution_source == Revenue::Channel::PRE_INSTALL %>
+        This customer predates the Stripe connection, so where they came from is genuinely unknown
+        rather than direct.
+      <% end %>
+    </div>
+  </div>
+
+  <div class="grid sm:grid-cols-3 gap-4 mb-6">
+    <div class="card card-body">
+      <p class="label">Current MRR</p>
+      <p class="text-2xl font-semibold mt-1"><%= money_amount(@site.base_currency, @customer.current_mrr_cents) %></p>
+    </div>
+    <div class="card card-body">
+      <p class="label">Lifetime revenue</p>
+      <p class="text-2xl font-semibold mt-1">
+        <%= money_amount(@site.base_currency, @customer.lifetime_revenue_cents) %>
+      </p>
+    </div>
+    <div class="card card-body">
+      <p class="label">Status</p>
+      <p class="text-2xl font-semibold mt-1">
+        <%= @customer.churned? ? "Churned" : (@customer.current_mrr_cents.positive? ? "Paying" : "Signed up") %>
+      </p>
+    </div>
+  </div>
+
+  <% if @subscriptions.any? %>
+    <div class="card mb-6">
+      <div class="card-head"><h2 class="text-sm font-semibold">Subscriptions</h2></div>
+      <table class="w-full text-sm">
+        <tbody>
+          <% @subscriptions.each do |subscription| %>
+            <tr class="border-b border-rule last:border-b-0">
+              <td class="px-5 py-3 font-mono text-xs"><%= subscription.stripe_subscription_id %></td>
+              <td class="px-5 py-3"><span class="label"><%= subscription.status %></span></td>
+              <td class="px-5 py-3 text-right tabular-nums">
+                <%= money_amount(subscription.currency, subscription.mrr_cents) %> / mo
+              </td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  <% end %>
+
+  <div class="card">
+    <div class="card-head"><h2 class="text-sm font-semibold">Revenue history</h2></div>
+    <% if @revenue_events.empty? %>
+      <div class="card-body text-sm text-ink-2">No revenue recorded for this customer yet.</div>
+    <% else %>
+      <table class="w-full text-sm">
+        <tbody>
+          <% @revenue_events.each do |event| %>
+            <tr class="border-b border-rule last:border-b-0">
+              <td class="px-5 py-3 text-ink-2"><%= l(event.occurred_at, format: :long) %></td>
+              <td class="px-5 py-3"><span class="label"><%= event.kind.humanize %></span></td>
+              <td class="px-5 py-3 text-right tabular-nums">
+                <%= money_amount(event.currency, event.amount_cents) %>
+                <% unless event.converted? %>
+                  <%# Flagged per row rather than only in the total, so the one
+                      line that is missing from the summary is findable. -%>
+                  <span class="label" title="No rate available to convert into <%= @site.base_currency %>">
+                    not counted
+                  </span>
+                <% end %>
+              </td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    <% end %>
+  </div>
+</div>

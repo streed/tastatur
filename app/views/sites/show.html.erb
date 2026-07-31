@@ -22,6 +22,17 @@
           <%= period_link(@site, key, Analytics::Period::PRESETS[key].sub("Last ", "")) %>
         <% end %>
       </div>
+      <%# FIRST OF THE REPORT LINKS, ahead of Dashboards and Goals, because it is
+          the screen this product is for. A revenue report reachable only after
+          three other tabs is a revenue report nobody finds.
+
+          Shown to anyone who can read the stats, connected or not: the
+          unconnected state is the page that explains what connecting gets you,
+          so hiding the link until Stripe is connected would hide the only
+          explanation of why to connect it. -%>
+      <%= link_to "Attribution", site_attribution_path(@site), class: "btn btn-sm",
+                  data: { analytics_event: "Attribution Opened" } %>
+      <%= link_to "Dashboards", site_dashboards_path(@site), class: "btn btn-sm" %>
       <%= link_to "Funnels", site_funnels_path(@site), class: "btn btn-sm" %>
       <%= link_to "Goals", site_goals_path(@site), class: "btn btn-sm" %>
       <%# Sharing was reachable only from the bottom of the settings form, in the

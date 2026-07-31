@@ -33,6 +33,56 @@ module DashboardHelper
     dashboard_url_for(site, filters: @filters.without(dimension))
   end
 
+  # One stat-tile value, formatted the way the default dashboard's stat row
+  # formats the same metric. The widget speaks its own vocabulary (see
+  # DashboardWidget::METRIC_READERS); this is the display half of that table.
+  def stat_widget_value(metrics, metric)
+    case metric
+    when "visitors" then metric_number(metrics.visitors)
+    when "pageviews" then metric_number(metrics.pageviews)
+    when "visits" then metric_number(metrics.sessions)
+    when "bounce_rate" then "#{metrics.bounce_rate}%"
+    when "visit_duration" then metrics.formatted_duration
+    end
+  end
+
+  # The filters a dashboard's author saved onto a widget, as one quiet line
+  # under the card. Stated on every widget that carries any, because a panel
+  # titled "Top pages" that is silently pinned to one source misleads exactly
+  # the person a curated dashboard was built for.
+  def widget_filter_summary(widget)
+    filters = widget.saved_filters
+    return if filters.empty?
+
+    filters.applied.map { |key, value| "#{filters.label_for(key)} is #{value}" }.join(" · ")
+  end
+
+  # The dimension choices for a widget's filter rows, each option tagged with
+  # the known-values group its values would come from — "pageview" for paths,
+  # "event" for custom event names, "other" for dimensions the picker has no
+  # payload for (the combobox then behaves as a plain text field).
+  # value_picker_controller reads the group off the selected option.
+  def filter_dimension_choices
+    Analytics::Filters::HUMAN_LABELS.map do |key, label|
+      group = case key
+              when "page", "entry_page" then "pageview"
+              when "event" then "event"
+              else "other"
+              end
+      [label, key, { data: { group: group } }]
+    end
+  end
+
+  # The delete confirm says what else the deletion revokes: share links
+  # pointing at this dashboard are destroyed with it — deliberately, rather
+  # than widened back to the default dashboard (see Dashboard#shared_links).
+  def delete_dashboard_confirmation(dashboard)
+    count = dashboard.shared_links.count
+    return "Delete this dashboard?" if count.zero?
+
+    "Delete this dashboard? #{pluralize(count, 'share link')} showing it will stop working."
+  end
+
   # What we record about a filter interaction in our OWN analytics.
   #
   # For the sixteen fixed dimensions this is just the key — "page", "source" —

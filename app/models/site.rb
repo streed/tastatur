@@ -11,6 +11,20 @@ class Site < ApplicationRecord
   has_many :goals, dependent: :destroy
   has_many :funnels, dependent: :destroy
   has_many :shared_links, dependent: :destroy
+  has_many :dashboards, dependent: :destroy
+
+  # --- The revenue side ------------------------------------------------------
+  # All :destroy rather than :delete_all, because Customer and CustomerSubscription
+  # each own rows below them. `dependent: :delete_all` here would leave orphaned
+  # revenue_events pointing at a customer_id that no longer exists — and the
+  # foreign key would refuse the delete, so deleting a site would 500 instead.
+  has_many :api_keys, dependent: :destroy
+  has_many :customers, dependent: :destroy
+  has_many :customer_subscriptions, dependent: :destroy
+  has_many :revenue_events, dependent: :destroy
+  has_many :connect_events, dependent: :destroy
+  has_many :stripe_connections, dependent: :destroy
+  has_many :attribution_rollups, dependent: :delete_all
 
   # One rule for every hostname this model holds, because they all end up in the
   # same place — Ingest::HostnamePolicy#candidates concatenates `domain` and
@@ -29,6 +43,7 @@ class Site < ApplicationRecord
                      format: { with: HOSTNAME_FORMAT, message: HOSTNAME_MESSAGE }
   validates :public_token, presence: true, uniqueness: true, length: { is: TOKEN_LENGTH }
   validates :k_anonymity_threshold, numericality: { in: 0..10_000 }
+  validates :base_currency, format: { with: /\A[A-Z]{3}\z/, message: "must be a three-letter ISO code like USD" }
   validate  :timezone_is_recognised
 
   # `on: :create` ONLY, and that is not a detail.
@@ -75,6 +90,7 @@ class Site < ApplicationRecord
   end
 
   before_validation :normalize_domain
+  before_validation :normalize_base_currency
   before_validation :assign_public_token, on: :create
 
   scope :ordered, -> { order(:domain) }
@@ -109,7 +125,24 @@ class Site < ApplicationRecord
     %(<script defer data-site="#{public_token}" src="#{Tastatur.tracker_url}"></script>)
   end
 
+  # The live Stripe connection, or nil. Memoized per instance because the
+  # revenue screens ask several times per render.
+  def stripe_connection
+    return @stripe_connection if defined?(@stripe_connection)
+
+    @stripe_connection = stripe_connections.live.first
+  end
+
+  def stripe_connected? = stripe_connection.present?
+
   private
+
+  # Accepts "usd", " Usd " and stores "USD". The CHECK constraint refuses
+  # anything else outright, and a 500 from a constraint is a worse way to learn
+  # you typed lowercase than a validation message.
+  def normalize_base_currency
+    self.base_currency = base_currency.to_s.strip.upcase.presence || "USD"
+  end
 
   # Accepts anything a user is likely to paste — "https://WWW.Example.com/",
   # "example.com:3000" — and stores the bare lowercase hostname that the

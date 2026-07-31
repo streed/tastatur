@@ -1,0 +1,52 @@
+<% content_for :title, "#{@dashboard.name} · #{@site.domain}" %>
+
+<div class="shell">
+  <div class="flex flex-wrap items-end justify-between gap-4 mb-6 pt-5 rule-heavy">
+    <div class="mt-5">
+      <div class="flex items-center gap-3">
+        <h1 class="text-2xl font-semibold"><%= @dashboard.name %></h1>
+        <% if @report.realtime.positive? %>
+          <span class="flex items-center gap-2 label" title="Visitors active in the last 5 minutes">
+            <span class="w-1.5 h-1.5 bg-signal inline-block" aria-hidden="true"></span>
+            <%= pluralize(@report.realtime, "current visitor") %>
+          </span>
+        <% end %>
+      </div>
+      <p class="label mt-2">
+        <%= @site.domain %><span class="mx-2">·</span><%= @period.label %>
+        <span class="mx-2">·</span><%= @site.timezone %>
+      </p>
+    </div>
+
+    <div class="flex flex-wrap items-center gap-3">
+      <div class="segmented">
+        <% %w[today 7d 30d 90d 12mo].each do |key| %>
+          <%# Same event as the site dashboard's period control, told apart by
+              `view` — how custom dashboards are read is a different question
+              from how the default one is. %>
+          <%= link_to Analytics::Period::PRESETS[key].sub("Last ", ""),
+                      site_dashboard_path(@site, @dashboard, period: key),
+                      class: "segment", "aria-current": (@period.key == key).to_s,
+                      data: { analytics_event: "Period Changed",
+                              analytics_props: { period: key, view: "custom_dashboard" } } %>
+        <% end %>
+      </div>
+      <%= link_to "All dashboards", site_dashboards_path(@site), class: "btn btn-sm" %>
+      <% if policy(@dashboard).update? %>
+        <%= link_to "Edit", edit_site_dashboard_path(@site, @dashboard), class: "btn btn-sm" %>
+      <% end %>
+      <%# Sharing what is on screen is a thought you have while looking at it —
+          same reasoning as the site dashboard's header. The dashboard's
+          public_id travels along so the share form preselects it. %>
+      <% if policy(SharedLink.new(site: @site)).index? %>
+        <%= link_to "Share", site_shared_links_path(@site, dashboard: @dashboard.public_id),
+                    class: "btn btn-sm",
+                    data: { analytics_event: "Share Links Opened",
+                            analytics_props: { source: "custom_dashboard_header" } } %>
+      <% end %>
+    </div>
+  </div>
+
+  <%= render "sites/dashboards/widgets", site: @site, report: @report,
+             editable: policy(@dashboard).update? %>
+</div>

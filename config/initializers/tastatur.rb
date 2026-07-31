@@ -87,6 +87,35 @@ module Tastatur
     !self_hosted? && Rails.configuration.stripe[:secret_key].present?
   end
 
+  # Can this instance read a customer's Stripe revenue?
+  #
+  # DELIBERATELY NOT GATED ON `billing_enabled?`, and getting this wrong would be
+  # the §14 mistake in reverse. Billing is about whether WE can charge; this is
+  # about whether a customer can connect THEIR payment processor to see their own
+  # attribution. A self-hosted install has no billing by definition and has every
+  # reason to want revenue analytics — refusing it there would remove the entire
+  # point of the product from the deployment most likely to be evaluating it.
+  #
+  # So the only question asked is whether the Connect integration is configured.
+  # Three variables, and each is genuinely required:
+  #
+  #   STRIPE_SECRET_KEY              every connected-account call is made with it
+  #   STRIPE_CONNECT_CLIENT_ID       there is no OAuth flow without it
+  #   STRIPE_CONNECT_WEBHOOK_SECRET  without it every delivery is refused, so a
+  #                                  connection succeeds and then silently never
+  #                                  reports a single dollar
+  #
+  # The third is the one worth requiring up front rather than discovering later.
+  # Its absence is invisible: connecting works, the backfill works, the screen
+  # shows historical revenue, and nothing new ever arrives.
+  def self.revenue_enabled?
+    stripe = Rails.configuration.stripe
+
+    stripe[:secret_key].present? &&
+      stripe[:connect_client_id].present? &&
+      stripe[:connect_webhook_secret].present?
+  end
+
   # Public signup. The hosted SaaS wants it on. A self-hosted instance exposed
   # to the internet usually does not, so it defaults off there and is opened
   # back up with ALLOW_SIGNUP=1.
@@ -156,7 +185,7 @@ module Tastatur
   # It is bound by docs/privacy/claims.md like every other claim we publish. The
   # size is the measured gzipped size of lib/tracker/t.js — re-measure it here if
   # the script changes rather than rounding it in the direction we would prefer.
-  DESCRIPTION = "Cookieless, privacy-first web analytics. One script tag, 3.2 KB over the wire. " \
+  DESCRIPTION = "Cookieless, privacy-first web analytics. One script tag, 4.4 KB over the wire. " \
                 "No cookies, no device storage, no fingerprinting, and visitor identifiers stop " \
                 "working after 24 hours.".freeze
 

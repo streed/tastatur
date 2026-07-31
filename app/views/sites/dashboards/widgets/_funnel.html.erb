@@ -1,0 +1,26 @@
+<%# One funnel's step bars, via the same partial as the funnel's own page.
+    Locals: site, report, result (data: Analytics::FunnelReport::Report). -%>
+<% funnel_report = result.data %>
+
+<div class="card">
+  <div class="card-head">
+    <h2 class="text-sm font-semibold"><%= result.widget.display_title %></h2>
+    <span class="label num">
+      <%= metric_number(funnel_report.entered) %> entered
+      <span class="mx-1">·</span><%= metric_number(funnel_report.completed) %> completed
+      <span class="mx-1">·</span><%= funnel_report.overall_rate %>%
+    </span>
+  </div>
+  <div class="card-body space-y-5 pt-6">
+    <%= render "sites/funnels/step_bars", report: funnel_report %>
+  </div>
+
+  <% if result.widget.funnel.window_exceeds_identity_lifetime? %>
+    <%# Stated rather than silently undercounting — the shortened form of the
+        notice on the funnel's own page. %>
+    <p class="px-5 pb-4 text-[12px] text-muted">
+      This funnel's window is longer than 24 hours; visitor identifiers expire daily, so these
+      numbers are a floor, not an exact figure.
+    </p>
+  <% end %>
+</div>

@@ -107,4 +107,50 @@ RSpec.describe "Share links", type: :request do
       expect(site.shared_links.count).to be_zero
     end
   end
+
+  describe "sharing a custom dashboard" do
+    before { sign_in_as("admin") }
+
+    let!(:dashboard) { create(:dashboard, site: site, name: "Client view") }
+
+    it "offers the site's dashboards in the form and preselects the one arriving from its Share button" do
+      get site_shared_links_path(site, dashboard: dashboard.public_id)
+
+      expect(response.body).to include("What it shows")
+      # Attribute order inside the option tag is Rails' business; the selected
+      # option being this dashboard is ours.
+      expect(response.body).to match(/<option[^>]*selected[^>]*>Client view</)
+    end
+
+    it "creates a link scoped to the dashboard, through its public id" do
+      post site_shared_links_path(site),
+           params: { shared_link: { name: "Scoped", dashboard_public_id: dashboard.public_id } }
+
+      expect(site.shared_links.find_by!(name: "Scoped").dashboard).to eq(dashboard)
+    end
+
+    it "refuses another site's dashboard even by public id" do
+      foreign = create(:dashboard)
+
+      post site_shared_links_path(site),
+           params: { shared_link: { name: "Sneaky", dashboard_public_id: foreign.public_id } }
+
+      expect(site.shared_links.count).to be_zero
+    end
+
+    it "says what a scoped link shows in the list" do
+      create(:shared_link, site: site, dashboard: dashboard, name: "Monthly")
+
+      get site_shared_links_path(site)
+
+      expect(response.body).to include("Client view")
+    end
+
+    it "does not let a posted primary key reach the model" do
+      post site_shared_links_path(site),
+           params: { shared_link: { name: "By id", dashboard_id: dashboard.id } }
+
+      expect(site.shared_links.find_by!(name: "By id").dashboard).to be_nil
+    end
+  end
 end

@@ -32,6 +32,16 @@
 
       <%= f.field :name, "Label", placeholder: "Client report" %>
 
+      <% if @site.dashboards.any? %>
+        <%# What the link exposes. A custom dashboard shares ONLY its own
+            widgets — including any filters their author saved onto them, which
+            each widget states on its face. -%>
+        <%= f.field :dashboard_public_id, "What it shows", as: :select,
+                    choices: [["The full dashboard", ""]] +
+                             @site.dashboards.ordered.map { |dashboard| [dashboard.name, dashboard.public_id] },
+                    hint: "A custom dashboard shares exactly its own widgets, nothing else." %>
+      <% end %>
+
       <div class="grid sm:grid-cols-2 gap-4">
         <%= f.field :password, "Password (optional)", as: :password_field,
                     autocomplete: "new-password",
@@ -85,6 +95,9 @@
                 Stopped working <%= time_ago_in_words(link.expires_at) %> ago
               <% else %>
                 <%= link.password_protected? ? "Password protected" : "Open link" %>
+                <% if link.dashboard %>
+                  <span class="mx-2">·</span>shows “<%= link.dashboard.name %>”
+                <% end %>
                 <span class="mx-2">·</span><%= pluralize(link.view_count, "view") %>
                 <% if link.expires_at %>
                   <span class="mx-2">·</span>expires <%= link.expires_at.to_date.to_fs(:long) %>

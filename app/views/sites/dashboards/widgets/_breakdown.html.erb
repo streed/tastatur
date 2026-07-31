@@ -1,0 +1,14 @@
+<%# A top-N panel, rendered by the same partial as the default dashboard's
+    panels so suppression messaging cannot drift. Locals: site, report, result
+    (data: Analytics::Breakdown::Result).
+
+    drillable: false everywhere on custom dashboards, not just the public
+    copies: a widget's filters are fixed by its author, there is no viewer
+    filter state to merge a drill-down into — and it is also what makes the
+    public path trivially safe. -%>
+<%= render "sites/breakdown",
+           site: site,
+           panel: { dimension: result.widget.dimension,
+                    title: result.widget.display_title,
+                    result: result.data },
+           drillable: false %>

@@ -1,0 +1,38 @@
+<%# The goal-conversions table. Locals: site, report, result (data:
+    Array[Analytics::GoalReport::Row]).
+
+    Same table as sites/_dashboard's goals card, minus the Manage link — this
+    partial also renders on the public shared dashboard, and the widget's job
+    is the numbers, not navigation. The duplication is deliberate:
+    sites/_dashboard stays untouched by this feature. -%>
+<div class="card">
+  <div class="card-head">
+    <h2 class="text-sm font-semibold"><%= result.widget.display_title %></h2>
+  </div>
+
+  <% if result.data.any? %>
+    <div>
+      <div class="bar-row label border-b border-rule">
+        <span>Goal</span>
+        <span class="flex gap-8">
+          <span class="w-24 text-right">Visitors</span>
+          <span class="w-24 text-right">Conversions</span>
+          <span class="w-16 text-right">Rate</span>
+        </span>
+      </div>
+      <% result.data.each do |row| %>
+        <div class="bar-row">
+          <span class="bar-fill" style="width: <%= row.conversion_rate.clamp(0, 100) %>%"></span>
+          <span class="bar-label font-medium"><%= row.goal.name %></span>
+          <span class="flex gap-8 num">
+            <span class="w-24 text-right"><%= metric_number(row.visitors) %></span>
+            <span class="w-24 text-right"><%= metric_number(row.conversions) %></span>
+            <span class="w-16 text-right font-semibold"><%= row.conversion_rate %>%</span>
+          </span>
+        </div>
+      <% end %>
+    </div>
+  <% else %>
+    <p class="px-5 py-10 text-center text-sm text-muted">No goals defined for this site yet.</p>
+  <% end %>
+</div>
