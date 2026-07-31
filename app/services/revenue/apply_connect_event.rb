@@ -54,6 +54,7 @@ module Revenue
       when "invoice.payment_failed"                then apply_payment_failed
       when "charge.refunded"                       then apply_refund
       when "charge.dispute.created"                then apply_dispute
+      when "account.application.deauthorized"      then apply_deauthorized
       else
         # Reachable only if HANDLED and this case gain entries at different
         # times. Answered as a success so the delivery is not retried forever.
@@ -157,7 +158,12 @@ module Revenue
     # pleasant correction rather than a nasty one.
     def apply_dispute
       object = @event.object
-      customer = resolve_customer(stripe_customer_id: id_of(object[:customer]))
+      # A Dispute object carries NO customer field — the charge it names does.
+      # Resolving through `object[:customer]` alone meant every dispute failed
+      # with :no_customer and was retried pointlessly for a day. The charge
+      # read goes through the same wrapper as everything else and is covered by
+      # the same charge_read permission the refund handler relies on.
+      customer = resolve_customer(stripe_customer_id: id_of(object[:customer]) || dispute_customer_id(object))
       return Failure(:no_customer) if customer.nil?
 
       amount = object[:amount].to_i
@@ -165,6 +171,41 @@ module Revenue
 
       write_cash(customer, kind: RevenueEvent::DISPUTE, amount_cents: -amount,
                  currency: object[:currency], stripe_object_id: object[:id])
+    end
+
+    def dispute_customer_id(object)
+      connection = @site.stripe_connection
+      return nil if connection.nil? || object[:charge].blank?
+
+      id_of(StripeAccount.retrieve(Stripe::Charge, connection, id_of(object[:charge]))[:customer])
+    end
+
+    # The customer uninstalled the app from their own Stripe dashboard. That is
+    # a disconnect performed at the other end, and it must land exactly where
+    # our own Disconnect button lands: the connection revoked, revenue already
+    # recorded kept. Without this, rows would keep flowing into a site whose
+    # owner watched themselves uninstall it.
+    #
+    # Idempotent like every handler here: the connection this event's account
+    # names may already be revoked (uninstall raced a manual disconnect, or a
+    # retry), and finding nothing to revoke is success, not an error.
+    #
+    # THE SUPERSEDED GUARD IS NOT OPTIONAL. A deauthorization that failed to
+    # apply on the first attempt stays in the retry sweep for 24 hours, and
+    # disconnect-then-reconnect is the documented remedy for most problems here
+    # — so a stale deauth catching a connection made AFTER it would revoke a
+    # reconnect that looked like it worked, and recording would stop with
+    # nothing raised. `>=` rather than `>`: with only second precision on both
+    # timestamps, an ambiguous tie must keep the connection, because a wrongly
+    # kept one is corrected by the next event or a manual disconnect, while a
+    # wrongly revoked one is silence.
+    def apply_deauthorized
+      connection = @site.stripe_connections.live.find_by(stripe_account_id: @event.stripe_account_id)
+      return Success(:already_revoked) if connection.nil?
+      return Success(:superseded) if connection.connected_at >= @event.occurred_at
+
+      connection.revoke!
+      Success(connection)
     end
 
     # --- Shared ---------------------------------------------------------------

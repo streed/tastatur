@@ -65,7 +65,12 @@ module Revenue
       authorize connection || @site.stripe_connections.new, :destroy?
 
       connection&.revoke!
-      redirect_to site_path(@site), notice: "Stripe disconnected. Revenue already recorded is kept."
+      # Disconnecting here stops us recording; it does not uninstall the app
+      # from their Stripe account, and saying so spares the customer wondering
+      # why it still appears in their installed-apps list.
+      redirect_to site_path(@site),
+                  notice: "Stripe disconnected. Revenue already recorded is kept. " \
+                          "You can also uninstall the Tastatur app under Settings → Installed apps in Stripe."
     end
 
     def backfill
@@ -129,19 +134,18 @@ module Revenue
     end
 
     def authorize_url(state)
+      # The Stripe App install link. No `scope` parameter: what the customer is
+      # asked to grant is the permission list in stripe-app/stripe-app.json,
+      # which Stripe reviewed and renders on the consent screen. Read-only,
+      # always — nothing in this application writes to a connected account and
+      # nothing may start, so every permission in that manifest ends in `_read`.
       query = {
-        response_type: "code",
         client_id: Rails.configuration.stripe[:connect_client_id],
-        # READ ONLY, ALWAYS. Nothing in this application writes to a connected
-        # account and nothing may start. Available only because the Connect app is
-        # registered as an Extension rather than a Platform — see the note in
-        # config/initializers/stripe.rb about that being effectively irreversible.
-        scope: StripeConnection::SCOPE,
         redirect_uri: stripe_connect_callback_url,
         state: state
       }
 
-      "https://connect.stripe.com/oauth/authorize?#{query.to_query}"
+      "https://marketplace.stripe.com/oauth/v2/authorize?#{query.to_query}"
     end
 
     def set_site

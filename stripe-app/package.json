@@ -1,0 +1,6 @@
+{
+  "name": "tastatur-stripe-app",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Manifest-only Stripe App for Tastatur revenue attribution. No UI extensions; the packager requires a Node project shape and a lockfile, which is all this file provides."
+}

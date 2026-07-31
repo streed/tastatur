@@ -49,7 +49,11 @@ module Seo
         # itself is public content on every deployment — unlike /pricing below,
         # which redirects away entirely.
         faq_url(**@url_options),
-        about_url(**@url_options)
+        about_url(**@url_options),
+        # The revenue-attribution marketing page. Public content on every
+        # deployment — the feature itself is gated on configuration, the page
+        # explaining it is not.
+        revenue_url(**@url_options)
       ]
 
       # The pricing page redirects to the root wherever billing is off — a

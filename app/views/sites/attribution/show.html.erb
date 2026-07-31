@@ -46,7 +46,8 @@
       <p class="text-sm text-ink-2 mt-2 max-w-2xl">
         This table shows which acquisition channel produced paying customers, not just visitors.
         The traffic half is already being measured. The revenue half needs a read-only connection
-        to your Stripe account — we ask for <code>read_only</code> scope and never write to it.
+        to your Stripe account — the Tastatur app asks only for read permissions, shown to you
+        item by item before you install, and never writes to your account.
       </p>
       <div class="mt-4 flex items-center gap-3">
         <% if Tastatur.revenue_enabled? && policy(StripeConnection.new(site: @site)).create? %>

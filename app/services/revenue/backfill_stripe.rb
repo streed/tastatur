@@ -48,8 +48,14 @@ module Revenue
     rescue Stripe::StripeError => e
       # Returned rather than raised so the job can decide, and so a rate limit —
       # which is the overwhelmingly common failure here — does not fill Sentry
-      # with something that resolves itself on the retry.
+      # with something that resolves itself on the retry. Everything ELSE does
+      # go to Sentry: a permission or auth failure here is the customer's
+      # history silently never arriving while the screen says "importing", and
+      # a log line nobody greps for is not an alert.
       Rails.logger.error("[tastatur] backfill failed for #{@site.domain}: #{e.class}: #{e.message}")
+      unless e.is_a?(Stripe::RateLimitError)
+        Sentry.capture_exception(e) if defined?(Sentry)
+      end
       Failure(stripe_error: e.message)
     end
 

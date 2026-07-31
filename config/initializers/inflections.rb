@@ -14,3 +14,9 @@
 # ActiveSupport::Inflector.inflections(:en) do |inflect|
 #   inflect.acronym "RESTful"
 # end
+
+# Zeitwerk maps app_oauth.rb to AppOauth unless told that OAuth is an acronym.
+# Registered so Revenue::AppOAuth can be spelled the way the protocol spells it.
+ActiveSupport::Inflector.inflections(:en) do |inflect|
+  inflect.acronym "OAuth"
+end

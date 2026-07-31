@@ -1,0 +1,114 @@
+<%# The revenue-attribution page for machine readers, negotiated via Accept:
+    text/markdown or fetched at /revenue.md — see PagesController#revenue. The
+    content mirrors revenue.html.erb; when the claims there change, change them
+    here too. -%>
+# Revenue attribution — which channel produces customers
+
+> Connect Stripe read-only and see which acquisition channel produced paying
+> customers — first-touch, write-once, with no cookies and no join to any
+> visitor identifier.
+
+Every analytics tool can rank where traffic comes from. The question a business
+needs answered is which of those channels produced the people who pay — and the
+channel sending the most visitors is very often not the one sending the most
+customers. The attribution report is sorted by MRR, deliberately: sorting by
+visitors reliably puts the channel that sends crowds at the top while the
+channel that sends customers looks small.
+
+## Two ledgers, joined only on a channel name
+
+**The traffic ledger stays anonymous.** Visits are counted the way Tastatur
+always counts them: no cookies, nothing stored on the device, a visitor
+identifier that stops working after 24 hours. The referrer is kept as a hostname
+only and classified into a channel the moment it is written.
+
+**The revenue ledger is your own customer data.** Customers, subscriptions and
+payments are data your application already holds. Your server sends them to
+Tastatur directly — authenticated, server-to-server, under your own relationship
+with your customers. Email addresses are hashed on receipt and never stored in
+the clear.
+
+**There is no column joining the two.** Nothing links a customer to a visitor
+identifier — not at collection, not later. The ledgers meet only in the report,
+on channel names. The source is AGPL-3.0, so this is verifiable rather than a
+promise.
+
+## The integration, in three steps
+
+The browser knows where somebody came from; the payment happens somewhere else,
+possibly days later, possibly on another device. With nothing stored on the
+visitor's device there is no cookie to join the two — so the attribution travels
+*with* the signup and the payment.
+
+**1. Capture the first touch on the landing page.** Store it in your own form
+state or user record — calling it at the end of your funnel would read your own
+checkout as the traffic source.
+
+```javascript
+const attribution = tastatur.attribution()
+// { source, medium, campaign, landing_path, referrer_host, first_seen_at }
+```
+
+**2. Send it when they sign up,** from your server, with an API key from your
+site's settings. The email is hashed on receipt.
+
+```http
+POST <%= Tastatur.base_url %>/api/v1/identify
+Authorization: Bearer tk_...
+Content-Type: application/json
+
+{
+  "external_id": "user_9182",
+  "email": "person@example.com",
+  "attribution": { "source": "reddit", "medium": "social", "landing_path": "/pricing" }
+}
+```
+
+**3. Attach it to Stripe Checkout.** This is what makes attribution survive a
+closed tab, or a payment finished three days later on a phone.
+
+```javascript
+stripe.checkout.sessions.create({
+  mode: 'subscription',
+  line_items: [...],
+  client_reference_id: user.id,
+  metadata: tastatur.checkoutMetadata(attribution)
+})
+```
+
+**First touch wins, and is never overwritten.** Apps call identify on every
+sign-in, so last-write-wins would re-attribute January's Reddit customer to
+whatever they searched in March, and every paid channel would decay towards
+"Direct" on its own. Attribution is written once; only an earlier first touch
+can amend it.
+
+## Connect Stripe, read-only
+
+Connecting Stripe imports two years of history and keeps revenue flowing in as
+it happens — subscriptions, invoices, refunds, disputes. The connection is a
+Stripe App whose permissions are all read: Stripe shows each one, item by item,
+before install. No code path writes to a connected Stripe account, and no access
+token is stored — disconnect from either end, and revenue already recorded stays
+yours to keep or erase.
+
+## Said plainly
+
+- **This part of Tastatur is not anonymous, and does not pretend to be.** A
+  customer record carries the identifier your app assigned, a hashed email, and
+  a first-touch channel — data your application already holds about somebody who
+  signed up for it, confined to five tables, deletable when you say so.
+- **Your visitors are not in it.** Someone who browses and never signs up exists
+  only in the anonymous ledger, under an identifier that stopped working the day
+  they visited.
+- **Revenue never appears on a public shared dashboard.** A shared link shows
+  traffic, never money.
+- **It works self-hosted.** Revenue attribution is deliberately not tied to our
+  billing: it is about whether you can connect your processor, not whether we
+  can charge you.
+
+## Where to go next
+
+- [Integration docs](<%= docs_url(format: :md) %>) — the attribution section has
+  the full API shapes
+- [What gets collected](<%= privacy_url %>) — the technical account of the
+  anonymous side

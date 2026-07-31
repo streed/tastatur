@@ -1,0 +1,232 @@
+<% seo title: "Revenue attribution · Tastatur",
+       description: "Connect Stripe read-only and see which acquisition channel produced paying " \
+                    "customers — first-touch, write-once, with no cookies and no join to any visitor identifier.",
+       og_type: "article",
+       markdown: revenue_path(format: :md) %>
+
+<div class="shell">
+  <%# --- Hero -%>
+  <section class="rule-heavy pt-8 pb-14">
+    <p class="label mb-5">Revenue attribution · first-touch · Stripe, read-only</p>
+    <h1 class="text-[clamp(2rem,4.5vw,3.25rem)] font-semibold leading-[1.06] tracking-[-0.035em] max-w-3xl">
+      Know which channel produces customers.<br>
+      <span class="text-signal">Not just visitors.</span>
+    </h1>
+    <p class="text-lg text-ink-2 mt-6 max-w-2xl leading-relaxed">
+      Every analytics tool can rank where your traffic comes from. The question a business
+      actually needs answered is which of those channels produced the people who pay — and
+      the channel sending the most visitors is very often not the one sending the most
+      customers.
+    </p>
+    <div class="flex flex-wrap items-center gap-3 mt-8">
+      <% if Tastatur.allow_signup? %>
+        <%= link_to "Start measuring", new_user_registration_path, class: "btn btn-primary",
+                    data: { analytics_event: "CTA Clicked",
+                            analytics_props: { cta: "start-measuring", placement: "revenue-hero" } } %>
+      <% end %>
+      <%= link_to "Read the integration docs", docs_path(anchor: "attribution"), class: "btn",
+                  data: { analytics_event: "CTA Clicked",
+                          analytics_props: { cta: "attribution-docs", placement: "revenue-hero" } } %>
+    </div>
+  </section>
+
+  <%# --- The example report. Static illustration, labelled as such: the point
+      it makes — most visitors ≠ most revenue — is the whole feature. -%>
+  <section class="py-14 border-t border-rule">
+    <div class="flex items-baseline justify-between gap-4 mb-6 max-w-3xl">
+      <p class="label">What the attribution report answers</p>
+      <p class="label">Example figures</p>
+    </div>
+    <div class="card max-w-3xl">
+      <div class="card-head">
+        <h2 class="text-sm font-semibold">Channels</h2>
+        <span class="label">Sorted by MRR — deliberately</span>
+      </div>
+      <div>
+        <%# Short headers below sm, same convention as the goals tables: the
+            full words at the label's tracking are wider than any column a
+            phone can afford. %>
+        <div class="bar-row label border-b border-rule">
+          <span>Channel</span>
+          <span class="flex gap-2 sm:gap-8">
+            <span class="w-16 sm:w-20 text-right"><span class="sm:hidden">Visit.</span><span class="hidden sm:inline">Visitors</span></span>
+            <span class="w-16 sm:w-20 text-right"><span class="sm:hidden">Sign.</span><span class="hidden sm:inline">Signups</span></span>
+            <span class="w-16 sm:w-20 text-right">MRR</span>
+          </span>
+        </div>
+        <% [
+             ["Reddit",  "412",   "38", "$1,240", 100],
+             ["Google",  "2,180", "21", "$340",   27],
+             ["Direct",  "960",   "12", "$180",   15],
+             ["X (Twitter)", "1,470", "9", "$90",  7]
+           ].each do |channel, visitors, signups, mrr, width| %>
+          <div class="bar-row">
+            <span class="bar-fill" style="width: <%= width %>%"></span>
+            <span class="bar-label font-medium"><%= channel %></span>
+            <span class="flex gap-2 sm:gap-8 num">
+              <span class="w-16 sm:w-20 text-right"><%= visitors %></span>
+              <span class="w-16 sm:w-20 text-right"><%= signups %></span>
+              <span class="w-16 sm:w-20 text-right font-semibold"><%= mrr %></span>
+            </span>
+          </div>
+        <% end %>
+      </div>
+    </div>
+    <p class="text-[13px] text-muted mt-4 max-w-3xl leading-relaxed">
+      Sorted by money rather than by visitors, because sorting by visitors reliably puts the
+      channel that sends crowds at the top — here, the search traffic — while the channel
+      that sends customers sits three rows down looking small.
+    </p>
+  </section>
+
+  <%# --- The design: two ledgers that never meet -%>
+  <section class="py-14 border-t border-rule">
+    <p class="label mb-8">Two ledgers, joined only on a channel name</p>
+    <div class="grid md:grid-cols-2 gap-px bg-rule max-w-4xl">
+      <div class="bg-surface p-7">
+        <h2 class="font-semibold">The traffic ledger stays anonymous</h2>
+        <p class="text-[14px] text-ink-2 mt-3 leading-relaxed">
+          Visits are counted the way Tastatur always counts them: no cookies, nothing stored
+          on the device, a visitor identifier that stops working after 24 hours. The referrer
+          is kept as a hostname only and classified into a channel the moment it is written.
+        </p>
+      </div>
+      <div class="bg-surface p-7">
+        <h2 class="font-semibold">The revenue ledger is your own customer data</h2>
+        <p class="text-[14px] text-ink-2 mt-3 leading-relaxed">
+          Customers, subscriptions and payments are data your application already holds.
+          Your server sends them to Tastatur directly — authenticated, server-to-server,
+          under your own relationship with your customers. Email addresses are hashed on
+          receipt and never stored in the clear.
+        </p>
+      </div>
+    </div>
+    <p class="text-[14px] text-ink-2 mt-6 max-w-3xl leading-relaxed">
+      <strong class="text-ink">There is no column joining the two.</strong> Nothing links a
+      customer to a visitor identifier — not at collection, not later. The two ledgers meet
+      only in the report, on channel names: all the visitors on one side, all the money on
+      the other. That is a design constraint, not a limitation we apologise for, and because
+      the source is AGPL-3.0 you can verify it rather than take our word.
+    </p>
+  </section>
+
+  <%# --- The three integration points, with the same code the docs show -%>
+  <section class="py-14 border-t border-rule">
+    <p class="label mb-3">The integration, in three steps</p>
+    <p class="text-[15px] text-ink-2 mb-8 max-w-2xl leading-relaxed">
+      The browser knows where somebody came from; the payment happens somewhere else,
+      possibly days later, possibly on another device. With nothing stored on the visitor's
+      device there is no cookie to join the two — so the attribution travels <em>with</em>
+      the signup and the payment instead.
+    </p>
+
+    <div class="space-y-10 max-w-3xl">
+      <div>
+        <p class="text-[14px] leading-relaxed mb-3">
+          <strong>1. Capture the first touch on the landing page.</strong> Reads the campaign
+          tags and referrer of the current visit. Store it in your own form state or user
+          record — calling it at the end of your funnel would read your own checkout as the
+          traffic source.
+        </p>
+        <%= render "docs/snippet", language: "JavaScript",
+                   code: %(const attribution = tastatur.attribution()\n// { source, medium, campaign, landing_path, referrer_host, first_seen_at }) %>
+      </div>
+
+      <div>
+        <p class="text-[14px] leading-relaxed mb-3">
+          <strong>2. Send it when they sign up,</strong> from your server, with an API key
+          from your site's settings. The email is hashed on receipt.
+        </p>
+        <%= render "docs/snippet", language: "HTTP",
+                   code: %(POST #{Tastatur.base_url}/api/v1/identify\nAuthorization: Bearer tk_...\nContent-Type: application/json\n\n{\n  "external_id": "user_9182",\n  "email": "person@example.com",\n  "attribution": { "source": "reddit", "medium": "social", "landing_path": "/pricing" }\n}) %>
+      </div>
+
+      <div>
+        <p class="text-[14px] leading-relaxed mb-3">
+          <strong>3. Attach it to Stripe Checkout.</strong> This is what makes attribution
+          survive a closed tab, or a payment finished three days later on a phone: the
+          first touch rides inside the checkout session's metadata and comes back to us on
+          the payment webhook.
+        </p>
+        <%= render "docs/snippet", language: "JavaScript",
+                   code: %(stripe.checkout.sessions.create({\n  mode: 'subscription',\n  line_items: [...],\n  client_reference_id: user.id,\n  metadata: tastatur.checkoutMetadata(attribution)\n})) %>
+      </div>
+    </div>
+
+    <p class="text-[14px] text-ink-2 mt-8 max-w-3xl leading-relaxed">
+      <strong class="text-ink">First touch wins, and is never overwritten.</strong> Your app
+      calls identify on every sign-in, so a last-write-wins design would re-attribute
+      January's Reddit customer to whatever they searched in March — and every paid channel
+      would decay towards "Direct" on its own. Attribution is written once; only an earlier
+      first touch can amend it.
+    </p>
+  </section>
+
+  <%# --- Stripe, read-only -%>
+  <section class="py-14 border-t border-rule">
+    <p class="label mb-3">Connect Stripe, read-only</p>
+    <p class="text-[15px] text-ink-2 max-w-3xl leading-relaxed">
+      Connecting Stripe imports your history and keeps revenue flowing in as it happens —
+      subscriptions, invoices, refunds, disputes. The connection is a Stripe App whose
+      permissions are all read: Stripe shows you each one, item by item, before you install,
+      and its review process pins the list. There is no code path here that writes to a
+      connected Stripe account, and no access token is stored on our side — you can
+      disconnect from either end, and revenue already recorded stays yours to keep or erase.
+    </p>
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-px bg-rule max-w-3xl mt-7">
+      <% [
+           ["read", "the only kind of permission the app asks for"],
+           ["0", "access tokens stored on our side"],
+           ["2 yrs", "of history imported on connect"],
+           ["1 click", "to disconnect, from either end"]
+         ].each do |value, note| %>
+        <div class="bg-surface px-5 py-5">
+          <p class="figure text-[26px]"><%= value %></p>
+          <p class="text-[12px] text-ink-2 mt-2 leading-snug"><%= note %></p>
+        </div>
+      <% end %>
+    </div>
+  </section>
+
+  <%# --- The honesty block. This feature is the identifiable part of the
+      product, and saying so plainly is the trust argument. -%>
+  <section class="py-14 border-t border-rule">
+    <p class="label mb-8">Said plainly</p>
+    <div class="space-y-5 max-w-3xl text-[14px] leading-relaxed">
+      <p>
+        <strong>This part of Tastatur is not anonymous, and does not pretend to be.</strong>
+        A customer record carries the identifier your app assigned, a hashed email, and a
+        first-touch channel. That is data your application already holds about somebody who
+        signed up for it, confined to five tables, deletable when you say so.
+      </p>
+      <p>
+        <strong>Your visitors are not in it.</strong> Someone who browses and never signs up
+        exists only in the anonymous ledger, under an identifier that stopped working the
+        day they visited.
+      </p>
+      <p>
+        <strong>Revenue never appears on a public shared dashboard.</strong> A shared link
+        shows traffic, never money. Publishing MRR to an unguessable-but-public URL is not
+        something anybody should be one checkbox away from.
+      </p>
+      <p>
+        <strong>It works self-hosted.</strong> Revenue attribution is deliberately not tied
+        to our billing: it is about whether you can connect your processor, not whether we
+        can charge you.
+      </p>
+    </div>
+  </section>
+
+  <%# --- CTA -%>
+  <section class="py-14 border-t border-rule">
+    <div class="flex flex-wrap items-center gap-3">
+      <% if Tastatur.allow_signup? %>
+        <%= link_to "Start measuring", new_user_registration_path, class: "btn btn-primary",
+                    data: { analytics_event: "CTA Clicked",
+                            analytics_props: { cta: "start-measuring", placement: "revenue-footer" } } %>
+      <% end %>
+      <%= link_to "Integration docs", docs_path(anchor: "attribution"), class: "btn" %>
+      <%= link_to "What gets collected", privacy_path, class: "btn btn-quiet" %>
+    </div>
+  </section>
+</div>

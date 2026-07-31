@@ -154,6 +154,10 @@ Rails.application.routes.draw do
   # without content negotiation — exactly as /docs.md does.
   get "faq", to: "pages#faq"
 
+  # The revenue-attribution marketing page. Same two-format contract as /faq:
+  # /revenue.md is the machine reader's copy.
+  get "revenue", to: "pages#revenue"
+
   # The llms.txt convention (https://llmstxt.org): a markdown index at a
   # well-known path telling an AI agent what is here and where the
   # markdown-native pages live. `format: false` keeps ".txt" as a literal part

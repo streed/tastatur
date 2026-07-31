@@ -589,8 +589,12 @@ The rules an agent must not break:
   days.** It appears in full on every day's row, so a 30-day sum multiplies the
   business by thirty and looks plausible. Same trap as §8's distinct counts.
 - **Stripe Connect is a SEPARATE integration from `Billing::`** — their money
-  versus ours. Its own endpoint, its own signing secret, `read_only` scope, and an
-  app registered as an **Extension** (irreversible without a support ticket).
+  versus ours. Its own endpoint, its own signing secret, and a **Stripe App**
+  (`stripe-app/stripe-app.json`) whose manifest holds an all-`_read` permission
+  list — that list, fixed by Stripe's app review and shown to the customer at
+  install, is where read-only-ness lives now that the legacy Extension
+  registration (and its `read_only` scope) no longer exists. Customers authorize
+  via the app's OAuth install link; the code is exchanged by `Revenue::AppOAuth`.
   **No access token is stored**: the platform key plus `Stripe-Account` reaches the
   same data, so there is no third-party credential on disk. On the webhook, the
   missing-secret 503 must be checked BEFORE `Tastatur.revenue_enabled?`, or that

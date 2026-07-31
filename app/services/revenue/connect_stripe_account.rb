@@ -19,7 +19,7 @@ module Revenue
       return Failure(:not_configured) unless Tastatur.revenue_enabled?
       return Failure(:missing_code) if @code.blank?
 
-      response = Stripe::OAuth.token(grant_type: "authorization_code", code: @code)
+      response = AppOAuth.exchange(code: @code)
       account_id = response[:stripe_user_id]
       return Failure(:no_account) if account_id.blank?
 
@@ -32,12 +32,12 @@ module Revenue
       BackfillStripeJob.perform_later(connection.id)
 
       Success(connection)
-    rescue Stripe::OAuth::OAuthError => e
-      # A code that was already used, expired, or belongs to another platform.
+    rescue AppOAuth::Refused => e
+      # A code that was already used, expired, or belongs to another app.
       # Expected: a customer double-clicking the button produces exactly this.
       Rails.logger.info("[tastatur] stripe connect oauth refused: #{e.message}")
       Failure(oauth_error: e.message)
-    rescue Stripe::StripeError => e
+    rescue AppOAuth::Unavailable, Stripe::StripeError => e
       Sentry.capture_exception(e) if defined?(Sentry)
       Failure(stripe_error: e.message)
     end

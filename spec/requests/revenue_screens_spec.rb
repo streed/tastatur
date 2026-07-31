@@ -149,14 +149,45 @@ RSpec.describe "Revenue screens", type: :request do
       expect(site.stripe_connections).to be_empty
     end
 
-    it "sends an admin to Stripe with read_only scope and a state parameter" do
+    # No `scope` parameter: what the customer is asked to grant is the app
+    # manifest's permission list, rendered by Stripe on the install screen.
+    it "sends an admin to the Stripe App install link with a state parameter" do
       sign_in_as("admin")
 
       post site_stripe_connection_path(site)
 
-      expect(response).to redirect_to(%r{\Ahttps://connect\.stripe\.com/oauth/authorize})
-      expect(response.location).to include("scope=read_only")
+      expect(response).to redirect_to(%r{\Ahttps://marketplace\.stripe\.com/oauth/v2/authorize})
+      expect(response.location).to include("client_id=ca_test_suite")
+      expect(response.location).to include(CGI.escape(stripe_connect_callback_url))
       expect(response.location).to match(/state=[^&]+/)
+    end
+
+    # The full happy path through the real route: start the flow to mint a
+    # state, come back with it and a code, and end connected. This spec did not
+    # exist under the legacy flow — the exchange was never stubbed anywhere —
+    # which is how a broken callback could have shipped unnoticed.
+    it "connects the site when the callback carries the state this browser started with" do
+      sign_in_as("admin")
+      allow(Revenue::AppOAuth).to receive(:exchange).with(code: "ac_1")
+        .and_return({ stripe_user_id: "acct_new", livemode: true, scope: "stripe_apps" })
+
+      post site_stripe_connection_path(site)
+      state = Rack::Utils.parse_query(URI.parse(response.location).query)["state"]
+
+      get stripe_connect_callback_path(code: "ac_1", state: state)
+
+      expect(response).to redirect_to(site_path(site))
+      connection = site.stripe_connections.sole
+      expect(connection.stripe_account_id).to eq("acct_new")
+      expect(connection).to be_live
+
+      # The state is single-use: `session.delete` on the way in is what makes
+      # it so, and it is one character away from `session[:stripe_connect]`,
+      # which would pass every other spec here while leaving the state
+      # replayable for the life of the session.
+      get stripe_connect_callback_path(code: "ac_2", state: state)
+      expect(response).to redirect_to(sites_path)
+      expect(site.stripe_connections.count).to eq(1)
     end
 
     # The state is a CSRF token and a routing slip at once. Without the random

@@ -169,8 +169,9 @@
         </p>
       <% elsif connection.nil? %>
         <p class="text-sm text-ink-2 max-w-2xl">
-          Connect Stripe to see which acquisition channel produced paying customers. We request
-          <code>read_only</code> scope and never write to your account.
+          Connect Stripe to see which acquisition channel produced paying customers. The Tastatur
+          app asks for read-only permissions — Stripe shows you each one before you install — and
+          never writes to your account.
         </p>
         <% if policy(StripeConnection.new(site: @site)).create? %>
           <%= button_to "Connect Stripe", site_stripe_connection_path(@site), class: "btn btn-primary btn-sm",
@@ -186,10 +187,13 @@
               Connected to <code><%= connection.stripe_account_id %></code>
               <% if connection.test_mode? %><span class="label ml-2">Test mode</span><% end %>
             </p>
+            <%# "read-only", not `connection.scope`: the app-era grant string is
+                "stripe_apps", which tells a customer nothing. What they need
+                stated here is the property, and the manifest guarantees it. %>
             <p class="label mt-1">
               Connected <%= time_ago_in_words(connection.connected_at) %> ago ·
               <%= connection.backfilled? ? "history imported" : "importing history…" %> ·
-              <%= connection.scope %>
+              read-only
             </p>
           </div>
           <% if policy(connection).destroy? %>
