@@ -140,6 +140,22 @@ RSpec.describe "Revenue screens", type: :request do
   end
 
   describe "connecting Stripe" do
+    # The same pin billing_spec holds over its checkout buttons, for the same
+    # §12 reason: this POST answers with a redirect to marketplace.stripe.com,
+    # and a Turbo-driven submission follows it with fetch straight into
+    # Stripe's CORS policy — a console error, a button that does nothing, and
+    # nothing to see server-side. Found in production by exactly that symptom.
+    it "renders the Connect button with turbo disabled, everywhere it appears" do
+      sign_in_as("admin")
+
+      [site_attribution_path(site), edit_site_path(site)].each do |path|
+        get path
+
+        form = response.body[/<form[^>]*#{Regexp.escape(site_stripe_connection_path(site))}[^>]*>/]
+        expect(form).to include('data-turbo="false"'), "missing data-turbo=false on #{path}"
+      end
+    end
+
     it "refuses a member" do
       sign_in_as("member")
 
