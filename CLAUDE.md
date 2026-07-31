@@ -402,9 +402,10 @@ and each has a spec.
 
 ### 14. Plans and billing
 
-Two plans on the hosted service — Free (100,000 events/month, 1 site) and Pro
-($40/month, 10,000,000 events, 20 sites) — plus `self_hosted`, which is a deployment
-mode rather than an offer. Teammates are unlimited on every plan. Full reasoning in
+Two plans on the hosted service — Free (500,000 events/month, 1 site) and Pro
+($30/month, 10,000,000 events, 20 sites) — plus `self_hosted`, which is a deployment
+mode rather than an offer. `Billing::Plan` in `app/values/billing/plan.rb` is the
+source of truth if these numbers ever look wrong again. Teammates are unlimited on every plan. Full reasoning in
 `docs/architecture/billing.md`; the rules an agent must not break:
 
 - **`Billing::Plan` is the catalogue.** Never read an allowance off the `plan`
