@@ -109,21 +109,11 @@ module Tastatur
   # Its absence is invisible: connecting works, the backfill works, the screen
   # shows historical revenue, and nothing new ever arrives.
   def self.revenue_enabled?
-    stripe_connect_key.present? &&
-      Rails.configuration.stripe[:connect_client_id].present? &&
-      Rails.configuration.stripe[:connect_webhook_secret].present?
-  end
-
-  # The key every Connect call is made with: the code exchange, the backfill,
-  # any read of a connected account. It is the key of the account that OWNS the
-  # Stripe App — normally the same account as billing, in which case
-  # STRIPE_CONNECT_SECRET_KEY stays unset and this falls back to
-  # STRIPE_SECRET_KEY. Resolved at read time, not boot, so the test suite's
-  # per-example configuration merge keeps working.
-  def self.stripe_connect_key
     stripe = Rails.configuration.stripe
 
-    stripe[:connect_secret_key].presence || stripe[:secret_key]
+    stripe[:secret_key].present? &&
+      stripe[:connect_client_id].present? &&
+      stripe[:connect_webhook_secret].present?
   end
 
   # Public signup. The hosted SaaS wants it on. A self-hosted instance exposed
@@ -195,7 +185,7 @@ module Tastatur
   # It is bound by docs/privacy/claims.md like every other claim we publish. The
   # size is the measured gzipped size of lib/tracker/t.js — re-measure it here if
   # the script changes rather than rounding it in the direction we would prefer.
-  DESCRIPTION = "Cookieless, privacy-first web analytics. One script tag, 3.6 KB over the wire. " \
+  DESCRIPTION = "Cookieless, privacy-first web analytics. One script tag, 4.4 KB over the wire. " \
                 "No cookies, no device storage, no fingerprinting, and visitor identifiers stop " \
                 "working after 24 hours.".freeze
 

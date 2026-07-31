@@ -90,17 +90,8 @@ Rails.configuration.stripe = {
   #
   # NO ACCESS TOKEN IS EVER STORED. The OAuth exchange is how the customer grants
   # access and how we learn the account id; the token it returns is discarded, and
-  # every later call uses the app owner's secret key plus a `Stripe-Account`
-  # header. See StripeConnection and Revenue::StripeAccount.
-  #
-  # STRIPE_CONNECT_SECRET_KEY is the key of the account that OWNS the Stripe
-  # App, and is only needed when that is a different account from billing's.
-  # tastatur.dev is that case: the billing account carries an old, unused
-  # Connect-platform registration, and Stripe refuses to let a Connect platform
-  # own a public-distribution app — so the app lives on a separate, clean
-  # account. Leave it unset and everything falls back to STRIPE_SECRET_KEY,
-  # which is right for any single-account setup, self-hosted included.
+  # every later call uses `secret_key` plus a `Stripe-Account` header. See
+  # StripeConnection and Revenue::StripeAccount.
   connect_client_id:      ENV["STRIPE_CONNECT_CLIENT_ID"],
-  connect_webhook_secret: ENV["STRIPE_CONNECT_WEBHOOK_SECRET"],
-  connect_secret_key:     ENV["STRIPE_CONNECT_SECRET_KEY"]
+  connect_webhook_secret: ENV["STRIPE_CONNECT_WEBHOOK_SECRET"]
 }
