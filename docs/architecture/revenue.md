@@ -227,6 +227,18 @@ account (once per mode):
    marketplace) starts from the same details page; the install URL to give review
    is the site's Attribution screen, which initiates the OAuth flow.
 
+**There are two shapes of install link, and the published one does not work
+until the app is published.** The Settings tab's public link is
+`marketplace.stripe.com/oauth/v2/authorize?...`; the External test tab's link —
+the only one that installs the app before app review — is
+`marketplace.stripe.com/oauth/v2/chnlink_.../authorize?...`, carrying a channel
+id that is not derivable from the client id or anything else we hold. Pointing
+the published form at an unpublished app is answered with "The provided OAuth
+link is invalid", which names no cause. So `STRIPE_CONNECT_INSTALL_URL`
+overrides the base until the app is published, and is dropped afterwards; the
+controller discards any query string on it and rebuilds the parameters, because
+the dashboard hands you a complete URL and pasting it whole is the obvious move.
+
 **The exchange key must match the install link's mode.** The code is exchanged
 with this instance's own `STRIPE_SECRET_KEY`, and Stripe requires the key for
 the link's mode: a live link needs the live key, a test link the test key, a
