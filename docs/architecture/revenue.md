@@ -243,6 +243,13 @@ access/refresh tokens its docs describe. The sandbox proved the negative case
 the positive one. If Stripe refuses, the "no token stored" invariant needs a
 decision, not a workaround — stop and take it to the owner.
 
+**App ids are globally unique across all of Stripe, and effectively
+unreclaimable.** The first sandbox copy was uploaded as `dev.tastatur.revenue`
+and squatted the name for every other account forever — ids are immutable, and
+deleting an app does not reliably release its id. The production app is
+therefore `dev.tastatur.attribution`, and any future sandbox or test copy must
+take its own id (`dev.tastatur.attribution.test`) from the start.
+
 Two things learned the hard way, both invisible until they refuse you:
 
 - **An account with a Connect *platform* registration cannot own this app** —
