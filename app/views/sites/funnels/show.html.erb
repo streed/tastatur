@@ -39,11 +39,14 @@
 
   <%# --- Summary -%>
   <div class="card mb-6">
-    <div class="grid grid-cols-3">
+    <%# Three across only from `sm`: a third of a phone's width is ~73px of
+        content, which wraps the "Overall conversion" label onto three lines.
+        Stacked cells get a hairline between them instead. %>
+    <div class="grid grid-cols-1 sm:grid-cols-3">
       <% [["Entered", metric_number(@report.entered)],
           ["Completed", metric_number(@report.completed)],
           ["Overall conversion", "#{@report.overall_rate}%"]].each_with_index do |(label, value), i| %>
-        <div class="px-5 py-5 <%= "grid-hairline" unless i.zero? %>">
+        <div class="px-5 py-5 <%= "grid-hairline" unless i.zero? %> <%= "border-t border-rule sm:border-t-0" unless i.zero? %>">
           <p class="label"><%= label %></p>
           <p class="figure mt-2.5"><%= value %></p>
         </div>

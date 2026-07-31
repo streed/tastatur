@@ -145,7 +145,10 @@
   .shell {
     max-width: 1240px;
     margin-inline: auto;
-    padding-inline: 32px;
+    padding-inline: 16px;
+  }
+  @media (min-width: 640px) {
+    .shell { padding-inline: 32px; }
   }
 
   /* A card is a hairline box on paper. It has no shadow and no radius; if you
@@ -179,7 +182,7 @@
   }
 
   .figure {
-    font-size: 34px;
+    font-size: 28px;
     font-weight: 600;
     letter-spacing: -0.03em;
     line-height: 1;
@@ -188,7 +191,14 @@
     font-variant-numeric: proportional-nums;
   }
 
-  .hero-figure { font-size: 52px; font-weight: 600; letter-spacing: -0.035em; line-height: 1; }
+  .hero-figure { font-size: 40px; font-weight: 600; letter-spacing: -0.035em; line-height: 1; }
+
+  /* Display sizes step up with the viewport: a 34px figure in a half-width
+     stat cell overflows a 375px phone ("1h 23m 45s" is the worst case). */
+  @media (min-width: 640px) {
+    .figure { font-size: 34px; }
+    .hero-figure { font-size: 52px; }
+  }
 
   /* Columns of numbers must align, so these ARE tabular. */
   .num { font-variant-numeric: tabular-nums; }
@@ -242,6 +252,11 @@
     outline: none;
     border-color: var(--color-ink);
     box-shadow: inset 0 0 0 1px var(--color-ink);
+  }
+  /* Under 16px, iOS Safari zooms the whole page in when a field is focused
+     and leaves it zoomed. 16px on small screens is the documented opt-out. */
+  @media (max-width: 639px) {
+    .field { font-size: 16px; }
   }
 
   /* --- Combobox -----------------------------------------------------------
@@ -327,6 +342,16 @@
   .segment:hover { background: var(--color-surface-2); color: var(--color-ink); }
   .segment[aria-current="true"] { background: var(--color-ink); color: var(--color-surface); }
 
+  /* The control is one atomic flex item — segments must not wrap, or the
+     joined borders fall apart — so on a phone it tightens, shrinks and, past
+     that, scrolls within itself. Without the overflow rule the five date
+     presets are wider than a 375px viewport and pan the whole page sideways
+     (a flex item's min-width is its content until overflow says otherwise). */
+  @media (max-width: 639px) {
+    .segmented { max-width: 100%; overflow-x: auto; }
+    .segment { padding: 7px 10px; }
+  }
+
   /* --- Filter chips ------------------------------------------------------ */
 
   .chip {
@@ -374,6 +399,17 @@
   /* --- Misc -------------------------------------------------------------- */
 
   .rule { border-top: 1px solid var(--color-rule); }
+
+  /* The heavier sibling of .rule, opening a page header. Templates have used
+     it since the design landed (`pt-5 rule-heavy` on every form header), but
+     the definition never existed, so it silently rendered as nothing. */
+  .rule-heavy { border-top: 2px solid var(--color-ink); }
+
+  /* An inline text link. Also referenced by templates without being defined —
+     which left links indistinguishable from body text, since the base style
+     strips underlines. */
+  .link { text-decoration: underline; text-underline-offset: 2px; }
+  .link:hover { color: var(--color-signal); }
 
   .stat-delta { font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
   .stat-delta[data-direction="up"]   { color: var(--color-positive); }

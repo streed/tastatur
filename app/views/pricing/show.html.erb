@@ -38,9 +38,12 @@
                ["Shared dashboards", "Included"],
                ["Goals and funnels", "Included"]
              ].each do |term, value| %>
+            <%# `sm:shrink-0`, not `shrink-0`: on a phone "Data retention" plus
+                its value is wider than the row, and a value that cannot shrink
+                can only overflow. Below `sm` it wraps instead. %>
             <div class="flex items-baseline justify-between gap-4 border-t border-rule py-3">
               <dt class="text-sm text-ink-2"><%= term %></dt>
-              <dd class="text-sm font-medium num shrink-0"><%= value %></dd>
+              <dd class="text-sm font-medium num sm:shrink-0 text-right"><%= value %></dd>
             </div>
           <% end %>
         </dl>

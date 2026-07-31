@@ -1,0 +1,28 @@
+<%# The signed-in navigation, rendered twice by the application layout: in the
+    header bar from sm up, and as a second header row below it on phones —
+    where `hidden sm:flex` used to leave no navigation at all. One partial so
+    the two can never drift. %>
+<%= link_to "Sites", sites_path, class: "btn btn-quiet btn-sm" %>
+<%= link_to "Account", account_path, class: "btn btn-quiet btn-sm" %>
+<%# Hidden unless billing is switched on AND configured: an operator
+    running this on their own hardware should never see a plan screen,
+    and neither should anyone on a deployment that cannot take a
+    payment. Also hidden from anyone who cannot open it — billing is
+    owner-only, so offering an admin or a viewer a link that can only
+    redirect them back with "you do not have access" is a dead end.
+    Same reasoning as the "Add a site" button in sites/index. %>
+<% if (Tastatur.billing_enabled? || current_account.billing_manageable?) &&
+      policy(current_account).manage_billing? %>
+  <%= link_to "Plan", billing_path, class: "btn btn-quiet btn-sm" %>
+<% end %>
+<%= link_to "Docs", docs_path, class: "btn btn-quiet btn-sm" %>
+<%# Instance administrators only, and shown to nobody else — the flag
+    is a property of the person, not of the account they are acting
+    as, so it does not go through `policy`. Marked with the signal
+    dot because these screens reach across every account and a link
+    that looks like the others is one whose reach is easy to forget. %>
+<% if current_user.admin? %>
+  <%= link_to admin_root_path, class: "btn btn-quiet btn-sm" do %>
+    Admin<span class="w-1.5 h-1.5 bg-signal inline-block ml-1.5 align-middle" aria-hidden="true"></span>
+  <% end %>
+<% end %>

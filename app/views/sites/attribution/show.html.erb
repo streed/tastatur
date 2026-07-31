@@ -24,10 +24,12 @@
           reason (§12); this screen has none for a simpler one — a revenue rollup
           is precomputed per channel per day and there is nothing to filter it by. -%>
       <div class="segmented">
+        <%# `segment` + aria-current, the control's real API — `segmented-item`
+            and `is-active` were never defined in the stylesheet. %>
         <% %w[today 7d 30d 90d 12mo].each do |key| %>
           <%= link_to Analytics::Period::PRESETS[key].sub("Last ", ""),
                       site_attribution_path(@site, period: key, sort: @report[:sort]),
-                      class: "segmented-item #{'is-active' if @period.key == key}" %>
+                      class: "segment", "aria-current": (@period.key == key).to_s %>
         <% end %>
       </div>
       <%= link_to "Customers", site_customers_path(@site), class: "btn btn-sm" %>
@@ -104,7 +106,7 @@
     <% end %>
 
     <div class="card">
-      <div class="card-head flex items-center justify-between gap-4">
+      <div class="card-head flex flex-wrap items-center justify-between gap-4">
         <h2 class="text-sm font-semibold">Channels</h2>
         <%# SORTED BY MONEY BY DEFAULT, and the control says so rather than
             hiding it. Every other analytics tool sorts this by visitors, which
@@ -115,7 +117,7 @@
                "conversions" => "Conversions" }.each do |key, label| %>
             <%= link_to label,
                         site_attribution_path(@site, period: @period.key, sort: key),
-                        class: "segmented-item #{'is-active' if @report[:sort] == key}" %>
+                        class: "segment", "aria-current": (@report[:sort] == key).to_s %>
           <% end %>
         </div>
       </div>
