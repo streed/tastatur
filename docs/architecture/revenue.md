@@ -198,9 +198,12 @@ controller, a webhook endpoint or a signing secret.
 ### Configuration
 
 ```
-STRIPE_SECRET_KEY=sk_...                # also used by billing; makes the Stripe-Account calls
+STRIPE_SECRET_KEY=sk_...                # billing's key; Connect calls fall back to it
 STRIPE_CONNECT_CLIENT_ID=...            # the Stripe App's OAuth client id (app details page)
 STRIPE_CONNECT_WEBHOOK_SECRET=whsec_... # a DIFFERENT secret from STRIPE_WEBHOOK_SECRET
+STRIPE_CONNECT_SECRET_KEY=sk_...        # ONLY when the app is owned by a different account
+                                        # than billing's (tastatur.dev's case — see below);
+                                        # the connect webhook endpoint lives on that account too
 ```
 
 ### Operating the Stripe App
