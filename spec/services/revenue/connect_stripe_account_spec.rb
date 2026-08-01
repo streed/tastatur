@@ -38,6 +38,22 @@ RSpec.describe Revenue::ConnectStripeAccount do
       expect(existing.reload).to be_live
     end
 
+    # The per-ACCOUNT index has no model validation behind it, so it arrives as
+    # a database error. Unrescued it was a 500 at the end of an OAuth round
+    # trip — and this is the ordinary case of one business measuring two sites
+    # with one Stripe account, not an exotic one.
+    it "explains rather than 500s when the account is live on another site" do
+      other_site = create(:site)
+      create(:stripe_connection, site: other_site, stripe_account_id: "acct_9")
+      stub_exchange(response)
+
+      result = described_class.call(site: site, code: "ac_1")
+
+      expect(result.failure[:invalid]).to include("already connected to another site")
+      # The other site is never named: it can belong to a different account.
+      expect(result.failure[:invalid]).not_to include(other_site.domain)
+    end
+
     it "refuses a second, different account while one is connected" do
       create(:stripe_connection, site: site, stripe_account_id: "acct_other")
       stub_exchange(response)
