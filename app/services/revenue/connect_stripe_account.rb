@@ -70,6 +70,19 @@ module Revenue
       # The live-connection-per-site validation. Reached when a DIFFERENT Stripe
       # account is already connected here, which is a real thing to want to say.
       Failure(invalid: e.record.errors.full_messages.to_sentence)
+    rescue ActiveRecord::RecordNotUnique
+      # The OTHER partial unique index: this Stripe account is already live on
+      # a different site. Only the per-SITE rule has a model validation, so
+      # this one arrives as a database error and used to escape as a 500 — at
+      # the end of an OAuth round trip, which is the worst possible moment to
+      # show somebody a stack trace.
+      #
+      # THE OTHER SITE IS NOT NAMED. It may belong to an entirely different
+      # Tastatur account, and confirming to whoever holds these Stripe
+      # credentials that some other customer measures with us is a leak, not a
+      # help. The person who can act on this can see it on their own screens.
+      Failure(invalid: "That Stripe account is already connected to another site. " \
+                       "Disconnect it there before connecting it here.")
     end
 
     # `livemode` is absent from the token response on some Stripe API versions.
