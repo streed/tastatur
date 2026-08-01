@@ -11,7 +11,21 @@ require "rails_helper"
 # Every window here stays inside the current calendar month. The test database can
 # carry materialized rows for low site ids left behind by a truncating spec, and a
 # wider window would quietly pick them up.
+#
+# WHICH IS WHY THE CLOCK IS PINNED TO MID-MONTH. The examples below place their
+# events with `N.hours.ago`, and the meter's window is the calendar month in UTC
+# (Billing::UsageMeter.period_bounds) — so between 00:00 and about 02:00 UTC on
+# the first of any month, "two hours ago" is the PREVIOUS month and every one of
+# those examples fails, having measured a window its own events fall outside of.
+# Nothing is wrong with the meter when that happens: an event at 23:00 on the
+# 31st does belong to the month that just ended. It is this file's arithmetic
+# that has to stop depending on what time the suite is run. Found by running the
+# suite at 00:03 UTC on the first of the month.
 RSpec.describe Billing::ReconcileUsage do
+  around do |example|
+    travel_to(Time.current.utc.beginning_of_month + 15.days) { example.run }
+  end
+
   let(:account) { create(:account, plan: "free") }
   let(:site) { create(:site, account: account) }
 
