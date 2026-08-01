@@ -191,6 +191,15 @@ RSpec.describe "Billing when Stripe is not configured", type: :request do
     let!(:site) { create(:site, account: account) }
     let!(:subscriber) { create(:account, plan: "pro", stripe_customer_id: "cus_1", stripe_subscription_id: "sub_1") }
 
+    # Pinned mid-month for the reason spec/services/billing/reconcile_usage_spec.rb
+    # explains at length: the meter's window is the calendar month in UTC, so an
+    # event placed "an hour ago" belongs to the PREVIOUS month for the first
+    # couple of hours of every first-of-the-month — and this example then
+    # reconciles a window its own event falls outside of.
+    around do |example|
+      travel_to(Time.current.utc.beginning_of_month + 15.days) { example.run }
+    end
+
     before do
       delete_all_events
       create_event(site, at: 1.hour.ago)
