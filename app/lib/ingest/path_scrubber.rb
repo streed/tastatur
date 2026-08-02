@@ -8,6 +8,7 @@ module Ingest
   #   /users/alice@example.com/settings
   #   /reset-password/eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
   #   /invoice/7f3a91c2-4b8e-4c1a-9f2d-1e5b8a7c3d90
+  #   /player/51
   #
   # If those are persisted, the claim "we store no personal data about your
   # visitors" is false, and it is our fault rather than the customer's. So
@@ -38,23 +39,38 @@ module Ingest
     # UUIDs, JWTs, hex digests, nanoids and base64 blobs all land here.
     UUID_SEGMENT = /\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/i
     HEX_SEGMENT = /\A[0-9a-f]{16,}\z/i
-    NUMERIC_SEGMENT = /\A\d{4,}\z/
+    NUMERIC_SEGMENT = /\A\d+\z/
     OPAQUE_SEGMENT = /\A[A-Za-z0-9\-_.]{25,}\z/
 
-    # A four-digit number in this range is almost always a year, not a record
-    # id, and date-based URLs are extremely common: /2026/07/roundup,
-    # /blog/2025/hello. Collapsing those to /:id/:id/roundup would destroy the
-    # top-pages report for every publication that organises by date, which is a
-    # lot of them. Years are kept; everything else numeric and long enough to
-    # look like an id is collapsed.
+    # A numeric path segment is a record id — /player/51, /orders/5, /team/172 —
+    # and it names an individual just as surely as /orders/1048576 does. The
+    # digit COUNT is not what makes a number personal, so every numeric segment
+    # collapses to :id, with exactly two exceptions, both about dates:
+    #
+    #   * A four-digit number in 1900..2100 is almost always a year, not a record
+    #     id. Date-based URLs are extremely common (/2026/07/roundup,
+    #     /blog/2025/hello) and collapsing the year would destroy the top-pages
+    #     report for every publication that organises by date.
+    #
+    #   * The month and day that FOLLOW such a year (/2026/07/15/roundup) are
+    #     also kept, but only there — a bare "07" or "15" with no preceding year
+    #     is far more likely to be a record id or a page number than a date, so
+    #     it collapses. This is why the scrub is position-aware rather than a
+    #     per-segment regex: /player/51 must collapse while /2026/07 must not.
+    #
+    # The previous rule kept every 1-3 digit number to sidestep the year case,
+    # which quietly published small sequential ids (/player/51) straight into the
+    # Top pages table. That is the leak this shape exists to close.
     YEAR_RANGE = (1900..2100).freeze
+    MONTH_RANGE = (1..12).freeze
+    DAY_RANGE = (1..31).freeze
 
     module_function
 
     # Returns the storable path for a URI.
     def call(uri)
       path = uri.path.presence || "/"
-      path = path.split("/").map { |segment| scrub_segment(segment) }.join("/")
+      path = scrub_path(path)
       path = "/" if path.blank?
       path = path.chomp("/") if path.length > 1 && path.end_with?("/")
       path.first(MAX_LENGTH)
@@ -79,8 +95,20 @@ module Ingest
       value.first(255)
     end
 
-    def scrub_segment(segment)
-      return segment if segment.blank?
+    # Walks the segments left to right, carrying a small amount of state so the
+    # month and day of a date-organised URL survive while an isolated numeric id
+    # does not. `date_slot` is :none, :month (a year was just seen), or :day (a
+    # month was just seen).
+    def scrub_path(path)
+      date_slot = :none
+      path.split("/").map do |segment|
+        scrubbed, date_slot = scrub_segment(segment, date_slot)
+        scrubbed
+      end.join("/")
+    end
+
+    def scrub_segment(segment, date_slot)
+      return [segment, date_slot] if segment.blank?
 
       decoded = begin
         CGI.unescape(segment)
@@ -88,17 +116,41 @@ module Ingest
         segment
       end
 
-      return ":email" if decoded.match?(EMAIL_SEGMENT)
-      return ":uuid"  if decoded.match?(UUID_SEGMENT)
-      return ":id"    if decoded.match?(NUMERIC_SEGMENT) && !year?(decoded)
-      return ":hash"  if decoded.match?(HEX_SEGMENT)
-      return ":token" if decoded.match?(OPAQUE_SEGMENT)
+      return [":email", :none] if decoded.match?(EMAIL_SEGMENT)
+      return [":uuid",  :none] if decoded.match?(UUID_SEGMENT)
 
-      segment
+      if decoded.match?(NUMERIC_SEGMENT)
+        return [segment, :month] if year?(decoded)
+        return [segment, next_date_slot(date_slot)] if date_part?(decoded, date_slot)
+
+        return [":id", :none]
+      end
+
+      return [":hash",  :none] if decoded.match?(HEX_SEGMENT)
+      return [":token", :none] if decoded.match?(OPAQUE_SEGMENT)
+
+      [segment, :none]
     end
 
     def year?(segment)
       segment.length == 4 && YEAR_RANGE.cover?(segment.to_i)
+    end
+
+    # A numeric segment counts as a date part only when it sits right after a
+    # year (a month) or right after that month (a day), and only when its value
+    # is a plausible month or day. /2026/99 keeps the year and collapses the 99.
+    def date_part?(segment, date_slot)
+      return false if segment.length > 2
+
+      case date_slot
+      when :month then MONTH_RANGE.cover?(segment.to_i)
+      when :day   then DAY_RANGE.cover?(segment.to_i)
+      else false
+      end
+    end
+
+    def next_date_slot(date_slot)
+      date_slot == :month ? :day : :none
     end
   end
 end
