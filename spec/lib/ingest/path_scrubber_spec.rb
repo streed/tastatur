@@ -30,6 +30,16 @@ RSpec.describe Ingest::PathScrubber do
       expect(scrub("https://e.com/orders/1048576")).to eq("/orders/:id")
     end
 
+    # The leak this class exists to close: a small sequential id names an
+    # individual just as surely as a seven-digit one. Publishing /player/51 into
+    # the Top pages table enumerates the site's people, so the digit count must
+    # not decide whether a numeric segment is treated as a record id.
+    it "collapses a short numeric id the same as a long one" do
+      expect(scrub("https://e.com/player/51")).to eq("/player/:id")
+      expect(scrub("https://e.com/orders/5")).to eq("/orders/:id")
+      expect(scrub("https://e.com/team/172/profile")).to eq("/team/:id/profile")
+    end
+
     it "decodes percent-encoding before deciding, so encoding cannot smuggle an email through" do
       expect(scrub("https://e.com/u/alice%40example.com")).to eq("/u/:email")
     end
@@ -45,6 +55,22 @@ RSpec.describe Ingest::PathScrubber do
     it "keeps a year segment" do
       expect(scrub("https://e.com/2026/roundup")).to eq("/2026/roundup")
       expect(scrub("https://e.com/blog/2025/07/hello")).to eq("/blog/2025/07/hello")
+    end
+
+    # The month and day survive only in the position that makes them a date: run
+    # right after a year. This is what lets /player/51 collapse without taking
+    # /2026/07/15 down with it.
+    it "keeps the month and day that follow a year" do
+      expect(scrub("https://e.com/2026/07/15/roundup")).to eq("/2026/07/15/roundup")
+    end
+
+    it "collapses a short number that is not in a date position" do
+      # No preceding year, so 07 is a record id or a page number, not a month.
+      expect(scrub("https://e.com/section/07/detail")).to eq("/section/:id/detail")
+    end
+
+    it "collapses a number after a year when it cannot be a real month or day" do
+      expect(scrub("https://e.com/2026/99/roundup")).to eq("/2026/:id/roundup")
     end
 
     it "still collapses a long number that is not a plausible year" do
