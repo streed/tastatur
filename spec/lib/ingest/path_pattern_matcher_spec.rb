@@ -34,13 +34,16 @@ RSpec.describe Ingest::PathPatternMatcher do
     expect(consumed).to eq(3)
   end
 
-  it "consumes nothing when no pattern matches" do
+  it "stops at the root when no declared segment matches, leaving the rest to the caller" do
+    # Every pattern begins with "/", so the shared leading "" is consumed; the
+    # first real segment ("docs") matches nothing, so the tail is left for
+    # PathScrubber to scrub heuristically.
     matched, consumed = apply(["/sites/:token"], "/docs/getting-started")
-    expect(matched).to eq([])
-    expect(consumed).to eq(0)
+    expect(matched).to eq([""])
+    expect(consumed).to eq(1)
   end
 
-  it "is empty when built from no patterns" do
+  it "matches nothing at all when built from no patterns" do
     expect(described_class.for([])).to be_empty
     matched, consumed = apply([], "/anything/here")
     expect(matched).to eq([])
