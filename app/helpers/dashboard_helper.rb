@@ -65,10 +65,10 @@ module DashboardHelper
   def filter_dimension_choices
     Analytics::Filters::HUMAN_LABELS.map do |key, label|
       group = case key
-              when "page", "entry_page" then "pageview"
-              when "event" then "event"
-              else "other"
-              end
+      when "page", "entry_page" then "pageview"
+      when "event" then "event"
+      else "other"
+      end
       [label, key, { data: { group: group } }]
     end
   end
