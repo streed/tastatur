@@ -1,7 +1,7 @@
 require "rails_helper"
 
 RSpec.describe Ingest::PathScrubber do
-  def scrub(url) = described_class.call(URI.parse(url))
+  def scrub(url, patterns: []) = described_class.call(URI.parse(url), patterns: patterns)
   def params(url) = described_class.query_params(URI.parse(url))
 
   describe "personal data in the path" do
@@ -40,8 +40,47 @@ RSpec.describe Ingest::PathScrubber do
       expect(scrub("https://e.com/team/172/profile")).to eq("/team/:id/profile")
     end
 
+    # A 16-char Crockford token (Site#public_token) and a 24-char base64 slug
+    # (SharedLink#slug) both sit below the 25-char opaque threshold and are not
+    # pure hex, so the earlier rules published them into Top pages verbatim.
+    it "collapses a short high-entropy identifier that mixes letters and digits" do
+      expect(scrub("https://e.com/sites/FB1WRC5D0PFFHKZ5")).to eq("/sites/:token")
+      expect(scrub("https://e.com/sites/8TQTENJQQWHW8H40")).to eq("/sites/:token")
+    end
+
+    # Conservative on purpose: a page name written in camelCase carries no digit,
+    # so it is left alone. The exact tool for a digitless id is a declared pattern.
+    it "leaves a long digitless word segment alone" do
+      expect(scrub("https://e.com/FrequentlyAskedQuestions")).to eq("/FrequentlyAskedQuestions")
+    end
+
     it "decodes percent-encoding before deciding, so encoding cannot smuggle an email through" do
       expect(scrub("https://e.com/u/alice%40example.com")).to eq("/u/:email")
+    end
+  end
+
+  describe "declared route patterns" do
+    # The exact tool: the owner names the dynamic segment, so it collapses with no
+    # guessing and no page name can be mistaken for an id.
+    it "collapses a declared parameter to its name" do
+      expect(scrub("https://e.com/player/51", patterns: ["/player/:id"])).to eq("/player/:id")
+      expect(scrub("https://e.com/sites/FB1WRC5D0PFFHKZ5", patterns: ["/sites/:token"]))
+        .to eq("/sites/:token")
+    end
+
+    it "collapses a low-entropy id that no heuristic could tell from a page name" do
+      # /team/7 would otherwise be indistinguishable from a real page named "7".
+      expect(scrub("https://e.com/team/7", patterns: ["/team/:id"])).to eq("/team/:id")
+    end
+
+    it "scrubs the undeclared tail with the heuristics" do
+      expect(scrub("https://e.com/player/51/orders/1048576", patterns: ["/player/:id"]))
+        .to eq("/player/:id/orders/:id")
+    end
+
+    it "leaves a path no pattern matches to the heuristics" do
+      expect(scrub("https://e.com/docs/why-cookieless", patterns: ["/player/:id"]))
+        .to eq("/docs/why-cookieless")
     end
   end
 

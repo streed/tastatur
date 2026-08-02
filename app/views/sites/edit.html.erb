@@ -44,6 +44,24 @@
                             hint: "Recommended. Turning this off accepts events claiming any hostname, which means anyone with your site key can add traffic to your reports." %>
     </div>
 
+    <div class="rule pt-6 space-y-5">
+      <div>
+        <p class="label mb-2">Dynamic path patterns</p>
+        <p class="text-[12px] text-ink-2 leading-relaxed">
+          We never store an id we can recognise — numbers, UUIDs and long tokens are collapsed to
+          placeholders like <code>/orders/:id</code> before anything is written, so one visitor's
+          record page cannot show up on its own in your reports. A short or word-shaped id we cannot
+          tell apart from a page name is the exception. List your dynamic routes here and the
+          matching segment is collapsed exactly, with nothing leaked and no page name mistaken for
+          an id.
+        </p>
+      </div>
+
+      <%= f.field :path_patterns_list, "Route patterns", as: :text_area, rows: 4,
+                  value: @site.path_patterns.join("\n"),
+                  hint: "One per line, written like your routes: /sites/:token, /player/:id, /blog/:year/:month/:slug. A :name segment matches any single value and is shown as :name; everything else is matched literally." %>
+    </div>
+
     <%= f.actions "Save settings", cancel_to: site_path(@site) %>
   <% end %>
 
