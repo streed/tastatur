@@ -42,6 +42,21 @@ module Ingest
     NUMERIC_SEGMENT = /\A\d+\z/
     OPAQUE_SEGMENT = /\A[A-Za-z0-9\-_.]{25,}\z/
 
+    # A no-separator alphanumeric run of 16+ characters that mixes letters and
+    # digits reads like a random identifier and not a page name. This is what
+    # catches the identifiers the length-25 OPAQUE rule missed: Site#public_token
+    # is 16 Crockford-base32 chars (/sites/FB1WRC5D0PFFHKZ5) and a SharedLink slug
+    # is 24 base64 chars — both below 25, neither pure-hex.
+    #
+    # Deliberately conservative, because by shape alone a short identifier is
+    # indistinguishable from a page name and the per-site route patterns are the
+    # exact tool for that. It requires a digit, so it will NOT fire on a long
+    # camelCase page like /FrequentlyAskedQuestions; page names rarely carry a
+    # digit mid-word while a random token almost always does. A token that
+    # happens to contain no digit (~0.25% of 16-char base32 tokens) slips this
+    # fallback and needs a declared pattern — which is exact and never guesses.
+    MIXED_TOKEN_SEGMENT = /\A(?=[A-Za-z0-9]*[A-Za-z])(?=[A-Za-z0-9]*\d)[A-Za-z0-9]{16,}\z/
+
     # A numeric path segment is a record id — /player/51, /orders/5, /team/172 —
     # and it names an individual just as surely as /orders/1048576 does. The
     # digit COUNT is not what makes a number personal, so every numeric segment
@@ -65,12 +80,20 @@ module Ingest
     MONTH_RANGE = (1..12).freeze
     DAY_RANGE = (1..31).freeze
 
+    EMPTY_PATTERNS = [].freeze
+
     module_function
 
     # Returns the storable path for a URI.
-    def call(uri)
+    #
+    # `patterns` are the site's declared route templates (see
+    # Ingest::PathPatternMatcher). Segments a pattern names are collapsed to that
+    # name exactly; everything a pattern does not cover — a site that declared
+    # none, or the tail past the last declared segment — falls through to the
+    # shape heuristics below.
+    def call(uri, patterns: EMPTY_PATTERNS)
       path = uri.path.presence || "/"
-      path = scrub_path(path)
+      path = scrub_path(path, patterns)
       path = "/" if path.blank?
       path = path.chomp("/") if path.length > 1 && path.end_with?("/")
       path.first(MAX_LENGTH)
@@ -95,16 +118,26 @@ module Ingest
       value.first(255)
     end
 
-    # Walks the segments left to right, carrying a small amount of state so the
-    # month and day of a date-organised URL survive while an isolated numeric id
-    # does not. `date_slot` is :none, :month (a year was just seen), or :day (a
-    # month was just seen).
-    def scrub_path(path)
+    # Declared route patterns first, shape heuristics for the rest.
+    #
+    # The matcher rewrites the leading segments its owner named — exactly, with
+    # no guessing — and reports how many it consumed. Whatever it did not cover
+    # (a site with no patterns, or the tail past the last declared segment) is
+    # walked by the heuristics, which carry a little state so the month and day of
+    # a date-organised URL survive while an isolated numeric id does not.
+    # `date_slot` is :none, :month (a year was just seen), or :day (a month was
+    # just seen).
+    def scrub_path(path, patterns)
+      segments = path.split("/")
+      matched, consumed = PathPatternMatcher.for(patterns).apply(segments)
+
       date_slot = :none
-      path.split("/").map do |segment|
+      heuristic = segments.drop(consumed).map do |segment|
         scrubbed, date_slot = scrub_segment(segment, date_slot)
         scrubbed
-      end.join("/")
+      end
+
+      (matched + heuristic).join("/")
     end
 
     def scrub_segment(segment, date_slot)
@@ -127,6 +160,7 @@ module Ingest
       end
 
       return [":hash",  :none] if decoded.match?(HEX_SEGMENT)
+      return [":token", :none] if decoded.match?(MIXED_TOKEN_SEGMENT)
       return [":token", :none] if decoded.match?(OPAQUE_SEGMENT)
 
       [segment, :none]

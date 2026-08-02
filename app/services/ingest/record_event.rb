@@ -123,7 +123,7 @@ module Ingest
         session_hash: identity.session_hash,
         is_entry: identity.entry?,
         hostname: url.host,
-        path: normalize_path(url),
+        path: normalize_path(site, url),
         country_code: Geolocation.country_code(@ip),
         screen_class: screen_class,
         revenue_cents: @payload[:v],
@@ -140,9 +140,10 @@ module Ingest
 
     # Both of these delegate to PathScrubber, which strips personal data out of
     # the path as well as the query string — see that class for why the query
-    # string alone is not enough.
-    def normalize_path(url)
-      PathScrubber.call(url)
+    # string alone is not enough. The site's declared route patterns let the
+    # scrubber collapse dynamic segments exactly rather than by shape.
+    def normalize_path(site, url)
+      PathScrubber.call(url, patterns: site.path_patterns)
     end
 
     def utm_params(url)

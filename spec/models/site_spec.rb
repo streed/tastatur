@@ -257,4 +257,37 @@ RSpec.describe Site do
       expect(site.update(extra_hostnames_list: "example.co.uk")).to be(true)
     end
   end
+
+  # The route patterns that let Ingest::PathScrubber collapse a site's dynamic
+  # segments exactly. Normalisation makes the stored form line up with how a real
+  # path is matched, and the validation keeps a malformed pattern — which would
+  # silently never match — out of the column.
+  describe "route patterns" do
+    let(:site) { create(:site) }
+
+    it "stores one pattern per line with a leading slash and no trailing slash" do
+      site.update!(path_patterns_list: "sites/:token\n/player/:id/\n\n  /blog/:year  ")
+      expect(site.path_patterns).to eq(["/sites/:token", "/player/:id", "/blog/:year"])
+    end
+
+    it "drops duplicates" do
+      site.update!(path_patterns_list: "/player/:id\n/player/:id")
+      expect(site.path_patterns).to eq(["/player/:id"])
+    end
+
+    it "accepts literal and named-parameter segments" do
+      expect(site.update(path_patterns_list: "/sites/:token/edit")).to be(true)
+    end
+
+    it "refuses a segment that is neither a literal nor a :name parameter" do
+      expect(site.update(path_patterns_list: "/sites/:")).to be(false)
+      expect(site.errors[:path_patterns]).to be_present
+    end
+
+    it "refuses more than the maximum number of patterns" do
+      many = Array.new(Site::MAX_PATH_PATTERNS + 1) { |i| "/p#{i}/:id" }.join("\n")
+      expect(site.update(path_patterns_list: many)).to be(false)
+      expect(site.errors[:path_patterns]).to be_present
+    end
+  end
 end
