@@ -17,6 +17,14 @@ RSpec.describe Ingest::PathScrubber do
         .to eq("/invoice/:uuid")
     end
 
+    # public_id is a UUID v4 for most models (CLAUDE.md §10), so a routed record
+    # is a UUID in a path segment. It must collapse whatever its case and wherever
+    # it sits, and a following segment must survive.
+    it "replaces a UUID regardless of case and keeps the rest of the path" do
+      expect(scrub("https://e.com/users/3F2504E0-4F89-41D3-9A0C-0305E82C3301/settings"))
+        .to eq("/users/:uuid/settings")
+    end
+
     it "replaces a long opaque token segment" do
       expect(scrub("https://e.com/reset/eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9abcdef"))
         .to eq("/reset/:token")
@@ -71,6 +79,11 @@ RSpec.describe Ingest::PathScrubber do
     it "collapses a low-entropy id that no heuristic could tell from a page name" do
       # /team/7 would otherwise be indistinguishable from a real page named "7".
       expect(scrub("https://e.com/team/7", patterns: ["/team/:id"])).to eq("/team/:id")
+    end
+
+    it "names a UUID segment after the pattern rather than the heuristic :uuid" do
+      expect(scrub("https://e.com/goals/3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+                   patterns: ["/goals/:id"])).to eq("/goals/:id")
     end
 
     it "scrubs the undeclared tail with the heuristics" do
