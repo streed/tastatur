@@ -1,7 +1,7 @@
 require "rails_helper"
 
 RSpec.describe Ingest::PathScrubber do
-  def scrub(url) = described_class.call(URI.parse(url))
+  def scrub(url, patterns: []) = described_class.call(URI.parse(url), patterns: patterns)
   def params(url) = described_class.query_params(URI.parse(url))
 
   describe "personal data in the path" do
@@ -17,6 +17,14 @@ RSpec.describe Ingest::PathScrubber do
         .to eq("/invoice/:uuid")
     end
 
+    # public_id is a UUID v4 for most models (CLAUDE.md §10), so a routed record
+    # is a UUID in a path segment. It must collapse whatever its case and wherever
+    # it sits, and a following segment must survive.
+    it "replaces a UUID regardless of case and keeps the rest of the path" do
+      expect(scrub("https://e.com/users/3F2504E0-4F89-41D3-9A0C-0305E82C3301/settings"))
+        .to eq("/users/:uuid/settings")
+    end
+
     it "replaces a long opaque token segment" do
       expect(scrub("https://e.com/reset/eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9abcdef"))
         .to eq("/reset/:token")
@@ -30,8 +38,62 @@ RSpec.describe Ingest::PathScrubber do
       expect(scrub("https://e.com/orders/1048576")).to eq("/orders/:id")
     end
 
+    # The leak this class exists to close: a small sequential id names an
+    # individual just as surely as a seven-digit one. Publishing /player/51 into
+    # the Top pages table enumerates the site's people, so the digit count must
+    # not decide whether a numeric segment is treated as a record id.
+    it "collapses a short numeric id the same as a long one" do
+      expect(scrub("https://e.com/player/51")).to eq("/player/:id")
+      expect(scrub("https://e.com/orders/5")).to eq("/orders/:id")
+      expect(scrub("https://e.com/team/172/profile")).to eq("/team/:id/profile")
+    end
+
+    # A 16-char Crockford token (Site#public_token) and a 24-char base64 slug
+    # (SharedLink#slug) both sit below the 25-char opaque threshold and are not
+    # pure hex, so the earlier rules published them into Top pages verbatim.
+    it "collapses a short high-entropy identifier that mixes letters and digits" do
+      expect(scrub("https://e.com/sites/FB1WRC5D0PFFHKZ5")).to eq("/sites/:token")
+      expect(scrub("https://e.com/sites/8TQTENJQQWHW8H40")).to eq("/sites/:token")
+    end
+
+    # Conservative on purpose: a page name written in camelCase carries no digit,
+    # so it is left alone. The exact tool for a digitless id is a declared pattern.
+    it "leaves a long digitless word segment alone" do
+      expect(scrub("https://e.com/FrequentlyAskedQuestions")).to eq("/FrequentlyAskedQuestions")
+    end
+
     it "decodes percent-encoding before deciding, so encoding cannot smuggle an email through" do
       expect(scrub("https://e.com/u/alice%40example.com")).to eq("/u/:email")
+    end
+  end
+
+  describe "declared route patterns" do
+    # The exact tool: the owner names the dynamic segment, so it collapses with no
+    # guessing and no page name can be mistaken for an id.
+    it "collapses a declared parameter to its name" do
+      expect(scrub("https://e.com/player/51", patterns: ["/player/:id"])).to eq("/player/:id")
+      expect(scrub("https://e.com/sites/FB1WRC5D0PFFHKZ5", patterns: ["/sites/:token"]))
+        .to eq("/sites/:token")
+    end
+
+    it "collapses a low-entropy id that no heuristic could tell from a page name" do
+      # /team/7 would otherwise be indistinguishable from a real page named "7".
+      expect(scrub("https://e.com/team/7", patterns: ["/team/:id"])).to eq("/team/:id")
+    end
+
+    it "names a UUID segment after the pattern rather than the heuristic :uuid" do
+      expect(scrub("https://e.com/goals/3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+                   patterns: ["/goals/:id"])).to eq("/goals/:id")
+    end
+
+    it "scrubs the undeclared tail with the heuristics" do
+      expect(scrub("https://e.com/player/51/orders/1048576", patterns: ["/player/:id"]))
+        .to eq("/player/:id/orders/:id")
+    end
+
+    it "leaves a path no pattern matches to the heuristics" do
+      expect(scrub("https://e.com/docs/why-cookieless", patterns: ["/player/:id"]))
+        .to eq("/docs/why-cookieless")
     end
   end
 
@@ -45,6 +107,22 @@ RSpec.describe Ingest::PathScrubber do
     it "keeps a year segment" do
       expect(scrub("https://e.com/2026/roundup")).to eq("/2026/roundup")
       expect(scrub("https://e.com/blog/2025/07/hello")).to eq("/blog/2025/07/hello")
+    end
+
+    # The month and day survive only in the position that makes them a date: run
+    # right after a year. This is what lets /player/51 collapse without taking
+    # /2026/07/15 down with it.
+    it "keeps the month and day that follow a year" do
+      expect(scrub("https://e.com/2026/07/15/roundup")).to eq("/2026/07/15/roundup")
+    end
+
+    it "collapses a short number that is not in a date position" do
+      # No preceding year, so 07 is a record id or a page number, not a month.
+      expect(scrub("https://e.com/section/07/detail")).to eq("/section/:id/detail")
+    end
+
+    it "collapses a number after a year when it cannot be a real month or day" do
+      expect(scrub("https://e.com/2026/99/roundup")).to eq("/2026/:id/roundup")
     end
 
     it "still collapses a long number that is not a plausible year" do

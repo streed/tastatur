@@ -337,9 +337,26 @@ Before "fixing" any of these, read the linked document.
   `docs/architecture/aggregates.md`
 - **Public shared dashboards ignore filter parameters.** Filtering someone else's
   audience is a re-identification tool.
-- **`Ingest::PathScrubber` keeps four-digit years** but collapses other long
-  numbers. Date-organised URLs are common and collapsing the year destroys the
-  top-pages report.
+- **`Ingest::PathScrubber` collapses every numeric path segment to `:id`** —
+  regardless of digit count, because `/player/51` names an individual just as
+  `/orders/1048576` does — with one date-shaped exception: a four-digit year
+  (1900–2100) is kept, as is the month and day that immediately follow it
+  (`/2026/07/15`). Date-organised URLs are common and collapsing the year
+  destroys the top-pages report; a bare short number outside that date run is a
+  record id and must not survive. The scrub is position-aware for this reason.
+- **A site's declared route patterns are the exact path scrubber, and the shape
+  heuristics are the fallback.** By shape alone a short or word-shaped id
+  (`/player/51`, a 16-char `Site#public_token` at `/sites/:token`) cannot be told
+  from a page name, so a site lists its route templates and
+  `Ingest::PathPatternMatcher` compiles them into a segment trie; `PathScrubber`
+  walks the trie first and hands the undeclared tail to the heuristics. Matching
+  is greedy (literal beats param, no backtracking), consumes only the declared
+  prefix, and an empty pattern list is a pure-heuristic scrub. Patterns are
+  per-site (`sites.path_patterns`, edited as a newline textarea like
+  `extra_hostnames`) and validated on the model. The heuristic fallback also
+  collapses a 16+ char alphanumeric run that mixes letters and digits, so an
+  undeclared site still loses its tokens; it stays digit-gated so a camelCase page
+  is left alone. `spec/lib/ingest/path_pattern_matcher_spec.rb`.
 - **The write buffer builds its INSERT by hand.** It is the ingest hot path;
   `insert_all` per event costs an order of magnitude. Values are all passed
   through `connection.quote` and the column list is a frozen constant. The

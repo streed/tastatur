@@ -79,7 +79,22 @@ class Site < ApplicationRecord
   validate :hostnames_are_not_public_suffixes, if: HOSTNAMES_CHANGED
   validate :hostnames_are_not_claimed_by_a_sibling, if: HOSTNAMES_CHANGED
 
-  # The settings form edits this as one newline-separated textarea, because a
+  # Declared route templates for Ingest::PathScrubber: "/sites/:token",
+  # "/player/:id", "/blog/:year/:month/:slug". A generous ceiling — real route
+  # tables are dozens of entries, and the cap only exists so a paste cannot make
+  # the trie unbounded.
+  MAX_PATH_PATTERNS = 200
+
+  # A pattern segment is either a literal (ordinary URL-path characters) or a
+  # named parameter (":id", ":token"). The parameter name is what the scrubbed
+  # path will show, so it is restricted to something readable in a report.
+  PATTERN_LITERAL = /\A[A-Za-z0-9\-._~%!$&'()*+,;=@]+\z/
+  PATTERN_PARAM = /\A:[a-z][a-z0-9_]*\z/
+  private_constant :PATTERN_LITERAL, :PATTERN_PARAM
+
+  validate :path_patterns_are_well_formed
+
+  # Both list fields are edited as one newline-separated textarea, because a
   # dynamic list widget is a lot of JavaScript for a field most sites never touch.
   def extra_hostnames_list
     extra_hostnames.to_a.join("\n")
@@ -89,8 +104,17 @@ class Site < ApplicationRecord
     self.extra_hostnames = value.to_s.split(/[\s,]+/).map { |h| normalize_hostname(h) }.compact_blank.uniq
   end
 
+  def path_patterns_list
+    path_patterns.to_a.join("\n")
+  end
+
+  def path_patterns_list=(value)
+    self.path_patterns = value.to_s.split(/[\r\n]+/).map(&:strip).compact_blank.uniq
+  end
+
   before_validation :normalize_domain
   before_validation :normalize_base_currency
+  before_validation :normalize_path_patterns
   before_validation :assign_public_token, on: :create
 
   scope :ordered, -> { order(:domain) }
@@ -177,6 +201,51 @@ class Site < ApplicationRecord
   def normalize_hostname(host)
     host.to_s.strip.downcase.sub(%r{\Ahttps?://}, "").split("/").first.to_s
         .sub(/:\d+\z/, "").sub(/\Awww\./, "").chomp(".").presence
+  end
+
+  # Store patterns with a leading slash and no trailing one, so "/sites/:token",
+  # "sites/:token" and "/sites/:token/" are one pattern — exactly the
+  # normalisation Ingest::PathScrubber applies to a real path before matching.
+  def normalize_path_patterns
+    self.path_patterns = path_patterns.to_a.filter_map do |pattern|
+      value = pattern.to_s.strip
+      next if value.blank?
+
+      value = "/#{value}" unless value.start_with?("/")
+      value = value.chomp("/") if value.length > 1
+      value
+    end.uniq
+  end
+
+  def path_patterns_are_well_formed
+    if path_patterns.size > MAX_PATH_PATTERNS
+      errors.add(:path_patterns, "cannot have more than #{MAX_PATH_PATTERNS} entries")
+      return
+    end
+
+    path_patterns.each do |pattern|
+      next if pattern_segments_valid?(pattern)
+
+      errors.add(:path_patterns,
+                 "#{pattern.inspect} is not a valid route pattern " \
+                 "(use segments like /sites/:token or /player/:id)")
+    end
+  end
+
+  # Split like a path ("/sites/:token" => ["", "sites", ":token"]); the leading
+  # empty segment is the root slash. Every other segment must be a literal or a
+  # named parameter.
+  def pattern_segments_valid?(pattern)
+    segments = pattern.split("/")
+    return false if segments.empty?
+
+    segments.each_with_index.all? do |segment, index|
+      if index.zero?
+        segment.empty?
+      else
+        segment.match?(PATTERN_LITERAL) || segment.match?(PATTERN_PARAM)
+      end
+    end
   end
 
   def extra_hostnames_are_well_formed

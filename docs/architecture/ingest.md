@@ -133,6 +133,7 @@ sufficient — real sites put personal data in the **path**:
 /reset-password/eyJhbGciOiJIUzI1NiJ9...  →  /reset-password/:token
 /invoice/7f3a91c2-4b8e-4c1a-9f2d-...     →  /invoice/:uuid
 /orders/1048576                          →  /orders/:id
+/player/51                               →  /player/:id
 /f/9f86d081884c7d659a2feaa0c55ad015      →  /f/:hash
 ```
 
@@ -143,10 +144,34 @@ before classification, so encoding cannot smuggle an email through.
 The collapse is a reporting win as well: a million distinct invoice URLs are
 useless as a top-pages table, and `/invoice/:uuid` is what the site owner wanted.
 
-One deliberate exception: **four-digit numbers in 1900–2100 are kept as years.**
-Date-organised URLs are extremely common (`/2026/07/roundup`, `/blog/2025/hello`)
-and collapsing the year would destroy the top-pages report for every publication
-that uses them. This was caught by a spec, not by inspection.
+**Every numeric segment collapses to `:id`, whatever its length** — `/player/51`
+identifies a person as surely as `/orders/1048576` does, so the digit count is
+not allowed to decide. The one exception is date-shaped: **a four-digit year in
+1900–2100 is kept, and so are the month (1–12) and day (1–31) that immediately
+follow it** (`/2026/07/15/roundup`). Date-organised URLs are extremely common
+(`/2026/07/roundup`, `/blog/2025/hello`) and collapsing the year would destroy
+the top-pages report for every publication that uses them. A short number that is
+*not* in that date run — `/section/07/detail`, `/player/51` — is a record id or a
+page number and collapses. That is why the scrub is position-aware rather than a
+per-segment regex, and it is enforced by a spec, not by inspection. (The earlier
+rule kept every 1–3 digit number to dodge the year case, which silently published
+small sequential ids like `/player/51` into the Top pages table.)
+
+**Short, low-entropy identifiers are the shape heuristics' blind spot, and
+declared route patterns are the exact tool.** A 16-char `Site#public_token`
+(`/sites/FB1WRC5D0PFFHKZ5`) and a 24-char `SharedLink#slug` both sit below the
+25-char opaque threshold, and `/player/51` is a two-digit id that no rule can
+tell from a page literally named `51`. A heuristic aggressive enough to catch
+every one of those would also collapse real page names. So a site can declare its
+route templates — `/sites/:token`, `/player/:id`, `/blog/:year/:month/:slug` —
+and `Ingest::PathPatternMatcher` compiles them into a segment **trie**. The
+scrubber walks the trie first, rewriting each declared segment to its name
+exactly (with no guessing and nothing leaked), and hands whatever the patterns do
+not cover — an undeclared site, or the tail past the last declared segment — to
+the shape heuristics. As a fallback for sites that declare nothing, the opaque
+rule now also collapses a 16+ char alphanumeric run that mixes letters and digits
+(which catches the token and slug shapes), while staying conservative enough to
+leave a digitless camelCase page like `/FrequentlyAskedQuestions` alone.
 
 Query parameters have an allowlist (`utm_*`, `ref`) *and* a deny-list that wins
 over it (`token`, `code`, `key`, `secret`, `password`, `email`, `phone`,
