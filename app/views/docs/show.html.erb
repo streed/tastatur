@@ -79,7 +79,7 @@
                            lede: "Paste this into your <head>. That is the entire installation, and nothing below is required to get numbers." } do %>
         <%= render "docs/snippet", code: %(<script defer data-site="#{token}" src="#{tracker}"></script>) %>
         <p class="text-[14px] text-ink-2 leading-relaxed">
-          <code>defer</code> keeps it off the critical path. The script is about 4.4 KB over the
+          <code>defer</code> keeps it off the critical path. The script is about 3.6 KB over the
           wire and makes one request per pageview. Visits from
           <code>localhost</code>, private network ranges and <code>file:</code> are ignored, so
           local development will not appear in your numbers.

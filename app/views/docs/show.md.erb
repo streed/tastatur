@@ -21,7 +21,7 @@ below is required to get numbers.
 <script defer data-site="<%= token %>" src="<%= tracker %>"></script>
 ```
 
-`defer` keeps it off the critical path. The script is about 4.4 KB over the
+`defer` keeps it off the critical path. The script is about 3.6 KB over the
 wire and makes one request per pageview. Visits from `localhost`, private
 network ranges and `file:` are ignored, so local development will not appear in
 your numbers.
