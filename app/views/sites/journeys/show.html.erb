@@ -1,0 +1,132 @@
+<% content_for :title, "Journeys · #{@site.domain}" %>
+
+<div class="shell max-w-4xl">
+  <div class="flex flex-wrap items-end justify-between gap-4 mb-8 pt-5 rule-heavy">
+    <div class="mt-5">
+      <h1 class="text-2xl font-semibold">Journeys</h1>
+      <p class="label mt-2">
+        <%= @site.domain %><span class="mx-2">·</span><%= @period.label %>
+      </p>
+    </div>
+    <div class="flex gap-3">
+      <div class="segmented">
+        <% %w[7d 30d 90d].each do |key| %>
+          <%# `view` tells this apart from the dashboard's own period control, the
+              same way the funnel page does: a flow is read over a different span
+              than a traffic report and one number for both would hide that. -%>
+          <%= link_to Analytics::Period::PRESETS[key].sub("Last ", ""),
+                      journey_url(@site, @path, period: Analytics::Period.parse(key, site: @site)),
+                      class: "segment", "aria-current": (@period.key == key).to_s,
+                      data: { analytics_event: "Period Changed",
+                              analytics_props: { period: key, view: "journeys" } } %>
+        <% end %>
+      </div>
+      <%= link_to "Dashboard", site_path(@site), class: "btn btn-sm" %>
+    </div>
+  </div>
+
+  <%# --- Where to start ------------------------------------------------------
+      Entry pages, because that is where a journey begins. The list comes from
+      Analytics::Breakdown, so it is already k-anonymous — see the controller. -%>
+  <% if @start_pages.any? %>
+    <div class="card mb-6">
+      <div class="card-head">
+        <h2 class="text-sm font-semibold">Start from</h2>
+        <span class="label">Where visits begin</span>
+      </div>
+      <div class="card-body flex flex-wrap gap-2">
+        <% @start_pages.rows.each do |row| %>
+          <% active = @path.first == row.value %>
+          <%= link_to row.label, journey_url(@site, [row.value]),
+                      class: "segment #{'font-semibold' if active}",
+                      "aria-current": active.to_s,
+                      data: { analytics_event: "Journey Started" } %>
+        <% end %>
+      </div>
+    </div>
+  <% end %>
+
+  <% if @levels.any? %>
+    <%# --- The walked path ---------------------------------------------------
+        Each hop links back to itself, so stepping back up the tree is one click
+        rather than a browser-history game. Suppressed at depth one, where it
+        would be a lone "/" repeating the card heading directly beneath it. -%>
+    <% if @path.size > 1 %>
+      <nav class="mb-6 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm" aria-label="Walked path">
+        <% @path.each_with_index do |segment, index| %>
+          <% if index.positive? %><span class="text-muted" aria-hidden="true">→</span><% end %>
+          <% if index == @path.size - 1 %>
+            <span class="font-semibold"><%= segment %></span>
+          <% else %>
+            <%= link_to segment, journey_url(@site, @path.first(index + 1)), class: "link" %>
+          <% end %>
+        <% end %>
+      </nav>
+    <% end %>
+
+    <div class="space-y-6">
+      <% @levels.each_with_index do |result, depth| %>
+        <div class="card">
+          <div class="card-head">
+            <h2 class="text-sm font-semibold">
+              <% if depth.zero? %>
+                After <%= result.anchor %>
+              <% else %>
+                After <%= @path.first(depth + 1).join(" → ") %>
+              <% end %>
+            </h2>
+            <span class="label"><%= pluralize(metric_number(result.visitors), "visitor") %> here</span>
+          </div>
+
+          <%= render "sites/flow_branches", site: @site, result: result,
+                     expandable: depth < Analytics::PageFlow::MAX_DEPTH - 1,
+                     chosen: @path[depth + 1] %>
+        </div>
+      <% end %>
+    </div>
+
+    <% if @path.size >= Analytics::PageFlow::MAX_DEPTH %>
+      <p class="notice mt-6">
+        This is as deep as the tree goes. Six hops is already further than a report stays
+        readable, and each one divides the crowd again — start from a page further along
+        instead to see what happens after it.
+      </p>
+    <% end %>
+
+    <p class="text-[12px] text-muted mt-6 max-w-2xl leading-relaxed">
+      Each row is the page visitors saw <em>immediately</em> next, within the same visit — not
+      merely somewhere later on, which is what a funnel measures. Percentages are shares of the
+      visitors at that point and add up to 100%. Repeated views of the same page are treated as
+      one step, so a reload is not a journey. Pages only; custom events are not steps here.
+    </p>
+
+  <%# No start page to open with. Two quite different reasons, and telling them
+      apart is the whole point — one is a quiet site, the other is a suppressed
+      one, and "No data." for both would be a lie half the time. -%>
+  <% elsif @start_pages.suppressed? %>
+    <div class="card card-body text-center py-14">
+      <p class="font-semibold">Nothing to show yet, but not because nothing happened.</p>
+      <p class="text-sm text-ink-2 mt-2 max-w-md mx-auto leading-relaxed">
+        <%= pluralize(@start_pages.suppressed_rows, "entry page") %> withheld
+        (<%= metric_number(@start_pages.suppressed_visitors) %> visitors), because a page seen by
+        fewer than <%= @start_pages.threshold %> visitors can identify the people who saw it. A
+        journey narrows the crowd further at every hop, so this report needs more traffic than the
+        dashboard does before it can show anything.
+      </p>
+      <div class="mt-6">
+        <%= link_to "Site settings", edit_site_path(@site), class: "btn btn-sm" %>
+      </div>
+    </div>
+  <% else %>
+    <div class="card card-body text-center py-14">
+      <p class="font-semibold">No journeys yet.</p>
+      <p class="text-sm text-ink-2 mt-2 max-w-md mx-auto leading-relaxed">
+        Once visits arrive, this shows where people go from each page — the home page to pricing
+        to checkout — one hop at a time.
+      </p>
+      <div class="mt-6">
+        <%= link_to "Dashboard", site_path(@site), class: "btn btn-quiet" %>
+      </div>
+    </div>
+  <% end %>
+</div>

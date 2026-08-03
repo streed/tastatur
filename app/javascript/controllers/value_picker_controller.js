@@ -7,10 +7,12 @@ import { Controller } from "@hotwired/stimulus"
 // the combobox, because the two are one question: "pageview" means the value is
 // a path and "event" means it is a custom event name, and the list has to swap
 // when that changes. On the goal form that element is the form; on a funnel it
-// is a single step row, of which there may be eight, each with its own kind.
+// is a single alternative within a step — a step is satisfied by any one of
+// several, each with its own kind, so eight steps can hold rather more than
+// eight of these.
 //
 // Options are read from one <script type="application/json"> elsewhere on the
-// page, named by `sourceValue`. Eight step rows sharing one payload is the
+// page, named by `sourceValue`. Dozens of rows sharing one payload is the
 // reason for the indirection — see OffersKnownValues.
 //
 // The input is never constrained to the list. Free text is the common case for

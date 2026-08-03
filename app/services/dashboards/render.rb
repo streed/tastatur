@@ -27,7 +27,7 @@ module Dashboards
     end
 
     def call
-      @widgets = @dashboard.dashboard_widgets.includes(funnel: :funnel_steps).to_a
+      @widgets = @dashboard.dashboard_widgets.includes(funnel: { funnel_steps: :conditions }).to_a
 
       Success(
         Report.new(
@@ -103,7 +103,8 @@ module Dashboards
       case Analytics::FunnelReport.call(funnel: widget.funnel, period: @period,
                                         filters: widget.saved_filters)
       in Success(report) then ok(widget, report)
-      in Failure(:not_enough_steps) then WidgetResult.new(widget: widget, status: :invalid)
+      in Failure(:not_enough_steps) | Failure(:step_without_a_match)
+        WidgetResult.new(widget: widget, status: :invalid)
       end
     end
 

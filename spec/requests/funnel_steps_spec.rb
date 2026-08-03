@@ -28,15 +28,38 @@ RSpec.describe "Funnel steps", type: :request do
   end
 
   # Mirrors what the rendered form submits: every existing row, plus the spare
-  # blank rows, keyed by index.
-  def step_attrs(existing, spares: 3, extra: {})
-    rows = existing.each_with_index.to_h do |step, i|
-      [i.to_s, { "id" => step.id.to_s, "name" => step.name, "kind" => step.kind,
-                 "match_value" => step.match_value, "match_type" => step.match_type }]
+  # blank rows, keyed by index. A step's match values are one level further down
+  # now — a step is satisfied by any one of its conditions — so a blank spare row
+  # is a blank step wrapped around a blank condition, which is the shape the
+  # reject_if rules have to see through.
+  def condition_attrs(existing, spares: 0)
+    rows = existing.each_with_index.to_h do |condition, i|
+      [i.to_s, { "id" => condition.id.to_s, "kind" => condition.kind,
+                 "match_value" => condition.match_value, "match_type" => condition.match_type }]
     end
     spares.times do |i|
       rows[(existing.size + i).to_s] =
-        { "name" => "", "kind" => "pageview", "match_value" => "", "match_type" => "exact" }
+        { "kind" => "pageview", "match_value" => "", "match_type" => "exact" }
+    end
+    rows
+  end
+
+  # A brand new step row, as the Add button's clone submits it.
+  def step_row(name, *matches)
+    conditions = matches.each_with_index.to_h do |match, i|
+      [i.to_s, { "kind" => "pageview", "match_type" => "exact" }.merge(match.transform_keys(&:to_s))]
+    end
+    { "name" => name, "conditions_attributes" => conditions }
+  end
+
+  def step_attrs(existing, spares: 3, extra: {})
+    rows = existing.each_with_index.to_h do |step, i|
+      [i.to_s, { "id" => step.id.to_s, "name" => step.name,
+                 "conditions_attributes" => condition_attrs(step.conditions.to_a) }]
+    end
+    spares.times do |i|
+      rows[(existing.size + i).to_s] =
+        { "name" => "", "conditions_attributes" => condition_attrs([], spares: 1) }
     end
     extra.each { |k, v| rows[k] = v }
     rows
@@ -73,8 +96,7 @@ RSpec.describe "Funnel steps", type: :request do
   describe "adding a step" do
     it "adds one by filling in a spare row" do
       rows = step_attrs(funnel.funnel_steps.to_a)
-      rows["2"] = { "name" => "Signed up", "kind" => "event",
-                    "match_value" => "Signup", "match_type" => "exact" }
+      rows["2"] = step_row("Signed up", kind: "event", match_value: "Signup")
 
       submit rows
 
@@ -84,8 +106,8 @@ RSpec.describe "Funnel steps", type: :request do
 
     it "adds several at once" do
       rows = step_attrs(funnel.funnel_steps.to_a)
-      rows["2"] = { "name" => "Third", "kind" => "pageview", "match_value" => "/c", "match_type" => "exact" }
-      rows["3"] = { "name" => "Fourth", "kind" => "pageview", "match_value" => "/d", "match_type" => "exact" }
+      rows["2"] = step_row("Third", match_value: "/c")
+      rows["3"] = step_row("Fourth", match_value: "/d")
 
       submit rows
       expect(funnel.reload.funnel_steps.count).to eq(4)
@@ -94,7 +116,7 @@ RSpec.describe "Funnel steps", type: :request do
     it "numbers steps contiguously even when a middle spare row is skipped" do
       rows = step_attrs(funnel.funnel_steps.to_a)
       # Fill the SECOND spare and leave the first blank.
-      rows["3"] = { "name" => "Later", "kind" => "pageview", "match_value" => "/z", "match_type" => "exact" }
+      rows["3"] = step_row("Later", match_value: "/z")
 
       submit rows
 
@@ -156,13 +178,103 @@ RSpec.describe "Funnel steps", type: :request do
       existing = funnel.funnel_steps.to_a
       rows = step_attrs(existing)
       rows["0"]["_destroy"] = "1"
-      rows["2"] = { "name" => "Replacement", "kind" => "pageview",
-                    "match_value" => "/new", "match_type" => "exact" }
+      rows["2"] = step_row("Replacement", match_value: "/new")
 
       submit rows
 
       expect(funnel.reload.funnel_steps.map(&:name)).to eq(%w[Priced Replacement])
       expect(funnel.funnel_steps.map(&:position)).to eq([1, 2])
+    end
+  end
+
+  # A step is satisfied by ANY of its alternatives, and they are a second nested
+  # form inside the first. The rows below are what that one submits.
+  describe "a step's alternatives" do
+    def conditions_of(step_name)
+      funnel.reload.funnel_steps.find { |step| step.name == step_name }.conditions
+    end
+
+    it "offers a control to add one" do
+      get "/sites/#{site.to_param}/funnels/#{funnel.to_param}/edit"
+
+      expect(response.body).to include("Add alternative")
+      # A placeholder of its own, because the step template's clone replaces the
+      # OUTER one throughout the markup it copies.
+      expect(response.body).to include("NEW_CONDITION")
+    end
+
+    it "adds one to a saved step" do
+      rows = step_attrs(funnel.funnel_steps.to_a)
+      rows["1"]["conditions_attributes"]["1"] =
+        { "kind" => "event", "match_value" => "Pricing Viewed", "match_type" => "exact" }
+
+      submit rows
+
+      expect(response).to redirect_to(site_funnel_path(site, funnel))
+      expect(conditions_of("Priced").map(&:match_value)).to eq(["/pricing", "Pricing Viewed"])
+      expect(conditions_of("Priced").map(&:position)).to eq([1, 2])
+    end
+
+    it "creates a step with alternatives in one go" do
+      rows = step_attrs(funnel.funnel_steps.to_a)
+      rows["2"] = step_row("Signed up",
+                           { match_value: "/welcome" },
+                           { kind: "event", match_value: "Signup" })
+
+      submit rows
+
+      expect(conditions_of("Signed up").map(&:match_value)).to eq(["/welcome", "Signup"])
+      expect(conditions_of("Signed up").map(&:kind)).to eq(%w[pageview event])
+    end
+
+    it "removes the ticked one and renumbers the rest" do
+      rows = step_attrs(funnel.funnel_steps.to_a)
+      rows["1"]["conditions_attributes"]["1"] =
+        { "kind" => "pageview", "match_value" => "/plans", "match_type" => "exact" }
+      submit rows
+
+      rows = step_attrs(funnel.reload.funnel_steps.to_a)
+      rows["1"]["conditions_attributes"]["0"]["_destroy"] = "1"
+      submit rows
+
+      expect(conditions_of("Priced").map(&:match_value)).to eq(["/plans"])
+      expect(conditions_of("Priced").map(&:position)).to eq([1])
+    end
+
+    # The blank spare row a step opens with must not fail the save, exactly as
+    # for steps themselves — that bug, one level down.
+    it "ignores a blank spare row" do
+      rows = step_attrs(funnel.funnel_steps.to_a)
+      rows["1"]["conditions_attributes"]["1"] =
+        { "kind" => "pageview", "match_value" => "", "match_type" => "exact" }
+
+      submit rows
+
+      expect(response).to redirect_to(site_funnel_path(site, funnel))
+      expect(conditions_of("Priced").count).to eq(1)
+    end
+
+    # ...but a step left with nothing at all to match is a step that can never
+    # be reached, and saving one produces a funnel the report refuses to run.
+    it "refuses a step whose only alternative was cleared" do
+      rows = step_attrs(funnel.funnel_steps.to_a)
+      rows["1"]["conditions_attributes"]["0"]["_destroy"] = "1"
+
+      submit rows
+
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(conditions_of("Priced").count).to eq(1)
+    end
+
+    # Otherwise the form comes back with the error and no field to answer it in.
+    it "re-renders a row to type into when the last one was rejected" do
+      rows = step_attrs(funnel.funnel_steps.to_a)
+      rows["1"]["conditions_attributes"]["0"]["_destroy"] = "1"
+
+      submit rows
+
+      expect(response.body).to include("Add alternative")
+      expect(response.body.scan(/\[conditions_attributes\]\[\d+\]\[match_value\]/).size).to be >= 2
     end
   end
 
@@ -173,7 +285,11 @@ RSpec.describe "Funnel steps", type: :request do
     # the server on its own.
     expect(response.body).to include("<template")
     expect(response.body).to include("NEW_RECORD")
-    # Exactly the two saved steps, no spare blanks padding the form out.
-    expect(response.body.scan(/data-nested-form-row/).size).to eq(3) # 2 real + 1 template
+    # Exactly the two saved steps, no spare blanks padding the form out. Counted
+    # by the fields a real row submits: the template's are keyed by the
+    # placeholder rather than a number, so they cannot be mistaken for one.
+    expect(response.body.scan(/funnel_steps_attributes\]\[\d+\]\[name\]/).size).to eq(2)
+    expect(response.body.scan(/funnel_steps_attributes\]\[\d+\]\[conditions_attributes\]\[\d+\]\[match_value\]/).size)
+      .to eq(2)
   end
 end

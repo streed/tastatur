@@ -1,0 +1,96 @@
+<%# One level of the navigation flow: the pages visitors went to next, or came
+    from. Shared by the Journeys tree and the two dashboard panels that appear
+    under a page filter, so the suppression wording cannot drift between them —
+    the same reason sites/_breakdown is one partial rather than three.
+
+    Locals:
+      result     Analytics::PageFlow::Result
+      site
+      expandable whether a branch links one hop deeper (the tree) or is a
+                 read-only row (the dashboard panels)
+      chosen     optional; the branch the reader has already walked into, marked
+                 so the route being followed is findable in a list of eight
+
+    The bar is scaled to the branch's share OF THIS NODE, not to the largest
+    row. That differs from sites/_breakdown on purpose: breakdown rows overlap
+    (one visitor is in several) and only their ranking is comparable, whereas
+    flow branches partition the node and do sum to 100%. A bar that means "a
+    third of the people here" is the whole reading of this panel. -%>
+<% prefix = result.prefix
+   chosen = local_assigns[:chosen] %>
+
+<% if result.any? %>
+  <div>
+    <% result.branches.each_with_index do |branch, index| %>
+      <% walked = !branch.terminal? && branch.path == chosen %>
+      <% row = capture do %>
+        <span class="bar-fill" style="width: <%= branch.percentage.clamp(0, 100) %>%"></span>
+
+        <span class="bar-label <%= "text-muted" if branch.terminal? %> <%= "font-semibold" if walked %>">
+          <%= flow_branch_label(branch, result.direction) %>
+          <% if flow_return?(branch, prefix) %>
+            <%# Distinguishes a loop from progress. See DashboardHelper#flow_return?. -%>
+            <span class="label ml-2">returned</span>
+          <% end %>
+        </span>
+
+        <span class="flex items-center gap-3 sm:gap-5 num shrink-0">
+          <span class="font-medium"><%= metric_number(branch.visitors) %></span>
+          <span class="text-muted w-12 text-right"><%= branch.percentage.round %>%</span>
+          <%# The affordance is present on every row so the column does not
+              ragged-edge, and invisible where there is nothing to open. -%>
+          <span class="w-2 text-muted" aria-hidden="true"><%= "›" if expandable && !branch.terminal? %></span>
+        </span>
+      <% end %>
+
+      <% if expandable && !branch.terminal? %>
+        <%# Only the SHAPE of the interaction is reported, never the path — the
+            rule app/javascript/controllers/analytics_controller.js states and
+            sites/_breakdown follows for row values. Depth is our vocabulary;
+            the customer's URLs are not. -%>
+        <%= link_to journey_url(site, prefix + [branch.path]), class: "bar-row",
+                    title: "Where visitors went after #{branch.path}",
+                    "aria-current": walked.to_s,
+                    data: { analytics_event: "Journey Expanded",
+                            analytics_props: { depth: prefix.size + 1, position: index + 1 } } do %><%= row %><% end %>
+      <% else %>
+        <div class="bar-row"><%= row %></div>
+      <% end %>
+    <% end %>
+  </div>
+
+  <% if result.suppressed? %>
+    <p class="px-3 py-2.5 text-[11px] text-muted border-t border-rule">
+      <%= pluralize(result.suppressed_rows, "branch", plural: "branches") %> withheld
+      (<%= metric_number(result.suppressed_visitors) %> visitors)
+      because each was taken by fewer than <%= result.threshold %> visitors.
+      <%= link_to "Why?", privacy_path, class: "underline hover:text-ink",
+                  data: { turbo_frame: "_top" } %>
+    </p>
+  <% end %>
+
+<%# EVERY branch was withheld. Not the same as nobody going anywhere, and it
+    must not say so — the same three-state rule sites/_breakdown carries and
+    spec/requests/breakdown_suppression_spec.rb pins. It is reached more often
+    here than on any breakdown panel, because each hop divides the crowd again:
+    a site comfortably over the threshold on Top pages will still run out of
+    people three levels into a tree. Saying which hop ran out is the useful
+    part. -%>
+<% elsif result.suppressed? %>
+  <div class="px-5 py-8 text-center">
+    <p class="text-sm text-ink-2">Nothing to show here, but not because nobody went anywhere.</p>
+    <p class="text-[12px] text-muted mt-2 max-w-sm mx-auto leading-relaxed">
+      <%= pluralize(result.suppressed_rows, "branch", plural: "branches") %> withheld
+      (<%= metric_number(result.suppressed_visitors) %> visitors), because a route taken by
+      fewer than <%= result.threshold %> visitors can identify the people who took it — and a
+      journey narrows the crowd at every step.
+      You can lower the threshold in
+      <%= link_to "site settings", edit_site_path(site), class: "underline hover:text-ink",
+                  data: { turbo_frame: "_top" } %>.
+      <%= link_to "Why?", privacy_path, class: "underline hover:text-ink",
+                  data: { turbo_frame: "_top" } %>
+    </p>
+  </div>
+<% else %>
+  <p class="px-5 py-10 text-center text-sm text-muted">No data.</p>
+<% end %>

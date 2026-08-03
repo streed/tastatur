@@ -262,6 +262,17 @@ The picker needs the `kind` control and the field inside one
 one per field — see `OffersKnownValues`, which is a `helper_method` and not a
 `before_action` so a save that redirects never pays for the scan.
 
+**`nested-form` nests inside itself, and two things make that work.** The funnel
+form is a list of steps, each of which is a list of alternatives that satisfy it
+(§12). Stimulus scopes targets and actions to the *nearest* controller of an
+identifier, so the outer list does not steal the inner one's `<template>` — but
+anything that walks the DOM itself must filter by `closest('[data-controller~=
+"nested-form"]') === this.element`, or a step's alternatives are counted as steps.
+And the two levels need **different template placeholders**
+(`data-nested-form-placeholder-value`): the outer Add replaces its own throughout
+the markup it clones, and would consume the inner one on the way past, leaving
+every later alternative added to that step under the same param key.
+
 ### 10. Public identifiers are never primary keys
 
 Nothing routable is addressed by its `id`. Sequential integers in URLs tell
@@ -337,6 +348,43 @@ Before "fixing" any of these, read the linked document.
   `docs/architecture/aggregates.md`
 - **Public shared dashboards ignore filter parameters.** Filtering someone else's
   audience is a re-identification tool.
+- **`Analytics::PageFlow` counts the page seen IMMEDIATELY next, and that is what
+  makes it not a funnel.** The tempting refactor is to reuse `FunnelReport`'s
+  chained CTE, whose steps are satisfied by a match anywhere later in the visit.
+  Do that and a visitor who went `/` → `/docs` → `/pricing` lands in both the
+  `/docs` and the `/pricing` branch of the same node, the branches sum past the
+  node's own visitor count, and the percentages exceed 100% — a co-occurrence
+  table drawn as a flow diagram. Each level joins on `n + 1`, and
+  `spec/services/analytics/page_flow_spec.rb` pins exactly that case. Three
+  further halves that are load-bearing: it walks `session_hash`, not
+  `visitor_hash`, so a journey is one sitting and survives the midnight salt
+  rotation intact; consecutive repeats of one path collapse, or the commonest
+  "next page" for every page on the site is itself; and the anchor CTE is
+  `DISTINCT ON (session_hash)` rather than a `GROUP BY` including `visitor_hash`,
+  because a visit spanning that rotation holds two visitor hashes and would
+  otherwise be walked, and counted, twice. Suppression applies at every level and
+  includes the terminal "left the site" row — the node total is on screen, so
+  that row is `total − Σvisible` and is precisely what complementary suppression
+  exists to protect. There is deliberately **no `(site_id, session_hash,
+  occurred_at)` index**: it was built and measured, and the planner declined it in
+  favour of `idx_events_site_time` plus a sort. Re-measure before adding it. Note
+  also that `CREATE INDEX CONCURRENTLY` is refused outright on a hypertable —
+  `WITH (timescaledb.transaction_per_chunk)` is the form that works.
+- **A funnel step's matcher lives in `funnel_step_conditions`, not on the step,**
+  and the `kind` / `match_value` / `match_type` columns were REMOVED from
+  `funnel_steps` rather than kept alongside it. A step is satisfied by any ONE of
+  its conditions, each with its own kind — "the /welcome pageview OR the Signup
+  event" — because real flows branch, and without OR such a flow has to be split
+  into one funnel per branch, which cannot be added back together: a visitor who
+  took both is counted in both. Restoring a matcher onto the step would give it
+  two places to say what it matches, one of which the report reads. The OR is the
+  step's predicate inside the same chained CTE, so ordering is unchanged, and the
+  kind test stays *inside* each branch or a custom event named `/welcome` starts
+  satisfying a step that asks for the page. `docs/architecture/funnels.md`
+- **The Journeys report is not reachable from a public shared dashboard,** and
+  the flow panels never render there. A journey is a conjunction that narrows the
+  crowd at every hop, so it is a sharper re-identification tool than any single
+  filter — the reason the bullet above exists, one step further along.
 - **`Ingest::PathScrubber` collapses every numeric path segment to `:id`** —
   regardless of digit count, because `/player/51` names an individual just as
   `/orders/1048576` does — with one date-shaped exception: a four-digit year

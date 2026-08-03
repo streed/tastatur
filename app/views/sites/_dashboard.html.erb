@@ -122,6 +122,50 @@
   <% end %>
 </div>
 
+<%# --- Page flow -------------------------------------------------------------
+    Only present when the dashboard is scoped to one page, because these two
+    panels are about that page's neighbours — see Analytics::Dashboard#flows,
+    which is also why `report.flows` is empty on the ordinary dashboard and on
+    every public shared dashboard.
+
+    Given its own heading rather than being appended to the breakdown grid: those
+    panels are about who the audience is, these are about the route they took
+    through the site, and the two read differently enough to be worth separating. -%>
+<% if report.flows.present? %>
+  <div class="mt-6">
+    <div class="flex flex-wrap items-baseline gap-3 mb-4">
+      <h2 class="text-sm font-semibold">Page flow</h2>
+      <%# Names the page, so the panels cannot be misread as site-wide. -%>
+      <p class="label">around <%= report.filters["page"] %></p>
+      <% if drillable %>
+        <%# `_top` because this partial renders inside the "dashboard" turbo-frame:
+            the journeys page has no matching frame, so an in-frame navigation
+            would replace the dashboard with "Content Missing". Same rule as the
+            Manage link on the goals card above. -%>
+        <%= link_to "Follow the whole journey →",
+                    site_journeys_path(site, path: [report.filters["page"]], **report.period.to_param),
+                    class: "label hover:text-ink", data: { turbo_frame: "_top" } %>
+      <% end %>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-6">
+      <% report.flows.each do |panel| %>
+        <div class="card">
+          <div class="card-head">
+            <h3 class="text-sm font-semibold"><%= panel[:title] %></h3>
+            <span class="label"><%= panel[:subtitle] %></span>
+          </div>
+          <%# expandable: false — a dashboard panel states the one hop. Walking
+              further is what the Journeys screen is for, and the link above goes
+              there. -%>
+          <%= render "sites/flow_branches", site: site, result: panel[:result],
+                     expandable: false %>
+        </div>
+      <% end %>
+    </div>
+  </div>
+<% end %>
+
 <%# --- Custom event properties ---------------------------------------------
     Only present when the dashboard is scoped to one custom event, because a
     property means nothing detached from the event that carried it — see

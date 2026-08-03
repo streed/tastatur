@@ -1,13 +1,14 @@
 <%# One funnel step row. Rendered both for real rows and, with a placeholder
     index, into the <template> the Add button clones.
 
-    The value-picker controller is per ROW, not per form: each step has its own
-    kind, so each needs its own list. Stimulus connects a cloned row's
-    controller when the Add button inserts it, and disconnects it when a row is
-    removed, so nothing here has to be re-initialised by hand. -%>
-<div class="border border-rule p-4 space-y-4" data-nested-form-row
-     data-controller="value-picker"
-     data-value-picker-source-value="<%= OffersKnownValues::KNOWN_VALUES_DOM_ID %>">
+    A step holds a LIST of alternatives, any one of which satisfies it, so this
+    row contains a second nested-form controller nested inside the one managing
+    the steps themselves. Stimulus scopes targets and actions to the nearest
+    controller of the same identifier, so the two do not reach into each other —
+    the one thing that has to differ is the template placeholder, because the
+    outer Add replaces its own placeholder throughout the markup it clones and
+    would otherwise consume the inner one on the way past. -%>
+<div class="border border-rule p-4 space-y-4" data-nested-form-row>
   <div class="flex items-center justify-between">
     <span class="label" data-nested-form-position>Step</span>
 
@@ -22,18 +23,37 @@
     </button>
   </div>
 
-  <div class="grid sm:grid-cols-2 gap-4">
-    <%= step.field :name, "Label", placeholder: "Saw pricing" %>
-    <%= step.field :kind, "Type", as: :select,
-                   choices: [["Pageview", "pageview"], ["Custom event", "event"]],
-                   data: { value_picker_target: "kind",
-                           action: "change->value-picker#kindChanged" } %>
-  </div>
+  <%= step.field :name, "Label", placeholder: "Saw pricing" %>
 
-  <div class="grid sm:grid-cols-3 gap-4">
-    <%= step.field :match_value, "Path or event name", as: :combobox, placeholder: "/pricing",
-                   wrapper: "sm:col-span-2" %>
-    <%= step.field :match_type, "Match", as: :select,
-                   choices: [["Exactly", "exact"], ["Starts with", "prefix"], ["Wildcard", "wildcard"]] %>
+  <%# Indented under the step's own fields, because the alternatives belong to
+      the step and each carries its own Remove control sitting at the same edge
+      as the step's. The rule is what tells the two apart at a glance. -%>
+  <div class="space-y-3 border-l border-rule pl-4"
+       data-controller="nested-form"
+       data-nested-form-max-value="<%= FunnelStep::MAX_CONDITIONS %>"
+       data-nested-form-min-value="<%= FunnelStep::MIN_CONDITIONS %>"
+       data-nested-form-placeholder-value="NEW_CONDITION"
+       data-nested-form-first-label-value="Matches"
+       data-nested-form-label-value="or"
+       data-nested-form-numbered-value="false">
+    <div class="space-y-3" data-nested-form-target="rows">
+      <%= step.fields_for :conditions do |condition| %>
+        <%= render "sites/funnels/condition_fields", condition: condition %>
+      <% end %>
+    </div>
+
+    <template data-nested-form-target="template">
+      <%= step.fields_for :conditions,
+                          FunnelStepCondition.new(kind: "pageview", match_type: "exact"),
+                          child_index: "NEW_CONDITION" do |condition| %>
+        <%= render "sites/funnels/condition_fields", condition: condition %>
+      <% end %>
+    </template>
+
+    <button type="button" class="btn btn-quiet btn-sm"
+            data-action="nested-form#add" data-nested-form-target="addButton"
+            data-analytics-event="Funnel Alternative Added">
+      Add alternative
+    </button>
   </div>
 </div>

@@ -35,10 +35,15 @@
 
     <%# The prototype the Add button clones. A browser never submits the contents
         of a <template>, so this blank row cannot reach the server on its own.
-        child_index gives it a placeholder the controller swaps for a unique one. -%>
+        child_index gives it a placeholder the controller swaps for a unique one.
+
+        The prototype step carries one built condition, because a step row with
+        no alternative in it has nowhere to type what the step matches — and the
+        row's own <template> cannot supply the first one, being a prototype
+        itself. -%>
     <template data-nested-form-target="template">
       <%= f.fields_for :funnel_steps,
-                       FunnelStep.new(kind: "pageview", match_type: "exact"),
+                       FunnelStep.new.tap { |s| s.conditions.build(kind: "pageview", match_type: "exact") },
                        child_index: "NEW_RECORD" do |step| %>
         <%= render "sites/funnels/step_fields", step: step %>
       <% end %>
@@ -63,7 +68,7 @@
       </button>
       <p class="text-[12px] text-muted">
         <%= Funnel::MIN_STEPS %> to <%= Funnel::MAX_STEPS %> steps. Visitors must reach them in
-        the order shown.
+        the order shown, and a step is reached by matching <em>any one</em> of its alternatives.
       </p>
     </div>
   </div>

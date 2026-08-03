@@ -16,6 +16,13 @@ module Analytics
   # the (site_id, visitor_hash, occurred_at) index that exists for exactly this
   # query.
   #
+  # A STEP IS A SET OF ALTERNATIVES. Each step holds one or more conditions and
+  # is satisfied by whichever matches FIRST, so the step's predicate is the OR
+  # of them and nothing else about the query changes: the chain still narrows,
+  # and MIN(occurred_at) over an OR is still the earliest moment the step was
+  # reached. Each condition carries its own kind, which is what lets one step be
+  # "the /welcome pageview OR the Signup event".
+  #
   # THE HONEST LIMITATION: without a persistent identifier, a visitor cannot be
   # followed past the daily salt rotation. A funnel whose window crosses that
   # boundary will undercount, because the same person is a different
@@ -32,8 +39,13 @@ module Analytics
     end
 
     def call
-      steps = @funnel.funnel_steps.to_a
+      steps = @funnel.funnel_steps.includes(:conditions).to_a
       return Failure(:not_enough_steps) if steps.size < Funnel::MIN_STEPS
+      # A step with nothing to match cannot be given a predicate at all, and the
+      # only shapes available — matching everything or matching nothing — are
+      # both a report that quietly means something other than it says. The model
+      # forbids it; this is what happens if a row is written around the model.
+      return Failure(:step_without_a_match) if steps.any? { |step| step.conditions.empty? }
 
       counts = execute(steps)
       Success(build(steps, counts))
@@ -47,8 +59,7 @@ module Analytics
       base_sql, base_binds = @scope.raw_conditions(table: "e")
 
       steps.each_with_index do |step, index|
-        match_sql, match_binds = step.matcher.to_sql("e.#{step.match_column}")
-        kind_sql = step.pageview? ? "e.event_name = 'pageview'" : "e.event_name <> 'pageview'"
+        match_sql, match_binds = step_predicate(step)
 
         if index.zero?
           # Everyone who reached step 1 within the reporting window.
@@ -57,7 +68,7 @@ module Analytics
               SELECT e.visitor_hash, MIN(e.occurred_at) AS t
               FROM events e
               WHERE #{base_sql}
-                AND #{kind_sql} AND #{match_sql}
+                AND #{match_sql}
               GROUP BY e.visitor_hash
             )
           SQL
@@ -74,7 +85,7 @@ module Analytics
                AND e.visitor_hash = p.visitor_hash
                AND e.occurred_at >= p.t
                AND e.occurred_at <= p.t + (? * INTERVAL '1 second')
-               AND #{kind_sql} AND #{match_sql}
+               AND #{match_sql}
               GROUP BY p.visitor_hash
             )
           SQL
@@ -85,6 +96,29 @@ module Analytics
       selects = steps.each_index.map { |i| "(SELECT COUNT(*) FROM s#{i}) AS step_#{i}" }
 
       @scope.select_one("WITH #{ctes.join(', ')} SELECT #{selects.join(', ')}", binds)
+    end
+
+    # What it takes to reach one step: any one of its conditions, each of which
+    # is a kind and a matcher that have to hold together.
+    #
+    # The kind test is not redundant with the matcher. A pageview condition
+    # compares `path` and an event condition compares `event_name`, so without
+    # it a custom event named "/pricing" would satisfy a step that asks for the
+    # /pricing page — the same rule Analytics::GoalReport applies for the same
+    # reason. Binds are collected in the order the fragments are concatenated,
+    # which is the order the caller must keep.
+    def step_predicate(step)
+      binds = []
+
+      parts = step.conditions.map do |condition|
+        kind_sql = condition.pageview? ? "e.event_name = 'pageview'" : "e.event_name <> 'pageview'"
+        match_sql, match_binds = condition.matcher.to_sql("e.#{condition.match_column}")
+        binds.concat(match_binds)
+
+        "(#{kind_sql} AND #{match_sql})"
+      end
+
+      ["(#{parts.join(' OR ')})", binds]
     end
 
     def build(steps, counts)

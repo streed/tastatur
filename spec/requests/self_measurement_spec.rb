@@ -108,7 +108,7 @@ RSpec.describe "Self-measurement", type: :request do
       expect(annotations).to include("Goal Created")
 
       get "/sites/#{site.to_param}/funnels/new"
-      expect(annotations).to include("Funnel Created", "Funnel Step Added")
+      expect(annotations).to include("Funnel Created", "Funnel Step Added", "Funnel Alternative Added")
 
       get "/sites/#{site.to_param}/shared_links"
       expect(annotations).to include("Share Link Created")

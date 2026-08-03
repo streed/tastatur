@@ -27,7 +27,7 @@ module Analytics
     ].freeze
 
     Report = Struct.new(:site, :period, :filters, :summary, :timeseries,
-                        :breakdowns, :properties, :goals, :realtime, keyword_init: true)
+                        :breakdowns, :properties, :flows, :goals, :realtime, keyword_init: true)
 
     def initialize(site:, period:, filters: Filters.new)
       @site = site
@@ -45,6 +45,7 @@ module Analytics
           timeseries: Timeseries.call(site: @site, period: @period, filters: @filters).value!,
           breakdowns: breakdowns,
           properties: properties,
+          flows: flows,
           goals: GoalReport.call(site: @site, period: @period, filters: @filters).value!,
           realtime: Realtime.call(site: @site).value!
         )
@@ -87,6 +88,46 @@ module Analytics
           analytics_dimension: "property",
           result: result
         }
+      end
+    end
+
+    # Came from / Went to, and ONLY when the dashboard is scoped to one page.
+    #
+    # The panels answer "how did visitors reach this page, and where did they go
+    # from it", which is a question about a page and is meaningless without one:
+    # unfiltered there is no anchor to hang the flow off, and computing every
+    # page's neighbours would be the wide-aggregate mistake the events schema
+    # exists to avoid. So the entry point is the Top pages panel — click a row,
+    # and the two flow cards appear beneath the breakdowns. Two more queries, on
+    # filtered dashboards only, which leaves the common unfiltered page exactly
+    # as expensive as it was.
+    #
+    # `page` and not also `entry_page`: an entry page is by definition the first
+    # thing in the visit, so its Came from panel could only ever read "Entered
+    # here" for every visitor. Drilling into the Entry pages panel therefore
+    # shows no flow cards, and the Journeys screen — which starts from entry
+    # pages by design — is where that question is answered properly.
+    #
+    # Public shared dashboards never reach this. They render with no filters at
+    # all (see SharedDashboardsController), which is deliberate, and a journey is
+    # a sharper re-identification tool than any single filter — see
+    # Sites::JourneysController.
+    FLOW_PANELS = [
+      { direction: :backward, title: "Came from", subtitle: "The page before this one" },
+      { direction: :forward,  title: "Went to",   subtitle: "The page after this one" }
+    ].freeze
+
+    def flows
+      page = @filters["page"]
+      return [] if page.blank?
+
+      FLOW_PANELS.map do |panel|
+        panel.merge(
+          result: PageFlow.call(
+            site: @site, period: @period, prefix: [page],
+            direction: panel[:direction], filters: @filters
+          ).value!
+        )
       end
     end
 

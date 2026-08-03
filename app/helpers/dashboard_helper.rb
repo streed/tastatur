@@ -29,6 +29,33 @@ module DashboardHelper
     dashboard_url_for(site, filters: @filters.with(dimension, value))
   end
 
+  # The journey tree expanded to one particular walked path. The path is an
+  # array in the query string, which is what makes an expanded tree a URL
+  # somebody can send to a colleague.
+  def journey_url(site, path, period: nil)
+    period ||= @period
+
+    site_journeys_path(site, path: Array(path), **period.to_param)
+  end
+
+  # What a flow branch is called. The terminal branch is the one with no page on
+  # the far side, and it means opposite things in the two directions: walking
+  # forward it is the visit ending, walking backward it is the visit beginning.
+  # Naming it "(none)" the way a breakdown row would makes the single most
+  # common row on the panel unreadable.
+  def flow_branch_label(branch, direction)
+    return branch.path unless branch.terminal?
+
+    direction.to_sym == :backward ? "Entered here" : "Left the site"
+  end
+
+  # A branch that returns to a page already on the walked path. Worth marking:
+  # in a checkout flow it is the difference between progress and a loop, and
+  # without it the row is indistinguishable from a first visit to that page.
+  def flow_return?(branch, prefix)
+    !branch.terminal? && prefix.include?(branch.path)
+  end
+
   def remove_filter_url(site, dimension)
     dashboard_url_for(site, filters: @filters.without(dimension))
   end

@@ -24,11 +24,26 @@ class Funnel < ApplicationRecord
   # `:all_blank` is not enough, because the spare rows arrive with `kind`,
   # `match_type` and `position` already populated by the selects and the hidden
   # field. A row is only meaningfully filled in if it has a name or a match value.
+  #
+  # The match values now live one level further down, in the step's conditions,
+  # so the emptiness test has to reach into them. Looking only at the step's own
+  # attributes would call every spare row filled in — a step's own fields are
+  # just a name — and the blank-row bug this exists to prevent would come back.
   accepts_nested_attributes_for :funnel_steps,
                                 allow_destroy: true,
                                 reject_if: ->(attrs) {
-                                  attrs["name"].blank? && attrs["match_value"].blank?
+                                  attrs["name"].blank? &&
+                                    Funnel.blank_conditions?(attrs["conditions_attributes"])
                                 }
+
+  # True when a step row carries no match value at all. Accepts what a form
+  # actually submits — a hash keyed by row index — as well as a plain array, so
+  # a caller building attributes in Ruby is not a special case.
+  def self.blank_conditions?(rows)
+    return true if rows.blank?
+
+    (rows.respond_to?(:values) ? rows.values : rows).all? { |row| row["match_value"].blank? }
+  end
 
   # Positions come out contiguous regardless of which rows were left blank or
   # ticked for removal, so ordering never depends on the shape of the form.

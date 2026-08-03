@@ -23,6 +23,9 @@ module Sites
       in Success(report) then @report = report
       in Failure(:not_enough_steps)
         redirect_to edit_site_funnel_path(@site, @funnel), alert: "Add at least two steps first."
+      in Failure(:step_without_a_match)
+        redirect_to edit_site_funnel_path(@site, @funnel),
+                    alert: "Every step needs at least one page or event to match."
       end
     end
 
@@ -30,7 +33,7 @@ module Sites
       @funnel = @site.funnels.new(window_seconds: 86_400)
       # Open with the minimum viable funnel. Further steps come from the Add
       # button, which clones a template row client-side.
-      Funnel::MIN_STEPS.times { @funnel.funnel_steps.build(kind: "pageview", match_type: "exact") }
+      Funnel::MIN_STEPS.times { build_blank_step }
       authorize @funnel
     end
 
@@ -72,21 +75,41 @@ module Sites
     # After a failed save the submitted rows are re-rendered as-is. If the user
     # had removed rows down below the minimum, top the form back up so they are
     # not left with a form they cannot submit.
+    #
+    # A step whose only condition was rejected for being blank is the same
+    # problem one level down — it comes back with no condition row at all, so
+    # there is nowhere to type the thing the error message is asking for.
     def ensure_minimum_rows
       missing = Funnel::MIN_STEPS - @funnel.funnel_steps.reject(&:marked_for_destruction?).size
-      missing.clamp(0, Funnel::MAX_STEPS).times do
-        @funnel.funnel_steps.build(kind: "pageview", match_type: "exact")
+      missing.clamp(0, Funnel::MAX_STEPS).times { build_blank_step }
+
+      @funnel.funnel_steps.reject(&:marked_for_destruction?).each do |step|
+        build_blank_condition(step) if step.live_conditions.empty?
       end
     end
 
+    def build_blank_step
+      build_blank_condition(@funnel.funnel_steps.build)
+    end
+
+    def build_blank_condition(step)
+      step.conditions.build(kind: "pageview", match_type: "exact")
+      step
+    end
+
+    # Preloaded two deep because both readers of it walk the whole tree: the
+    # report builds one predicate per condition, and the edit form renders one
+    # row per condition.
     def set_funnel
-      @funnel = @site.funnels.find_by_public_id!(params[:id])
+      @funnel = @site.funnels.includes(funnel_steps: :conditions).find_by_public_id!(params[:id])
     end
 
     def funnel_params
       params.expect(
         funnel: [:name, :window_seconds, :strict_order,
-                 { funnel_steps_attributes: [%i[id position name kind match_value match_type _destroy]] }]
+                 { funnel_steps_attributes: [[:id, :position, :name, :_destroy,
+                                              { conditions_attributes:
+                                                  [%i[id position kind match_value match_type _destroy]] }]] }]
       )
     end
   end

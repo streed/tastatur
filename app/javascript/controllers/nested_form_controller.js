@@ -15,13 +15,29 @@ import { Controller } from "@hotwired/stimulus"
 //     1, because the server has to be told to delete it. Removing it from the DOM
 //     instead would simply omit it from the submission, and Rails leaves omitted
 //     nested records untouched — so the row would quietly come back.
+//
+// ONE OF THESE NESTS INSIDE ANOTHER: a funnel is a list of steps, and each step
+// is a list of alternatives that satisfy it. Stimulus already scopes targets and
+// actions to the nearest controller of the same identifier, so the outer
+// instance does not steal the inner one's <template> — but `visibleRows` walks
+// the DOM itself and has to do that filtering by hand, or a step's alternatives
+// are counted as steps and "Step 3" ends up labelling an OR branch.
 export default class extends Controller {
   static targets = ["rows", "template", "addButton", "count"]
   static values = {
     max: { type: Number, default: 0 },
     min: { type: Number, default: 0 },
     // What a row is called in its position label — "Step 2", "Widget 2".
-    label: { type: String, default: "Step" }
+    label: { type: String, default: "Step" },
+    // A set of alternatives is not a sequence: its first row reads "Matches" and
+    // every later one reads "or", with no numbering, because "or 2" is not a
+    // thing anybody means.
+    firstLabel: { type: String, default: "" },
+    numbered: { type: Boolean, default: true },
+    // The string the <template> uses where the row index goes. Nested lists need
+    // two different ones: the outer add replaces its own placeholder throughout
+    // the cloned markup, and would consume the inner one on the way past.
+    placeholder: { type: String, default: "NEW_RECORD" }
   }
 
   connect() {
@@ -34,7 +50,7 @@ export default class extends Controller {
 
     // A timestamp keeps indices unique across repeated adds without having to
     // track a counter that could collide with a server-rendered index.
-    const html = this.templateTarget.innerHTML.replace(/NEW_RECORD/g, Date.now().toString())
+    const html = this.templateTarget.innerHTML.split(this.placeholderValue).join(Date.now().toString())
     this.rowsTarget.insertAdjacentHTML("beforeend", html)
     this.refresh()
 
@@ -64,7 +80,7 @@ export default class extends Controller {
   refresh() {
     this.visibleRows.forEach((row, index) => {
       const label = row.querySelector("[data-nested-form-position]")
-      if (label) label.textContent = `${this.labelValue} ${index + 1}`
+      if (label) label.textContent = this.positionLabel(index)
 
       // Below the minimum there is nothing safe to remove, so the control is
       // hidden rather than offered and then rejected by the server.
@@ -80,8 +96,22 @@ export default class extends Controller {
     }
   }
 
+  positionLabel(index) {
+    const text = index === 0 && this.firstLabelValue ? this.firstLabelValue : this.labelValue
+    return this.numberedValue ? `${text} ${index + 1}` : text
+  }
+
+  // Only the rows this instance owns. A nested list's rows are descendants of
+  // this one's rows container too, so querySelectorAll alone would return a
+  // funnel's steps AND every alternative inside them. `closest` names the
+  // controller each row actually belongs to.
+  //
+  // Rows inside a <template> never appear here at all: its contents live in a
+  // separate document fragment, which is also what keeps the prototype out of
+  // the submission.
   get visibleRows() {
     return Array.from(this.rowsTarget.querySelectorAll("[data-nested-form-row]"))
+                .filter((row) => row.closest('[data-controller~="nested-form"]') === this.element)
                 .filter((row) => !row.hidden)
   }
 

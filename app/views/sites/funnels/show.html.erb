@@ -69,7 +69,8 @@
   <p class="text-[12px] text-muted mt-4 max-w-2xl leading-relaxed">
     Steps are matched in order: each step is searched only in the window after the previous step
     was reached for that same visitor. A visitor who backtracks and returns still counts, which a
-    naive "first time each step matched" query would miss.
+    naive "first time each step matched" query would miss. A step listing several alternatives is
+    reached by whichever of them the visitor hits first.
   </p>
 
   <div class="mt-8">

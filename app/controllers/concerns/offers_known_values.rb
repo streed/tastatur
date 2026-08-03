@@ -12,9 +12,10 @@ module OffersKnownValues
   extend ActiveSupport::Concern
 
   # The DOM id of the single JSON payload on the page. The forms render it once
-  # and every picker on the page points at it by id — a funnel holds up to eight
-  # pickers and the payload can run to hundreds of paths, so a copy per field
-  # would put the same tens of kilobytes on the page nine times.
+  # and every picker on the page points at it by id — a funnel holds eight steps
+  # of up to five alternatives each, so forty pickers, and the payload can run to
+  # hundreds of paths. A copy per field would put the same tens of kilobytes on
+  # the page forty times over.
   KNOWN_VALUES_DOM_ID = "known-values".freeze
 
   included do

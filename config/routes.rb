@@ -62,6 +62,13 @@ Rails.application.routes.draw do
       resource :installation, only: %i[show]
       resources :goals, except: %i[show]
       resources :funnels
+
+      # Where visitors go from a page. A GET with no resource behind it, like
+      # `attribution` below: the walked path is the whole state and it lives in
+      # the query string (`?path[]=/&path[]=/pricing`), so there is nothing to
+      # route by identifier. Not nested under the dashboard's own turbo frame
+      # either — see Analytics::PageFlow for why a journey is its own screen.
+      get "journeys", to: "journeys#show"
       # No `edit`: a dashboard is configured on the dashboard itself, so there
       # is no second page to render. `update` remains — it is what the inline
       # rename posts to.

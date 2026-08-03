@@ -1,0 +1,41 @@
+<%# One alternative that satisfies a funnel step. Rendered both for real rows
+    and, with a placeholder index, into the <template> the Add button clones.
+
+    The value-picker controller is per CONDITION, not per step and not per form:
+    kind lives here — one alternative may be a pageview and the next a custom
+    event — and the picker's list has to follow whichever this row is. Stimulus
+    connects a cloned row's controller when the Add button inserts it, and
+    disconnects it when a row is removed. -%>
+<div data-nested-form-row
+     data-controller="value-picker"
+     data-value-picker-source-value="<%= OffersKnownValues::KNOWN_VALUES_DOM_ID %>">
+  <div class="flex items-center justify-between mb-2">
+    <%# "Matches" on the first row, "or" on every one after it, written by the
+        nested-form controller so it keeps up with adds and removals. -%>
+    <span class="label" data-nested-form-position>Matches</span>
+
+    <%= condition.hidden_field :_destroy, value: "0" %>
+
+    <button type="button" class="btn btn-quiet btn-sm text-negative"
+            data-action="nested-form#remove" data-nested-form-remove>
+      Remove
+    </button>
+  </div>
+
+  <%# Ten columns rather than four: indenting these rows under their step took
+      enough width off the two selects to clip "Custom event" and "Starts with",
+      and a control that cannot show the option it is set to is worse than a
+      narrower field for the path. -%>
+  <div class="grid sm:grid-cols-10 gap-3">
+    <%= condition.field :kind, "Type", as: :select,
+                        choices: [["Pageview", "pageview"], ["Custom event", "event"]],
+                        wrapper: "sm:col-span-3",
+                        data: { value_picker_target: "kind",
+                                action: "change->value-picker#kindChanged" } %>
+    <%= condition.field :match_value, "Path or event name", as: :combobox, placeholder: "/pricing",
+                        wrapper: "sm:col-span-4" %>
+    <%= condition.field :match_type, "Match", as: :select,
+                        choices: [["Exactly", "exact"], ["Starts with", "prefix"], ["Wildcard", "wildcard"]],
+                        wrapper: "sm:col-span-3" %>
+  </div>
+</div>

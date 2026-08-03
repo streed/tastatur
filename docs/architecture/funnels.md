@@ -121,6 +121,42 @@ Both behaviours are covered by spec: a visitor who backtracks and then completes
 in order **is** counted; a visitor whose step 3 occurs only before step 2 is
 **not**.
 
+### A step is a set of alternatives, not one matcher
+
+A step holds one or more **conditions** (`funnel_step_conditions`) and is
+satisfied by whichever matches first. Each condition carries its own kind and
+match type, so one step can be
+
+> the `/welcome` pageview **or** the `Signup` event **or** anything under
+> `/onboarding/`
+
+The reason this is not a nicety: real flows branch. Two checkout pages, a page
+and an event that both mean the same thing, a redesign that moved a URL. Without
+OR the only way to measure such a flow is one funnel per branch, and those cannot
+be added back together — a visitor who took both branches is counted in both, so
+there is no arithmetic that yields the number of people who converted.
+
+Nothing about the query changes. The step's predicate is the OR of its
+conditions, and `MIN(occurred_at)` over that OR is still the earliest moment the
+step was reached, which is what the next step's window is measured from. The kind
+test stays inside each branch — `(event_name = 'pageview' AND path = ?)` OR
+`(event_name <> 'pageview' AND event_name = ?)` — so a custom event named
+`/welcome` still cannot satisfy a step asking for the `/welcome` page.
+
+Two consequences worth stating:
+
+- **A step is a set, not a sum.** Someone who matched two alternatives reached
+  the step once. This is exactly what separate funnels cannot report.
+- **A step with no conditions is refused, not guessed at.**
+  `Analytics::FunnelReport` returns `Failure(:step_without_a_match)` rather than
+  picking one of the two available meanings — match everything, match nothing —
+  both of which are a report that quietly means something other than it says. The
+  model already forbids the state; this covers rows written around it.
+
+The matcher used to live in three columns on `funnel_steps` and moved wholesale
+into the new table rather than staying alongside it, because a step with two
+places to say what it matches has one the report reads and one that drifts.
+
 ### The honest limitation
 
 A funnel window longer than the identifier's lifetime will undercount, because

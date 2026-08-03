@@ -13,8 +13,10 @@
       <p class="text-sm">
         <span class="label mr-2"><%= index + 1 %></span>
         <span class="font-medium"><%= row.step.name %></span>
+        <%# Every alternative, not just the first: a step reporting "/checkout"
+            while it also counts /cart is a number nobody can account for. -%>
         <span class="text-muted text-[12px] ml-2">
-          <%= row.step.pageview? ? row.step.match_value : "event: #{row.step.match_value}" %>
+          <%= row.step.summary %>
         </span>
       </p>
       <p class="num text-sm shrink-0">
