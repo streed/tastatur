@@ -8,7 +8,23 @@
         <%= @site.domain %><span class="mx-2">·</span><%= @period.label %>
       </p>
     </div>
-    <div class="flex gap-3">
+    <div class="flex flex-wrap gap-3">
+      <%# What counts as a step. Events are in by default because the click
+          between two pages is usually the point; the other half exists for the
+          site that fires one event on every page, where leaving them in means
+          there is a step between every pair of pages and the shape of the site
+          disappears. See Sites::JourneysController::PAGES_ONLY. -%>
+      <div class="segmented">
+        <%= link_to "Pages & events", journey_mode_url(@site, true),
+                    class: "segment", "aria-current": @include_events.to_s,
+                    data: { analytics_event: "Journey Steps Changed",
+                            analytics_props: { steps: "all" } } %>
+        <%= link_to "Pages only", journey_mode_url(@site, false),
+                    class: "segment", "aria-current": (!@include_events).to_s,
+                    data: { analytics_event: "Journey Steps Changed",
+                            analytics_props: { steps: "pages" } } %>
+      </div>
+
       <div class="segmented">
         <% %w[7d 30d 90d].each do |key| %>
           <%# `view` tells this apart from the dashboard's own period control, the
@@ -26,25 +42,90 @@
   </div>
 
   <%# --- Where to start ------------------------------------------------------
-      Entry pages, because that is where a journey begins. The list comes from
-      Analytics::Breakdown, so it is already k-anonymous — see the controller. -%>
-  <% if @start_pages.any? %>
-    <div class="card mb-6">
-      <div class="card-head">
-        <h2 class="text-sm font-semibold">Start from</h2>
-        <span class="label">Where visits begin</span>
+      Typed, or picked. The chips below are entry pages, because that is where a
+      journey usually begins — but a journey does not have to, and a report you
+      can only open at one of twelve places cannot answer "what happens after
+      somebody clicks this". Both lists come from Analytics::Breakdown, so both
+      are k-anonymous before anything is walked: the chips through the
+      controller, the picker through Analytics::KnownValues.
+
+      A GET form, so the answer is a URL like every other state on this screen,
+      and so it works with no JavaScript at all — the combobox only ever
+      suggests. Submitting it starts a NEW journey at depth one, which is why it
+      carries no `path[]` beyond its own: the walked path is exactly what you
+      are replacing. The period and the events mode are not, so they ride along
+      as hidden fields. -%>
+  <div class="card mb-6">
+    <div class="card-head">
+      <h2 class="text-sm font-semibold">Start from</h2>
+      <span class="label">Any page or custom event</span>
+    </div>
+
+    <%# The value-picker controller goes on the form rather than on the field,
+        because the field and the kind select are one question: which of them is
+        chosen decides whether the list is paths or event names. Same shape as
+        the goal form and a funnel step's condition. -%>
+    <%= form_with model: @start, scope: :start, url: site_journeys_path(@site), method: :get,
+                  class: "card-body space-y-4",
+                  data: { controller: "value-picker",
+                          value_picker_source_value: OffersKnownValues::KNOWN_VALUES_DOM_ID } do |f| %>
+      <div class="grid sm:grid-cols-[minmax(0,11rem)_1fr_auto] gap-4 items-end">
+        <%# `name:` is given explicitly on both, because these two fields are one
+            element of the URL's parallel `path[]` / `kind[]` arrays rather than
+            an object being saved. See Analytics::FlowStep. -%>
+        <%= f.field :kind, "Kind", as: :select, name: "kind[]",
+                    choices: [["Page", Analytics::FlowStep::PAGEVIEW],
+                              ["Custom event", Analytics::FlowStep::EVENT]],
+                    data: { value_picker_target: "kind",
+                            action: "change->value-picker#kindChanged" } %>
+        <%= f.field :value, "Page or event name", as: :combobox, name: "path[]",
+                    placeholder: "/pricing" %>
+        <button type="submit" class="btn mb-0.5"
+                data-analytics-event="Journey Started">Show journey</button>
       </div>
-      <div class="card-body flex flex-wrap gap-2">
+
+      <% journey_mode_param.merge(@period.to_param).each do |key, value| %>
+        <%= hidden_field_tag key, value, id: nil %>
+      <% end %>
+
+      <%# Said in the same voice as the goal and funnel forms (see
+          sites/_known_values_note), and for the same reason: on a quiet site at
+          the default threshold every row is withheld and the picker opens onto
+          nothing, which without this sentence reads as "this site has no
+          pages". -%>
+      <p class="text-[12px] text-muted">
+        <% if known_values.any? %>
+          Pick from the <%= pluralize(known_values.paths.size, "page") %> and
+          <%= pluralize(known_values.events.size, "custom event") %> recorded in the last
+          <%= pluralize(known_values.days, "day") %>, or type anything else.
+        <% else %>
+          Nothing recorded in the last <%= pluralize(known_values.days, "day") %>,
+          so there is nothing to pick from yet.
+        <% end %>
+        <% if known_values.withheld? %>
+          <%= pluralize(known_values.withheld, "value") %>
+          <%= known_values.withheld == 1 ? "is" : "are" %> not listed because
+          <%= known_values.withheld == 1 ? "it was" : "they were" %> seen by fewer than
+          <%= known_values.threshold %> visitors, this site's privacy threshold.
+        <% end %>
+      </p>
+    <% end %>
+
+    <% if @start_pages.any? %>
+      <div class="card-body border-t border-rule flex flex-wrap gap-2 items-center">
+        <span class="label mr-1">Where visits begin</span>
         <% @start_pages.rows.each do |row| %>
-          <% active = @path.first == row.value %>
-          <%= link_to row.label, journey_url(@site, [row.value]),
+          <% active = @path.first == Analytics::FlowStep.page(row.value) %>
+          <%= link_to row.label, journey_url(@site, [Analytics::FlowStep.page(row.value)]),
                       class: "segment #{'font-semibold' if active}",
                       "aria-current": active.to_s,
                       data: { analytics_event: "Journey Started" } %>
         <% end %>
       </div>
-    </div>
-  <% end %>
+    <% end %>
+  </div>
+
+  <%= render "sites/known_values_payload" %>
 
   <% if @levels.any? %>
     <%# --- The walked path ---------------------------------------------------
@@ -53,12 +134,12 @@
         would be a lone "/" repeating the card heading directly beneath it. -%>
     <% if @path.size > 1 %>
       <nav class="mb-6 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm" aria-label="Walked path">
-        <% @path.each_with_index do |segment, index| %>
+        <% @path.each_with_index do |step, index| %>
           <% if index.positive? %><span class="text-muted" aria-hidden="true">→</span><% end %>
           <% if index == @path.size - 1 %>
-            <span class="font-semibold"><%= segment %></span>
+            <span class="font-semibold"><%= flow_step_label(step) %></span>
           <% else %>
-            <%= link_to segment, journey_url(@site, @path.first(index + 1)), class: "link" %>
+            <%= link_to flow_step_label(step), journey_url(@site, @path.first(index + 1)), class: "link" %>
           <% end %>
         <% end %>
       </nav>
@@ -69,11 +150,7 @@
         <div class="card">
           <div class="card-head">
             <h2 class="text-sm font-semibold">
-              <% if depth.zero? %>
-                After <%= result.anchor %>
-              <% else %>
-                After <%= @path.first(depth + 1).join(" → ") %>
-              <% end %>
+              After <%= flow_path_label(@path.first(depth + 1)) %>
             </h2>
             <span class="label"><%= pluralize(metric_number(result.visitors), "visitor") %> here</span>
           </div>
@@ -94,10 +171,17 @@
     <% end %>
 
     <p class="text-[12px] text-muted mt-6 max-w-2xl leading-relaxed">
-      Each row is the page visitors saw <em>immediately</em> next, within the same visit — not
+      Each row is what visitors did <em>immediately</em> next, within the same visit — not
       merely somewhere later on, which is what a funnel measures. Percentages are shares of the
-      visitors at that point and add up to 100%. Repeated views of the same page are treated as
-      one step, so a reload is not a journey. Pages only; custom events are not steps here.
+      visitors at that point and add up to 100%. Repeats of the same step in a row are treated as
+      one, so a reload is not a journey and neither is a double-clicked button.
+      <% if @include_events %>
+        A step is a page view or a custom event; an event that fired on the page you were
+        already on is a step of its own, between that page and the next.
+      <% else %>
+        Only page views are steps in this view. Custom events — the clicks between the pages —
+        are left out until you switch them on above.
+      <% end %>
     </p>
 
   <%# No start page to open with. Two quite different reasons, and telling them
@@ -121,8 +205,8 @@
     <div class="card card-body text-center py-14">
       <p class="font-semibold">No journeys yet.</p>
       <p class="text-sm text-ink-2 mt-2 max-w-md mx-auto leading-relaxed">
-        Once visits arrive, this shows where people go from each page — the home page to pricing
-        to checkout — one hop at a time.
+        Once visits arrive, this shows what people did next from any page or event — the home
+        page to pricing, the pricing page to a Signup click — one hop at a time.
       </p>
       <div class="mt-6">
         <%= link_to "Dashboard", site_path(@site), class: "btn btn-quiet" %>

@@ -2,10 +2,25 @@ module Analytics
   # Where visitors went next — one level of the navigation tree.
   #
   # Given a path already walked ("/", then "/pricing"), this answers "and then
-  # what", as a table of next pages with the visitors who took each. Walk it
+  # what", as a table of next steps with the visitors who took each. Walk it
   # repeatedly and you get the flow tree on the Journeys page; ask it once, in
   # either direction, and you get the Came from / Went to panels that appear on
   # the dashboard when it is filtered to a single page.
+  #
+  # A STEP IS A PAGE OR A CUSTOM EVENT, and which one is `include_events`.
+  #
+  # A journey through a page-only report is a journey with the interesting part
+  # removed: the thing between /pricing and /checkout is usually the click, and
+  # a report that can only say "and then they were on the next page" cannot say
+  # where the ones who did not click went instead. So the Journeys screen walks
+  # both, and each step carries its kind — an Analytics::FlowStep — rather than a
+  # bare string, for the reason that class documents.
+  #
+  # It is OFF by default, and the dashboard's two flow panels are why. Those are
+  # titled "The page before this one" and "The page after this one", they answer
+  # a question about pages, and a site that fires a scroll-depth event on every
+  # page would have both of them report that event and nothing else. The screen
+  # that wants events asks for them.
   #
   # NEXT, NOT EVENTUALLY — the one thing that separates this from FunnelReport.
   #
@@ -24,11 +39,15 @@ module Analytics
   # visitor_hash is still what gets COUNTed, so the numbers here mean the same
   # thing as the numbers in every other panel.
   #
-  # CONSECUTIVE REPEATS OF ONE PATH COLLAPSE. A reload, or a bfcache restore, is
+  # CONSECUTIVE REPEATS OF ONE STEP COLLAPSE. A reload, or a bfcache restore, is
   # not navigation. Left in, the commonest "next page" for every page on the site
-  # is itself, which is both true and useless.
+  # is itself, which is both true and useless. The rule extends to events on the
+  # composite key rather than being confined to pages: a double-clicked button
+  # sends the same event twice and that is the same non-navigation, while a
+  # pageview and an event fired on it are different steps and never collapse
+  # into each other.
   #
-  # PERFORMANCE. The steps CTE sorts the period's pageviews by
+  # PERFORMANCE. The steps CTE sorts the period's events by
   # (session_hash, occurred_at), which no current index provides. Measured on the
   # development set (17,971 events, 8,438 sessions, 30 days): 21-24 ms. Adding
   # (site_id, session_hash, occurred_at) was tried and the planner did not choose
@@ -41,10 +60,10 @@ module Analytics
   # creation", verified on TimescaleDB 2.29); the per-chunk form
   # `WITH (timescaledb.transaction_per_chunk)` is what works.
   class PageFlow < ApplicationService
-    # A branch is one next (or previous) page. `path` is nil for the branch that
+    # A branch is one next (or previous) step. `step` is nil for the branch that
     # leaves the tree: the visit ended, or — walking backwards — began here.
-    Branch = Struct.new(:path, :visitors, :sessions, :percentage, keyword_init: true) do
-      def terminal? = path.nil?
+    Branch = Struct.new(:step, :visitors, :sessions, :percentage, keyword_init: true) do
+      def terminal? = step.nil?
     end
 
     Result = Struct.new(:prefix, :direction, :visitors, :branches,
@@ -52,7 +71,7 @@ module Analytics
       def any? = branches.any?
       def suppressed? = suppressed_rows.positive?
 
-      # The page this level hangs off: the last one walked going forward, the
+      # The step this level hangs off: the last one walked going forward, the
       # first one going backward.
       def anchor = direction == :backward ? prefix.first : prefix.last
     end
@@ -67,10 +86,21 @@ module Analytics
 
     DIRECTIONS = %i[forward backward].freeze
 
-    def initialize(site:, period:, prefix:, direction: :forward, filters: Filters.new, limit: DEFAULT_LIMIT)
+    # Ties are ordinary here in a way they were not when only pageviews were
+    # walked: a click event and the pageview it fired on arrive in separate
+    # beacons and land on the same `occurred_at` often enough to matter. Two
+    # window functions over an unstable order would then number the steps one
+    # way and collapse the repeats another, so the order is pinned — and pinned
+    # so that a page sorts before anything that happened on it, which is the only
+    # causal reading of a tie.
+    STEP_ORDER = "occurred_at, CASE WHEN kind = 'pageview' THEN 0 ELSE 1 END, value".freeze
+
+    def initialize(site:, period:, prefix:, direction: :forward, filters: Filters.new,
+                   include_events: false, limit: DEFAULT_LIMIT)
       @scope = Scope.new(site: site, period: period, filters: filters)
-      @prefix = Array(prefix).map(&:to_s).reject(&:empty?).first(MAX_DEPTH)
+      @prefix = Array(prefix).filter_map { |step| FlowStep.coerce(step) }.first(MAX_DEPTH)
       @direction = DIRECTIONS.include?(direction.to_sym) ? direction.to_sym : :forward
+      @include_events = include_events
       @limit = limit.clamp(1, 100)
     end
 
@@ -97,12 +127,12 @@ module Analytics
 
     def execute
       where, binds = conditions
-      ctes = [ordered_cte(where), steps_cte]
+      ctes = [labelled_cte(where), ordered_cte, steps_cte]
       cte_binds = binds.dup
 
-      @prefix.each_with_index do |path, index|
+      @prefix.each_with_index do |step, index|
         ctes << (index.zero? ? anchor_cte : chain_cte(index))
-        cte_binds << path
+        cte_binds.push(step.kind, step.value)
       end
 
       last = "r#{@prefix.size - 1}"
@@ -118,7 +148,8 @@ module Analytics
       @scope.select_all(<<~SQL, cte_binds)
         WITH #{ctes.join(", ")}
         SELECT
-          s.path                       AS value,
+          s.kind                       AS kind,
+          s.value                      AS value,
           COUNT(DISTINCT r.visitor_hash) AS visitors,
           COUNT(*)                     AS sessions,
           (SELECT COUNT(DISTINCT visitor_hash) FROM #{last}) AS total
@@ -126,8 +157,8 @@ module Analytics
         LEFT JOIN steps s
           ON s.session_hash = r.session_hash
          AND s.n = #{step_offset}
-        GROUP BY 1
-        ORDER BY visitors DESC, sessions DESC, 1 ASC
+        GROUP BY 1, 2
+        ORDER BY visitors DESC, sessions DESC, 2 ASC, 1 ASC
       SQL
     end
 
@@ -137,13 +168,35 @@ module Analytics
       @direction == :backward ? "r.anchor - 1" : "r.n + 1"
     end
 
-    def ordered_cte(where)
+    # Every row becomes a (kind, value) pair before anything else looks at it,
+    # and the two CASEs are the only place in this query that knows how the
+    # events table spells the distinction. They are real columns rather than
+    # expressions repeated downstream because a window ORDER BY cannot reference
+    # an output alias of its own SELECT — hence the extra CTE.
+    #
+    # With events excluded this is byte-for-byte the predicate the report has
+    # always used, so the pages-only plan (and the measurement in the note above)
+    # is unchanged.
+    def labelled_cte(where)
+      <<~SQL
+        labelled AS (
+          SELECT session_hash, visitor_hash, occurred_at,
+                 CASE WHEN event_name = 'pageview' THEN 'pageview' ELSE 'event' END AS kind,
+                 CASE WHEN event_name = 'pageview' THEN path ELSE event_name END AS value
+          FROM events
+          WHERE #{where}#{" AND event_name = 'pageview'" unless @include_events}
+        )
+      SQL
+    end
+
+    def ordered_cte
       <<~SQL
         ordered AS (
-          SELECT session_hash, visitor_hash, path, occurred_at,
-                 LAG(path) OVER (PARTITION BY session_hash ORDER BY occurred_at) AS prev_path
-          FROM events
-          WHERE #{where} AND event_name = 'pageview'
+          SELECT session_hash, visitor_hash, kind, value, occurred_at,
+                 LAG(kind)  OVER w AS prev_kind,
+                 LAG(value) OVER w AS prev_value
+          FROM labelled
+          WINDOW w AS (PARTITION BY session_hash ORDER BY #{STEP_ORDER})
         )
       SQL
     end
@@ -151,13 +204,18 @@ module Analytics
     # WHERE is evaluated before the window function, so the repeats are gone
     # before ROW_NUMBER counts — the positions are 1..n over the collapsed
     # sequence, which is what the n + 1 joins above rely on.
+    #
+    # Both halves of the key are tested. `IS DISTINCT FROM` on the value alone
+    # would collapse the `Signup` event that fired on `/signup` into the
+    # pageview before it whenever a customer names the two the same way, which
+    # is neither rare nor something they did wrong.
     def steps_cte
       <<~SQL
         steps AS (
-          SELECT session_hash, visitor_hash, path,
-                 ROW_NUMBER() OVER (PARTITION BY session_hash ORDER BY occurred_at) AS n
+          SELECT session_hash, visitor_hash, kind, value,
+                 ROW_NUMBER() OVER (PARTITION BY session_hash ORDER BY #{STEP_ORDER}) AS n
           FROM ordered
-          WHERE prev_path IS DISTINCT FROM path
+          WHERE prev_value IS DISTINCT FROM value OR prev_kind IS DISTINCT FROM kind
         )
       SQL
     end
@@ -173,12 +231,16 @@ module Analytics
           SELECT DISTINCT ON (session_hash)
                  session_hash, visitor_hash, n AS anchor, n
           FROM steps
-          WHERE path = ?
+          WHERE kind = ? AND value = ?
           ORDER BY session_hash, n
         )
       SQL
     end
 
+    # The kind test stays INSIDE the branch, beside the value it qualifies —
+    # the rule CLAUDE.md §12 states for a funnel step's conditions, and it is
+    # load-bearing for the same reason: `WHERE s.value = ?` alone would let a
+    # custom event named `/welcome` satisfy a step that asked for the page.
     def chain_cte(index)
       <<~SQL
         r#{index} AS (
@@ -187,7 +249,7 @@ module Analytics
           JOIN steps s
             ON s.session_hash = p.session_hash
            AND s.n = p.n + 1
-          WHERE s.path = ?
+          WHERE s.kind = ? AND s.value = ?
         )
       SQL
     end
@@ -221,11 +283,15 @@ module Analytics
       )
     end
 
+    # `kind`, not `value`, is what says a row is the terminal branch. Both
+    # columns are NULL when the LEFT JOIN found nothing, but `path` is NOT NULL
+    # on the events table while a kind is only ever absent for that one row.
     def to_branch(row, total)
       visitors = row["visitors"].to_i
+      kind = row["kind"]
 
       Branch.new(
-        path: row["value"],
+        step: kind && FlowStep.new(kind: kind, value: row["value"]),
         visitors: visitors,
         sessions: row["sessions"].to_i,
         percentage: total.zero? ? 0.0 : ((visitors.to_f / total) * 100).round(1)

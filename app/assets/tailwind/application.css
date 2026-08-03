@@ -58,7 +58,18 @@
 }
 
 @theme {
-  --font-sans: "Archivo", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  /* The emoji families at the end are not decoration: the country breakdown
+     draws its flags from regional indicator pairs (DashboardHelper#country_flag),
+     and none of the text families above covers U+1F1E6–1F1FF. Without a named
+     emoji family the browser falls through to whatever the operating system's
+     font configuration happens to offer for those code points, which is a color
+     emoji font on some machines and a monochrome font with no flags at all on
+     others — so the flags render for one reader and silently vanish for the
+     next. This is the tail Tailwind's own default stack carries and this
+     override had dropped. */
+  --font-sans: "Archivo", "Helvetica Neue", Helvetica, Arial, sans-serif,
+               "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji",
+               "Twemoji Mozilla", "Segoe UI Symbol";
 
   /* Surfaces — warm paper, not blue-white. */
   --color-paper:      #f2f1ec;

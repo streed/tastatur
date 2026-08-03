@@ -1,7 +1,11 @@
-<%# One level of the navigation flow: the pages visitors went to next, or came
-    from. Shared by the Journeys tree and the two dashboard panels that appear
-    under a page filter, so the suppression wording cannot drift between them —
-    the same reason sites/_breakdown is one partial rather than three.
+<%# One level of the navigation flow: what visitors did next, or came from.
+    Shared by the Journeys tree and the two dashboard panels that appear under a
+    page filter, so the suppression wording cannot drift between them — the same
+    reason sites/_breakdown is one partial rather than three.
+
+    A branch is an Analytics::FlowStep, so it may be a page or a custom event
+    and says which. The dashboard panels only ever get pages (they ask PageFlow
+    with include_events off); the tree gets both.
 
     Locals:
       result     Analytics::PageFlow::Result
@@ -22,7 +26,7 @@
 <% if result.any? %>
   <div>
     <% result.branches.each_with_index do |branch, index| %>
-      <% walked = !branch.terminal? && branch.path == chosen %>
+      <% walked = !branch.terminal? && branch.step == chosen %>
       <% row = capture do %>
         <span class="bar-fill" style="width: <%= branch.percentage.clamp(0, 100) %>%"></span>
 
@@ -48,8 +52,8 @@
             rule app/javascript/controllers/analytics_controller.js states and
             sites/_breakdown follows for row values. Depth is our vocabulary;
             the customer's URLs are not. -%>
-        <%= link_to journey_url(site, prefix + [branch.path]), class: "bar-row",
-                    title: "Where visitors went after #{branch.path}",
+        <%= link_to journey_url(site, prefix + [branch.step]), class: "bar-row",
+                    title: "Where visitors went after #{flow_step_text(branch.step)}",
                     "aria-current": walked.to_s,
                     data: { analytics_event: "Journey Expanded",
                             analytics_props: { depth: prefix.size + 1, position: index + 1 } } do %><%= row %><% end %>

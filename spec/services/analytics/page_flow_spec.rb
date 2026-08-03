@@ -20,8 +20,18 @@ RSpec.describe Analytics::PageFlow do
     end
   end
 
+  # One custom event, on the page the visit is already on.
+  def fire(session, name, base: 3.hours.ago, offset: 0, path: "/", visitor: session)
+    create_event(site, visitor: visitor, session: session, path: path,
+                      event_name: name, at: base + offset)
+  end
+
   def branch(result, path)
-    result.branches.find { |b| b.path == path }
+    result.branches.find { |b| !b.terminal? && b.step == Analytics::FlowStep.page(path) }
+  end
+
+  def event_branch(result, name)
+    result.branches.find { |b| !b.terminal? && b.step == Analytics::FlowStep.event(name) }
   end
 
   def terminal(result)
@@ -184,14 +194,119 @@ RSpec.describe Analytics::PageFlow do
   end
 
   describe "custom events" do
-    it "ignores them as steps" do
+    # The default, and what Analytics::Dashboard's two flow panels rely on:
+    # they are titled "The page before this one" and would otherwise answer a
+    # different question than they ask.
+    it "ignores them as steps unless asked for" do
       visit("s1", ["/"])
-      create_event(site, session: "s1", visitor: "s1", event_name: "Signup",
-                        path: "/", at: 3.hours.ago + 30.seconds)
+      fire("s1", "Signup", offset: 30.seconds)
       create_event(site, session: "s1", visitor: "s1", path: "/pricing",
                         at: 3.hours.ago + 1.minute)
 
       expect(branch(flow(["/"]), "/pricing").visitors).to eq(1)
+      expect(event_branch(flow(["/"]), "Signup")).to be_nil
+    end
+
+    it "counts them as steps when asked for" do
+      visit("s1", ["/"])
+      fire("s1", "Signup", offset: 30.seconds)
+
+      result = flow(["/"], include_events: true)
+      expect(result.visitors).to eq(1)
+      expect(event_branch(result, "Signup").visitors).to eq(1)
+    end
+
+    # The whole point of including them: the event goes BETWEEN the two pages,
+    # so the page after it is no longer the page immediately after "/". A report
+    # that placed both there would be counting one visitor twice, which is the
+    # co-occurrence bug this service exists to avoid.
+    it "sits between the pages it happened between" do
+      visit("s1", ["/"])
+      fire("s1", "Signup", offset: 30.seconds)
+      create_event(site, session: "s1", visitor: "s1", path: "/welcome",
+                        at: 3.hours.ago + 1.minute)
+
+      level = flow(["/"], include_events: true)
+      expect(event_branch(level, "Signup").visitors).to eq(1)
+      expect(branch(level, "/welcome")).to be_nil
+
+      deeper = flow(["/", Analytics::FlowStep.event("Signup")], include_events: true)
+      expect(branch(deeper, "/welcome").visitors).to eq(1)
+    end
+
+    it "walks a journey that starts at an event" do
+      visit("s1", ["/"])
+      fire("s1", "Signup", offset: 30.seconds)
+      create_event(site, session: "s1", visitor: "s1", path: "/welcome",
+                        at: 3.hours.ago + 1.minute)
+
+      result = flow([Analytics::FlowStep.event("Signup")], include_events: true)
+      expect(branch(result, "/welcome").visitors).to eq(1)
+    end
+
+    it "reports a visit that ended on an event" do
+      visit("s1", ["/"])
+      fire("s1", "Signup", offset: 30.seconds)
+
+      deeper = flow(["/", Analytics::FlowStep.event("Signup")], include_events: true)
+      expect(terminal(deeper).visitors).to eq(1)
+    end
+
+    # THE KIND IS TESTED INSIDE EACH BRANCH, which is the rule CLAUDE.md §12
+    # states for funnel-step conditions and which matters here for the same
+    # reason: a customer is free to name an event after the page it leads to,
+    # and matching on the value alone would make the two the same step.
+    it "does not let an event satisfy a step that asked for the page" do
+      visit("s1", ["/"])
+      fire("s1", "/welcome", offset: 30.seconds)
+      create_event(site, session: "s1", visitor: "s1", path: "/pricing",
+                        at: 3.hours.ago + 1.minute)
+
+      level = flow(["/"], include_events: true)
+      expect(event_branch(level, "/welcome").visitors).to eq(1)
+      expect(branch(level, "/welcome")).to be_nil
+
+      as_a_page = flow(["/", Analytics::FlowStep.page("/welcome")], include_events: true)
+      expect(as_a_page.visitors).to be_zero
+    end
+
+    it "does not collapse an event into a page of the same name" do
+      create_event(site, session: "s1", visitor: "s1", path: "/signup",
+                        at: 3.hours.ago, is_entry: true)
+      fire("s1", "/signup", path: "/signup", offset: 30.seconds)
+
+      expect(event_branch(flow(["/signup"], include_events: true), "/signup").visitors).to eq(1)
+    end
+
+    # A double-clicked button is not two steps, for the same reason a reload is
+    # not two pages.
+    it "treats consecutive repeats of one event as a single step" do
+      visit("s1", ["/"])
+      fire("s1", "Ping", offset: 10.seconds)
+      fire("s1", "Ping", offset: 20.seconds)
+      fire("s1", "Ping", offset: 30.seconds)
+      create_event(site, session: "s1", visitor: "s1", path: "/pricing",
+                        at: 3.hours.ago + 1.minute)
+
+      level = flow(["/", Analytics::FlowStep.event("Ping")], include_events: true)
+      expect(event_branch(level, "Ping")).to be_nil
+      expect(branch(level, "/pricing").visitors).to eq(1)
+    end
+
+    # A click event and the pageview it fired on arrive in separate beacons and
+    # land on the same occurred_at often enough to matter. The tiebreak in
+    # STEP_ORDER puts the page first, because a page has to be open before
+    # anything can happen on it — without it the order is whatever the planner
+    # happens to produce, and the two window functions can disagree.
+    it "orders an event after the pageview it ties with" do
+      at = 3.hours.ago
+      create_event(site, session: "s1", visitor: "s1", path: "/", at: at, is_entry: true)
+      fire("s1", "Signup", base: at)
+      create_event(site, session: "s1", visitor: "s1", path: "/pricing", at: at + 1.minute)
+
+      level = flow(["/"], include_events: true)
+      expect(event_branch(level, "Signup").visitors).to eq(1)
+      expect(branch(level, "/pricing")).to be_nil
     end
   end
 

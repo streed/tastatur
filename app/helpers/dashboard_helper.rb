@@ -32,28 +32,95 @@ module DashboardHelper
   # The journey tree expanded to one particular walked path. The path is an
   # array in the query string, which is what makes an expanded tree a URL
   # somebody can send to a colleague.
-  def journey_url(site, path, period: nil)
+  #
+  # Accepts steps or bare strings, because Analytics::Dashboard's flow panels
+  # deal only in pages and should not have to know otherwise.
+  def journey_url(site, steps, period: nil, **overrides)
     period ||= @period
+    steps = Array(steps).filter_map { |step| Analytics::FlowStep.coerce(step) }
 
-    site_journeys_path(site, path: Array(path), **period.to_param)
+    # `compact` last, so an override of nil REMOVES a parameter rather than
+    # emitting it empty — which is how the events toggle turns itself back off
+    # without leaving `?steps=` on every link it produces.
+    query = { path: steps.map(&:value) }
+            .merge(journey_kind_param(steps))
+            .merge(journey_mode_param)
+            .merge(period.to_param)
+            .merge(overrides)
+            .compact
+
+    site_journeys_path(site, **query)
   end
 
-  # What a flow branch is called. The terminal branch is the one with no page on
+  # The two halves of the events toggle.
+  #
+  # Switching events OFF truncates the walked path at the first event rather
+  # than filtering them out of the middle of it: `/ → Signup → /welcome` with
+  # the event removed is `/ → /welcome`, a different journey that quite possibly
+  # nobody took. Same rule as JourneysController#requested_path.
+  def journey_mode_url(site, include_events)
+    steps = include_events ? @path : @path.take_while(&:page?)
+
+    journey_url(site, steps,
+                steps: (Sites::JourneysController::PAGES_ONLY unless include_events))
+  end
+
+  # `kind[]` is omitted from an all-pages path, so the URL for the overwhelmingly
+  # common case stays the exact string it was before events could be steps —
+  # including in anybody's bookmarks. Analytics::FlowStep reads an absent kind as
+  # a pageview, which is the other half of that.
+  def journey_kind_param(steps)
+    steps.any?(&:event?) ? { kind: steps.map(&:kind) } : {}
+  end
+
+  # Reading the tree with events switched off is a mode, so every link on the
+  # screen has to stay in it. Nil on the dashboard, where the two flow panels
+  # link into a tree they are not themselves part of.
+  def journey_mode_param
+    @include_events == false ? { steps: Sites::JourneysController::PAGES_ONLY } : {}
+  end
+
+  # What a flow branch is called. The terminal branch is the one with no step on
   # the far side, and it means opposite things in the two directions: walking
   # forward it is the visit ending, walking backward it is the visit beginning.
   # Naming it "(none)" the way a breakdown row would makes the single most
   # common row on the panel unreadable.
   def flow_branch_label(branch, direction)
-    return branch.path unless branch.terminal?
+    return flow_step_label(branch.step) unless branch.terminal?
 
     direction.to_sym == :backward ? "Entered here" : "Left the site"
   end
 
-  # A branch that returns to a page already on the walked path. Worth marking:
+  # A step on screen, with its kind said rather than inferred.
+  #
+  # `Signup` the custom event and `/signup` the page are different things, a
+  # customer may well have both, and in a list of eight rows the reader has no
+  # other way to tell which one a row is about — the same reason the goal and
+  # funnel forms put a kind control beside their value field. A leading slash is
+  # not the test: an event may be named anything, including a path.
+  def flow_step_label(step)
+    return step.value if step.page?
+
+    safe_join([step.value, tag.span("event", class: "label ml-2")], " ")
+  end
+
+  # The same thing where markup cannot go — a title attribute, a page title.
+  def flow_step_text(step)
+    step.page? ? step.value : "the #{step.value} event"
+  end
+
+  # A walked path as one line. Used for the level headings and the breadcrumb,
+  # which is why it keeps the badges: a heading reading "After / → Signup" would
+  # be the one place on the screen that hides which kind of thing Signup is.
+  def flow_path_label(steps)
+    safe_join(steps.map { |step| flow_step_label(step) }, " → ")
+  end
+
+  # A branch that returns to a step already on the walked path. Worth marking:
   # in a checkout flow it is the difference between progress and a loop, and
   # without it the row is indistinguishable from a first visit to that page.
   def flow_return?(branch, prefix)
-    !branch.terminal? && prefix.include?(branch.path)
+    !branch.terminal? && prefix.include?(branch.step)
   end
 
   def remove_filter_url(site, dimension)

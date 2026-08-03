@@ -240,11 +240,12 @@ form, and associates the button with it by the HTML `form` attribute. The one
 place `destroy_to:` still may not be used is a form rendered into a turbo frame:
 Turbo extracts the frame and drops the rest, taking the detached form with it.
 
-**`as: :combobox` is a text field that can also be picked from,** and it is used
-by exactly one thing: the match value of a goal or a funnel step, which is a
-string compared against a column. A typo there saves cleanly and then reports 0%
-forever, which is indistinguishable from a page nobody converts on. Two halves
-that must both stay as they are:
+**`as: :combobox` is a text field that can also be picked from,** and everything
+it is used for is one shape: a string the customer's own website produced,
+compared against a column. The match value of a goal or a funnel step, the value
+of a saved dashboard filter, and the page or event the Journeys screen opens on.
+A typo saves cleanly and then reports 0% forever, which is indistinguishable
+from a page nobody converts on. Two halves that must both stay as they are:
 
 - **It stays free text.** A `<select>` would refuse a goal for a page that has
   not shipped yet, and refuse `/blog/**` outright — a wildcard is a pattern, so
@@ -348,7 +349,7 @@ Before "fixing" any of these, read the linked document.
   `docs/architecture/aggregates.md`
 - **Public shared dashboards ignore filter parameters.** Filtering someone else's
   audience is a re-identification tool.
-- **`Analytics::PageFlow` counts the page seen IMMEDIATELY next, and that is what
+- **`Analytics::PageFlow` counts the step taken IMMEDIATELY next, and that is what
   makes it not a funnel.** The tempting refactor is to reuse `FunnelReport`'s
   chained CTE, whose steps are satisfied by a match anywhere later in the visit.
   Do that and a visitor who went `/` → `/docs` → `/pricing` lands in both the
@@ -358,7 +359,7 @@ Before "fixing" any of these, read the linked document.
   `spec/services/analytics/page_flow_spec.rb` pins exactly that case. Three
   further halves that are load-bearing: it walks `session_hash`, not
   `visitor_hash`, so a journey is one sitting and survives the midnight salt
-  rotation intact; consecutive repeats of one path collapse, or the commonest
+  rotation intact; consecutive repeats of one step collapse, or the commonest
   "next page" for every page on the site is itself; and the anchor CTE is
   `DISTINCT ON (session_hash)` rather than a `GROUP BY` including `visitor_hash`,
   because a visit spanning that rotation holds two visitor hashes and would
@@ -370,6 +371,23 @@ Before "fixing" any of these, read the linked document.
   favour of `idx_events_site_time` plus a sort. Re-measure before adding it. Note
   also that `CREATE INDEX CONCURRENTLY` is refused outright on a hypertable —
   `WITH (timescaledb.transaction_per_chunk)` is the form that works.
+- **A step is a page OR a custom event, and it is an `Analytics::FlowStep` — a
+  (kind, value) pair — everywhere, never a bare string.** The click between two
+  pages is usually the interesting part of the journey, so the Journeys screen
+  passes `include_events: true` and the event lands BETWEEN the two pages rather
+  than beside them. The kind test stays *inside* each branch of the chained CTE
+  for the reason the funnel bullet below gives: a customer may name an event
+  after the page it leads to, and `WHERE value = ?` alone makes the two one step.
+  Three consequences worth knowing before they look like bugs. `include_events`
+  defaults to **false**, because `Analytics::Dashboard`'s two flow panels are
+  titled "The page before/after this one" and a site firing one event per page
+  would have them report nothing else — the screen that wants events asks. The
+  URL carries kinds in a **parallel `kind[]` array that is omitted entirely when
+  every step is a page**, so links written before this existed still work and the
+  common one is unchanged. And `STEP_ORDER` breaks an `occurred_at` tie by putting
+  the pageview first — a click and the page it fired on arrive in separate
+  beacons and tie often, and two window functions over an unstable order will
+  number the steps one way and collapse the repeats another.
 - **A funnel step's matcher lives in `funnel_step_conditions`, not on the step,**
   and the `kind` / `match_value` / `match_type` columns were REMOVED from
   `funnel_steps` rather than kept alongside it. A step is satisfied by any ONE of

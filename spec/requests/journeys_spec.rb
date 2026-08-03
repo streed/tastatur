@@ -88,6 +88,111 @@ RSpec.describe "Journeys", type: :request do
     end
   end
 
+  # The click between two pages is usually the interesting part of the journey,
+  # so it is a step. See Analytics::PageFlow.
+  describe "custom events as steps" do
+    # "/" at T, the Signup click at T+30s, "/welcome" at T+1m — so the event is
+    # genuinely between the two pages rather than beside them.
+    before do
+      2.times do |i|
+        visit_pages("s#{i}", ["/", "/welcome"])
+        create_event(site, visitor: "s#{i}", session: "s#{i}", event_name: "Signup",
+                          path: "/", at: 2.hours.ago + 30.seconds)
+      end
+    end
+
+    it "shows an event as a branch, and says it is one" do
+      get site_journeys_path(site)
+
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to include("Where visitors went after the Signup event")
+    end
+
+    # The kind travels in a parallel array, because a custom event may be named
+    # after a page — see Analytics::FlowStep.
+    it "links a branch to the path extended by one hop, carrying its kind" do
+      get site_journeys_path(site)
+
+      expect(response.body).to include(CGI.escapeHTML(
+        site_journeys_path(site, path: ["/", "Signup"], kind: %w[pageview event], period: "30d")
+      ))
+    end
+
+    it "walks past an event to the page after it" do
+      get site_journeys_path(site, path: ["/", "Signup"], kind: %w[pageview event])
+
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to include("After / → Signup")
+      expect(response.body).to include("Where visitors went after /welcome")
+    end
+
+    it "opens a journey rooted at an event" do
+      get site_journeys_path(site, path: ["Signup"], kind: %w[event])
+
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to include("/welcome")
+    end
+
+    # `?steps=pages` is the report as it was, for the site that fires one event
+    # on every page and would otherwise have a step between every pair of them.
+    describe "with events switched off" do
+      it "leaves them out and joins the pages directly" do
+        get site_journeys_path(site, steps: "pages")
+
+        expect(response).to have_http_status(:ok)
+        expect(response.body).not_to include("Where visitors went after the Signup event")
+        expect(response.body).to include("Where visitors went after /welcome")
+      end
+
+      # Truncated at the first event, not filtered — dropping the event from the
+      # middle of the path would silently substitute a different journey.
+      it "truncates a walked path at its first event" do
+        get site_journeys_path(site, path: ["/", "Signup"], kind: %w[pageview event],
+                                     steps: "pages")
+
+        expect(response).to have_http_status(:ok)
+        expect(response.body).not_to include("After / → Signup")
+      end
+
+      it "keeps every link on the screen in the same mode" do
+        get site_journeys_path(site, steps: "pages")
+
+        expect(response.body).to include(CGI.escapeHTML(
+          site_journeys_path(site, path: ["/", "/welcome"], steps: "pages", period: "30d")
+        ))
+      end
+    end
+  end
+
+  # Twelve entry-page chips cannot answer "what happens after somebody clicks
+  # this". The field can, and it is free text over a k-anonymous list — the same
+  # combobox the goal and funnel forms use.
+  describe "the start-from picker" do
+    before do
+      2.times { |i| visit_pages("s#{i}", ["/", "/pricing"]) }
+      get site_journeys_path(site)
+    end
+
+    it "offers a kind and a value, named as the URL's two arrays" do
+      expect(response.body).to include('name="kind[]"')
+      expect(response.body).to include('name="path[]"')
+    end
+
+    it "carries the values this site has recorded" do
+      expect(response.body).to include(OffersKnownValues::KNOWN_VALUES_DOM_ID)
+      expect(response.body).to include("or type anything else")
+    end
+
+    # A GET form: the answer is a URL like every other piece of state here, and
+    # the screen still works with no JavaScript.
+    it "starts a journey at a typed page" do
+      get site_journeys_path(site, path: ["/pricing"], kind: %w[pageview])
+
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to include("After /pricing")
+    end
+  end
+
   describe "when every row is suppressed" do
     let(:site) { create(:site, account: account, k_anonymity_threshold: 25) }
 
