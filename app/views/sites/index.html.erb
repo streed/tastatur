@@ -68,10 +68,67 @@
     </div>
   <% else %>
 
+  <%# --- The whole account, in four numbers -------------------------------
+      ALL TIME, and said so on the card, because this is the one screen where a
+      period switcher would be lying: every site reports in its own timezone
+      (Analytics::Period resolves a preset against ONE site's zone), so "last 30
+      days" across an account of sites in Berlin, Kolkata and UTC is three
+      different windows added together. A lifetime total has no boundary to get
+      wrong, and it is the number somebody opening this page is actually after.
+
+      Which metrics appear is decided in Analytics::SiteTotals, not here: these
+      are the columns that may be summed across buckets. There is deliberately no
+      visitor figure — see the note there. -%>
+  <% total = @totals.total
+     awaiting = @sites.reject(&:receiving_data?).size %>
+  <div class="card mb-6">
+    <div class="card-head">
+      <h2 class="text-sm font-semibold">Across every site</h2>
+      <%# The title says what "all time" is bounded by, since retention deletes
+          events from the aggregates too (Privacy::EnforceDataRetention). -%>
+      <span class="label" title="Everything still stored. Events older than this account's retention window have been deleted.">All time</span>
+    </div>
+
+    <%# The hairline grid the dashboard's stat row uses, with the rules written
+        out per cell rather than by a `first:` variant: at 2 columns the second
+        row needs a top rule and the left-hand cells must not have a left one, and
+        the two breakpoints disagree about which cells those are. Four literal
+        strings for four tiles is longer and cannot be misread. -%>
+    <% rules = ["", "border-l", "border-t md:border-t-0 md:border-l", "border-t md:border-t-0 border-l"] %>
+    <div class="grid grid-cols-2 md:grid-cols-4">
+      <% [
+           ["Pageviews",     metric_number(total.pageviews),     nil],
+           ["Visits",        metric_number(total.visits),        nil],
+           ["Custom events", metric_number(total.custom_events), nil],
+           ["Sites",         @sites.size,
+            awaiting.zero? ? "All collecting" : "#{awaiting} awaiting first event"]
+         ].each_with_index do |(label, value, note), index| %>
+        <div class="px-4 sm:px-5 py-4 sm:py-5 border-rule <%= rules[index] %>">
+          <p class="label"><%= label %></p>
+          <p class="figure mt-2.5"><%= value %></p>
+          <p class="label mt-2.5"><%= note %></p>
+        </div>
+      <% end %>
+    </div>
+  </div>
+
   <div class="card">
+    <%# Column headings for the two numbers, so a bare figure on a row cannot be
+        read as the wrong metric. Hidden on phones, where the labels sit on the
+        numbers themselves. -%>
+    <div class="hidden sm:flex items-center justify-between gap-4 px-5 py-3 border-b border-rule">
+      <span class="label">Site</span>
+      <span class="flex items-center gap-8">
+        <span class="label w-24 sm:w-28 text-right">Pageviews</span>
+        <span class="label w-24 sm:w-28 text-right">Custom events</span>
+        <span class="label w-12"></span>
+      </span>
+    </div>
+
     <% @sites.each do |site| %>
-      <%= link_to site_path(site), class: "flex items-center justify-between gap-4 px-5 py-4 border-b border-rule last:border-b-0 hover:bg-surface-2" do %>
-        <div>
+      <% totals = @totals.for_site(site) %>
+      <%= link_to site_path(site), class: "flex flex-wrap items-center justify-between gap-4 px-5 py-4 border-b border-rule last:border-b-0 hover:bg-surface-2" do %>
+        <div class="min-w-0">
           <p class="font-semibold"><%= site.domain %></p>
           <p class="label mt-1">
             <% if site.receiving_data? %>
@@ -81,7 +138,21 @@
             <% end %>
           </p>
         </div>
-        <span class="label">View →</span>
+        <%# `items-end` and not `items-center`: below sm the labels sit above their
+            numbers and "Custom events" takes two lines where "Pageviews" takes one,
+            which centred left the two figures a line apart from each other. Aligning
+            the cells' bottoms puts the numbers on one line whatever the labels do. -%>
+        <div class="flex items-end sm:items-center gap-6 sm:gap-8">
+          <div class="w-24 sm:w-28 text-right">
+            <span class="label sm:hidden">Pageviews</span>
+            <p class="num font-semibold"><%= metric_number(totals.pageviews) %></p>
+          </div>
+          <div class="w-24 sm:w-28 text-right">
+            <span class="label sm:hidden">Custom events</span>
+            <p class="num font-semibold"><%= metric_number(totals.custom_events) %></p>
+          </div>
+          <span class="label w-12 text-right self-center">View →</span>
+        </div>
       <% end %>
     <% end %>
   </div>

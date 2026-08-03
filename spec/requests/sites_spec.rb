@@ -132,6 +132,68 @@ RSpec.describe "Sites", type: :request do
       expect(response.body).to include("Add a site")
     end
 
+    # THE ACCOUNT OVERVIEW, asserted on the rendered numbers rather than on
+    # Analytics::SiteTotals, which has its own spec. A service that totals
+    # perfectly and a view that prints the wrong field of it produce a page that
+    # is wrong in a way no unit test of either half can see — and the two numbers
+    # on a row are adjacent, similar, and easy to swap.
+    #
+    # `clear_materialized_aggregates!` because these totals are ALL TIME, so a
+    # bucket another spec materialized for a since-recycled site id would be added
+    # to this account's traffic. See spec/support/test_database.rb.
+    describe "the totals" do
+      let(:busy) { create(:site, account: account, domain: "busy.example.com") }
+      let(:quiet) { create(:site, account: account, domain: "quiet.example.com") }
+
+      def tile(label)
+        Nokogiri::HTML(response.body).css("p.label")
+                .find { |node| node.text.strip == label }&.next_element&.text&.strip
+      end
+
+      def row_numbers(domain)
+        row = Nokogiri::HTML(response.body).css("a")
+                      .find { |node| node.at_css("p.font-semibold")&.text&.strip == domain }
+        row.css("p.num").map { |node| node.text.strip }
+      end
+
+      before do
+        account.update!(site_limit_override: 5)
+        delete_all_events
+        Tastatur::TestDatabase.clear_materialized_aggregates!
+
+        create_event(busy, path: "/", visitor: "a", at: 1.hour.ago, is_entry: true)
+        create_event(busy, path: "/pricing", visitor: "a", at: 1.hour.ago + 1.minute)
+        create_event(busy, path: "/", visitor: "b", at: 30.minutes.ago, is_entry: true)
+        create_event(quiet, event_name: "Signup", visitor: "c", at: 20.minutes.ago, is_entry: true)
+
+        get "/sites"
+      end
+
+      it "adds every site up across the account" do
+        expect(tile("Pageviews")).to eq("3")
+        expect(tile("Visits")).to eq("3")
+        expect(tile("Custom events")).to eq("1")
+        expect(tile("Sites")).to eq("2")
+      end
+
+      it "gives each site its own pageview and custom-event counts" do
+        expect(row_numbers("busy.example.com")).to eq(%w[3 0])
+        expect(row_numbers("quiet.example.com")).to eq(%w[0 1])
+      end
+
+      it "says how many sites are still waiting for their first event" do
+        # `quiet` has sent an event, `busy` has, and a third has not — first_event_at
+        # is stamped by ingest, which these events bypass, so it is set directly.
+        busy.update!(first_event_at: 1.hour.ago)
+        create(:site, account: account, domain: "silent.example.com")
+
+        get "/sites"
+
+        expect(tile("Sites")).to eq("3")
+        expect(response.body).to include("2 awaiting first event")
+      end
+    end
+
     # Offering a button that cannot succeed is worse than not offering it: the
     # customer types a domain before finding out.
     it "replaces the add button with the plan screen at the limit" do

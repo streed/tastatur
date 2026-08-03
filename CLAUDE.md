@@ -423,6 +423,23 @@ Before "fixing" any of these, read the linked document.
   collapses a 16+ char alphanumeric run that mixes letters and digits, so an
   undeclared site still loses its tokens; it stays digit-gated so a camelCase page
   is left alone. `spec/lib/ingest/path_pattern_matcher_spec.rb`.
+- **The sites index totals are ALL TIME and carry no visitor figure.** Both halves
+  are load-bearing. A period switcher there would be lying: `Analytics::Period`
+  resolves a preset against ONE site's timezone, so "last 30 days" across sites in
+  Berlin, Kolkata and UTC is three different windows added together — a lifetime
+  total has no boundary to get wrong. And the metrics are exactly the columns of
+  `events_by_hour` that may be SUMmed across buckets: pageviews, custom events, and
+  `entries` (one per session, so it counts visits started). `visitors` and
+  `sessions` are distinct counts, which §8 forbids summing; even taken exactly from
+  `visitor_days` an all-time unique count would be a count of visitor-days wearing
+  the word "visitors", because the salt rotates at each site's midnight.
+  `Analytics::SiteTotals` reads the aggregate and never the hypertable, which is
+  what makes an unbounded total affordable — `COUNT(*)` over `events` with no time
+  bound is a scan of every chunk on the instance, the trap `Admin::InstanceSummary`
+  avoids by bounding its own count to 24 hours. Note the spec hazard this creates:
+  materialized aggregate rows survive the suite's truncation, and an all-time query
+  has no window to exclude a recycled site id's leftovers with — see
+  `Tastatur::TestDatabase.clear_materialized_aggregates!`.
 - **The write buffer builds its INSERT by hand.** It is the ingest hot path;
   `insert_all` per event costs an order of magnitude. Values are all passed
   through `connection.quote` and the column list is a frozen constant. The

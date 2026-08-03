@@ -13,7 +13,12 @@ class SitesController < ApplicationController
   # requires a confirmed address — anyone who has not confirmed one.
   def index
     @sites = policy_scope(Site).ordered
-    redirect_to new_site_path if @sites.empty? && policy(Site).create?
+    return redirect_to new_site_path if @sites.empty? && policy(Site).create?
+
+    # ONE query for every site on the page, not one per site. See
+    # Analytics::SiteTotals — it reads events_by_hour, so the cost is a few
+    # thousand aggregate rows rather than a scan of the raw hypertable.
+    @totals = Analytics::SiteTotals.call(sites: @sites).value!
   end
 
   # The dashboard.
