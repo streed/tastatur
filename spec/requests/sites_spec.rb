@@ -145,15 +145,24 @@ RSpec.describe "Sites", type: :request do
       let(:busy) { create(:site, account: account, domain: "busy.example.com") }
       let(:quiet) { create(:site, account: account, domain: "quiet.example.com") }
 
+      # Scoped to the overview card rather than the whole page: the rows below it
+      # label their own figures with the same words on a narrow screen, so an
+      # unscoped search for "Pageviews" would silently start reading a site's
+      # number as the account's the moment the card moved.
       def tile(label)
-        Nokogiri::HTML(response.body).css("p.label")
+        Nokogiri::HTML(response.body).at_css("div.card").css("p.label")
                 .find { |node| node.text.strip == label }&.next_element&.text&.strip
       end
 
-      def row_numbers(domain)
+      # A row prints its two figures TWICE — once stacked under the domain for a
+      # phone, once in the columns the header row names — so this returns one pair
+      # per rendering and the caller asserts on both. Two copies that drift apart
+      # is the failure mode of having two, and only the wide one is ever open in
+      # the browser somebody is testing in.
+      def row_number_pairs(domain)
         row = Nokogiri::HTML(response.body).css("a")
                       .find { |node| node.at_css("p.font-semibold")&.text&.strip == domain }
-        row.css("p.num").map { |node| node.text.strip }
+        row.css("p.num").map { |node| node.text.strip }.each_slice(2).to_a
       end
 
       before do
@@ -177,8 +186,8 @@ RSpec.describe "Sites", type: :request do
       end
 
       it "gives each site its own pageview and custom-event counts" do
-        expect(row_numbers("busy.example.com")).to eq(%w[3 0])
-        expect(row_numbers("quiet.example.com")).to eq(%w[0 1])
+        expect(row_number_pairs("busy.example.com")).to eq([%w[3 0], %w[3 0]])
+        expect(row_number_pairs("quiet.example.com")).to eq([%w[0 1], %w[0 1]])
       end
 
       it "says how many sites are still waiting for their first event" do

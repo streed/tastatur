@@ -49,3 +49,9 @@
 # Ignore Docker-related files
 /.dockerignore
 /Dockerfile*
+
+# Editions (CLAUDE.md §20) are copied INTO the image when they are checked out —
+# that is how a local `docker build` of the hosted edition works without a token.
+# Only their git history is excluded, which the /.git/ rule above does not match
+# because it is anchored at the repository root.
+/editions/*/.git/

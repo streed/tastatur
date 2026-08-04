@@ -27,6 +27,11 @@ require 'rspec/rails'
 
 Rails.root.glob('spec/support/**/*.rb').sort_by(&:to_s).each { |f| require f }
 
+# The same, for any edition (config/application.rb). Loaded after this
+# repository's own so an edition can build on a shared helper but cannot change
+# what one means for the specs here.
+Rails.root.glob('editions/*/spec/support/**/*.rb').sort_by(&:to_s).each { |f| require f }
+
 # We keep no schema file — a pg_dump of a TimescaleDB database silently loses
 # hypertables and turns continuous aggregates into plain views (see
 # config/application.rb). So `maintain_test_schema!` has nothing to load and is

@@ -106,7 +106,14 @@
         <div class="px-4 sm:px-5 py-4 sm:py-5 border-rule <%= rules[index] %>">
           <p class="label"><%= label %></p>
           <p class="figure mt-2.5"><%= value %></p>
-          <p class="label mt-2.5"><%= note %></p>
+          <%# Rendered only when there is one to render. An empty <p> still takes a
+              line box and its margin, and on a phone that is a quarter of the
+              tile's height of nothing, on three of the four tiles. Grid cells in a
+              row are equal height and top-aligned, so the figures still line up
+              across a row whether or not their neighbour has a note. -%>
+          <% if note %>
+            <p class="label mt-2.5"><%= note %></p>
+          <% end %>
         </div>
       <% end %>
     </div>
@@ -114,44 +121,72 @@
 
   <div class="card">
     <%# Column headings for the two numbers, so a bare figure on a row cannot be
-        read as the wrong metric. Hidden on phones, where the labels sit on the
-        numbers themselves. -%>
-    <div class="hidden sm:flex items-center justify-between gap-4 px-5 py-3 border-b border-rule">
+        read as the wrong metric. Hidden below md, where the labels sit on the
+        numbers themselves.
+
+        md and not sm, and it must stay in step with the rows below it: the two
+        112px columns, their gaps and the View cell are 336px whatever the screen,
+        so at 640 they leave the domain about 200px and "Collecting since July 29,
+        2026" wraps under a domain it is supposed to sit beneath in one line. It is
+        also the breakpoint the totals card above changes shape at, so the page now
+        rearranges once rather than twice. -%>
+    <div class="hidden md:flex items-center justify-between gap-4 px-5 py-3 border-b border-rule">
       <span class="label">Site</span>
       <span class="flex items-center gap-8">
-        <span class="label w-24 sm:w-28 text-right">Pageviews</span>
-        <span class="label w-24 sm:w-28 text-right">Custom events</span>
+        <span class="label w-28 text-right">Pageviews</span>
+        <span class="label w-28 text-right">Custom events</span>
         <span class="label w-12"></span>
       </span>
     </div>
 
     <% @sites.each do |site| %>
       <% totals = @totals.for_site(site) %>
-      <%= link_to site_path(site), class: "flex flex-wrap items-center justify-between gap-4 px-5 py-4 border-b border-rule last:border-b-0 hover:bg-surface-2" do %>
-        <div class="min-w-0">
-          <p class="font-semibold"><%= site.domain %></p>
-          <p class="label mt-1">
-            <% if site.receiving_data? %>
-              Collecting since <%= site.first_event_at.to_date.to_fs(:long) %>
-            <% else %>
-              Awaiting first event
-            <% end %>
-          </p>
-        </div>
-        <%# `items-end` and not `items-center`: below sm the labels sit above their
-            numbers and "Custom events" takes two lines where "Pageviews" takes one,
-            which centred left the two figures a line apart from each other. Aligning
-            the cells' bottoms puts the numbers on one line whatever the labels do. -%>
-        <div class="flex items-end sm:items-center gap-6 sm:gap-8">
-          <div class="w-24 sm:w-28 text-right">
-            <span class="label sm:hidden">Pageviews</span>
-            <p class="num font-semibold"><%= metric_number(totals.pageviews) %></p>
+      <%# Two arrangements of the same two numbers, because a phone cannot hold the
+          one the header row above names. The fixed-width right-aligned columns are
+          288px of a 303px row at 375, so the domain was flex-wrapped onto its own
+          line and the figures ended up stranded mid-row under a heading that wrapped
+          ("Custom events") beside one that did not — three ragged columns and an
+          empty gutter down the left. Below md the numbers go under the domain
+          instead, on the same left margin as everything else in the row. -%>
+      <%= link_to site_path(site), class: "block px-5 py-4 border-b border-rule last:border-b-0 hover:bg-surface-2" do %>
+        <div class="md:flex md:items-center md:justify-between md:gap-4">
+          <div class="min-w-0">
+            <div class="flex items-baseline justify-between gap-3">
+              <p class="font-semibold"><%= site.domain %></p>
+              <%# The stand-in for the "View →" cell, which does not fit and is
+                  redundant beside it anyway: the whole row is the link. -%>
+              <span class="md:hidden text-ink-2 shrink-0" aria-hidden="true">→</span>
+            </div>
+            <p class="label mt-1">
+              <% if site.receiving_data? %>
+                Collecting since <%= site.first_event_at.to_date.to_fs(:long) %>
+              <% else %>
+                Awaiting first event
+              <% end %>
+            </p>
+
+            <%# A fixed two-column grid rather than an inline "126 pageviews · 54
+                custom events" run: half-width cells put every row's figures on the
+                same two left edges down the list, which is what the header row buys
+                on a wider screen, and they cannot reflow when one site's number is
+                two digits and the next site's is six. -%>
+            <div class="grid grid-cols-2 gap-x-4 md:hidden mt-3">
+              <div>
+                <p class="label">Pageviews</p>
+                <p class="num font-semibold mt-1"><%= metric_number(totals.pageviews) %></p>
+              </div>
+              <div>
+                <p class="label">Custom events</p>
+                <p class="num font-semibold mt-1"><%= metric_number(totals.custom_events) %></p>
+              </div>
+            </div>
           </div>
-          <div class="w-24 sm:w-28 text-right">
-            <span class="label sm:hidden">Custom events</span>
-            <p class="num font-semibold"><%= metric_number(totals.custom_events) %></p>
+
+          <div class="hidden md:flex items-center gap-8 shrink-0">
+            <p class="num font-semibold w-28 text-right"><%= metric_number(totals.pageviews) %></p>
+            <p class="num font-semibold w-28 text-right"><%= metric_number(totals.custom_events) %></p>
+            <span class="label w-12 text-right">View →</span>
           </div>
-          <span class="label w-12 text-right self-center">View →</span>
         </div>
       <% end %>
     <% end %>

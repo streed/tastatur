@@ -341,6 +341,79 @@ endpoint answers 200 rather than 400 or 503:
 stripe trigger customer.subscription.updated --api-key sk_live_…
 ```
 
+## Private customizations (editions)
+
+You can keep your own code — a landing page of your own, an internal integration,
+anything you would rather not publish — in a second, private repository and have
+it built into the image alongside this one. That is what an *edition* is; see
+CLAUDE.md §20 for the shape of one and what it may and may not touch. Skip this
+section entirely if you are deploying Tastatur as it ships.
+
+Set these as service variables on **both** the app and the worker service. The
+Dockerfile declares a matching `ARG` for each, which is what makes Railway pass
+them into a Docker build — Railpack does it automatically, Dockerfile builds do
+not:
+
+| Variable | Example | |
+|---|---|---|
+| `EDITION_REPO` | `you/tastatur-edition` | `owner/name`, cloned over HTTPS |
+| `EDITION_REF` | a commit SHA, or `main` | see below — prefer the SHA |
+| `EDITION_NAME` | `private` | becomes `editions/<name>` |
+| `EDITION_TOKEN` | a fine-grained PAT | **seal this one** |
+
+Give the token read-only Contents permission on that one repository and nothing
+else. Seal it (Variables → ⋮ → Seal) so it cannot be read back out of the
+dashboard afterwards; sealing changes visibility, not availability, and it still
+reaches the build.
+
+The token never reaches the image you run. It is declared in the throw-away
+build stage, and the final stage copies only `/rails` and the bundle out of it,
+so it is absent from both the shipped layers and their metadata. Do not lift
+those `ARG` lines to the top of the Dockerfile to tidy them: an `ARG` before the
+first `FROM` is in scope for every stage, including the one that ships.
+
+**Both services need the variables**, because they are built from the same
+Dockerfile and the worker runs the edition's jobs. A worker built without the
+edition accepts its cron entries and runs none of them, which is the silent
+failure `spec/jobs/queue_names_spec.rb` exists to catch, arriving by a route that
+spec cannot see.
+
+### Deploying a change to the private repository
+
+A push to the private repository does not trigger anything by itself — Railway
+watches this repository, and the edition is fetched during the build. `railway
+redeploy` will not help either: it reuses the image that has already been built.
+
+So pin `EDITION_REF` to a commit SHA and update the variable when you want the
+new commit live. Setting it changes a build argument, which forces a rebuild, and
+it has the better property besides: the variable says exactly which edition
+commit is running, rather than "whatever `main` was at build time". From the
+private repository's CI:
+
+```bash
+railway variables --set "EDITION_REF=$GITHUB_SHA" --service app --skip-deploys
+railway variables --set "EDITION_REF=$GITHUB_SHA" --service worker
+```
+
+`--skip-deploys` on all but the last one, so the two services rebuild together
+rather than the app deploying against the previous edition for a minute.
+
+If you would rather not automate it, leave `EDITION_REF=main` and press Redeploy
+after pushing — but know that two deploys of the same application commit can then
+produce different images, which is exactly the thing that makes a bad deploy hard
+to reason about.
+
+### Verifying which edition is running
+
+```bash
+railway run --service app bin/rails runner 'puts Tastatur.features.to_a.inspect'
+```
+
+An empty list means the community edition: the clone did not happen, or happened
+into the wrong path. The build fails loudly if `EDITION_REPO` is set and the
+clone produced nothing, precisely so this cannot present as a healthy container
+quietly serving the wrong landing page.
+
 ## Things that differ from the VPS instructions
 
 | | VPS (`docker-compose.prod.yml`) | Railway |

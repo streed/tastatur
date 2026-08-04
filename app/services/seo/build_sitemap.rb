@@ -27,6 +27,24 @@ module Seo
   class BuildSitemap < ApplicationService
     include Rails.application.routes.url_helpers
 
+    # Editions add their own pages here, and the security argument above applies
+    # to them UNCHANGED: a registration is a literal list, hand-written in the
+    # edition's own repository, and spec/requests/sitemap_spec.rb fetches every
+    # URL this returns with no session and asserts a 200. What an edition must
+    # never do is register something derived from the routing table, for exactly
+    # the reason this file does not derive its own.
+    #
+    # Keyed rather than appended so that registering twice — which
+    # `config.to_prepare` will do on every reload in development — replaces the
+    # entry instead of listing every page twice.
+    def self.register(key, &block)
+      registrations[key.to_sym] = block
+    end
+
+    def self.registrations
+      @registrations ||= {}
+    end
+
     # `url_options` comes from the controller, so every <loc> is absolute on the
     # host the crawler actually asked — exactly like llms.txt. A self-hosted
     # install then publishes its own domain instead of advertising ours.
@@ -35,34 +53,24 @@ module Seo
     end
 
     def call
-      Success(marketing + policies)
+      Success(pages + policies + editions)
     end
 
     private
 
-    def marketing
-      urls = [
-        root_url(**@url_options),
-        docs_url(**@url_options),
-        # Listed unconditionally, even though one of its entries is about price.
-        # Seo::Faq drops that entry where there is nothing to buy, so the page
-        # itself is public content on every deployment — unlike /pricing below,
-        # which redirects away entirely.
-        faq_url(**@url_options),
-        about_url(**@url_options),
-        # The revenue-attribution marketing page. Public content on every
-        # deployment — the feature itself is gated on configuration, the page
-        # explaining it is not.
-        revenue_url(**@url_options)
+    # The pages every deployment has. The landing page describes the software,
+    # and /docs explains how to use it; both say the same thing on the hosted
+    # service and on somebody's own hardware, which is the test for belonging
+    # here rather than in an edition.
+    def pages
+      [
+        SitemapEntry.new(loc: root_url(**@url_options)),
+        SitemapEntry.new(loc: docs_url(**@url_options))
       ]
+    end
 
-      # The pricing page redirects to the root wherever billing is off — a
-      # self-hosted install, or a deployment whose Stripe keys are unset — and a
-      # sitemap entry that redirects is reported back as an error rather than
-      # followed. Same reasoning, and the same condition, as llms.txt.
-      urls << pricing_url(**@url_options) if Tastatur.billing_enabled?
-
-      urls.map { |loc| SitemapEntry.new(loc: loc) }
+    def editions
+      self.class.registrations.values.flat_map { |block| block.call(@url_options) }
     end
 
     def policies

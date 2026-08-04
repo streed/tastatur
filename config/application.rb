@@ -18,6 +18,36 @@ require "action_cable/engine"
 # you've limited to :test, :development, or :production.
 Bundler.require(*Rails.groups)
 
+# --- Editions ---------------------------------------------------------------
+#
+# This repository is the community edition, and it is complete: everything below
+# this line runs, and every spec in this repository passes, with no editions/
+# directory present at all. That is the property to preserve when editing here.
+#
+# An edition is a Rails engine in editions/<name>, kept in its own repository and
+# ignored by this one (see .gitignore). It contributes controllers, views,
+# routes, migrations and cron entries the way any engine does, so nothing here
+# has to know what is in one. The hosted service loads editions/private, which
+# holds the marketing site and the waitlist — the parts that describe and sell
+# *our* deployment rather than the parts that measure *a* website.
+#
+# The extension points an edition may use are deliberately few and each is
+# documented where it lives, not here:
+#
+#   Tastatur.enable_feature      the predicates below (marketing_site?, …)
+#   Seo::BuildSitemap.register   an edition's literal URL list
+#   Seo::BuildStructuredData     .register_page / .register_offers
+#   EditionHelper#edition_partial a view slot that renders nothing when empty
+#   config/schedule.yml          merged from editions by the sidekiq initializer
+#
+# Loaded HERE, before the application class, because a Rails::Engine subclass has
+# to exist before the application is initialized for its railtie hooks to run at
+# all. `sort` so two editions load in a defined order rather than whatever order
+# the filesystem happens to return.
+Dir[File.expand_path("../editions/*/lib/edition.rb", __dir__)].sort.each do |edition|
+  require edition
+end
+
 module Tastatur
   class Application < Rails::Application
     config.active_job.queue_adapter = :sidekiq

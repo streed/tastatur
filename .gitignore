@@ -62,3 +62,11 @@
 /db/geoip/*.mmdb
 
 stripe-app/.build/
+
+# Editions: Rails engines kept in their own repositories and loaded by
+# config/application.rb when present. The hosted service clones its edition to
+# editions/private; this repository is the community edition and is complete
+# without any of them. Ignored as a directory rather than by name so a second
+# edition cannot be committed here by accident — which is the whole point, since
+# a private file committed to a public history stays in it.
+/editions/

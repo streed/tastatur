@@ -35,7 +35,42 @@ module Seo
     # silently ship a page with its structured data missing — which is precisely
     # the class of failure nothing else would notice, since the page still looks
     # perfect to a human.
-    PAGES = %i[home pricing docs faq about].freeze
+    #
+    # Only the two pages every deployment has. An edition's pages — /pricing,
+    # /faq and /about are the hosted service's — arrive through `register_page`
+    # below and are just as much a hard error when misspelled.
+    PAGES = %i[home docs].freeze
+
+    # --- Edition extension points --------------------------------------------
+    #
+    # Both take a block that is `instance_exec`'d on the service, so an edition
+    # writes `software`, `id_for("website")` and `faq_url(**@url_options)` the
+    # same way the nodes below do. That is deliberate: the alternative is
+    # duplicating the @id-and-absolute-URL discipline in a second repository,
+    # where a drifting copy would publish a graph whose nodes do not reference
+    # each other — valid JSON-LD that no consumer can join up, and nothing would
+    # raise.
+    #
+    # Keyed for the same reason BuildSitemap's registrations are: to_prepare
+    # re-registers on every reload in development.
+    def self.register_page(page, &block)
+      registered_pages[page.to_sym] = block
+    end
+
+    def self.registered_pages
+      @registered_pages ||= {}
+    end
+
+    # What a SoftwareApplication node costs. Empty here, because the community
+    # edition sells nothing and a deployment with no checkout must not publish an
+    # Offer — the same condition that keeps /pricing out of the sitemap.
+    def self.register_offers(key, &block)
+      registered_offers[key.to_sym] = block
+    end
+
+    def self.registered_offers
+      @registered_offers ||= {}
+    end
 
     def initialize(page:, url_options:)
       @page = page.to_sym
@@ -43,8 +78,9 @@ module Seo
     end
 
     def call
-      unless PAGES.include?(@page)
-        raise ArgumentError, "no structured data for #{@page.inspect}; known pages are #{PAGES.join(', ')}"
+      known = PAGES + self.class.registered_pages.keys
+      unless known.include?(@page)
+        raise ArgumentError, "no structured data for #{@page.inspect}; known pages are #{known.join(', ')}"
       end
 
       Success(StructuredData.new(graph: [ website, *operator, *page_nodes ].compact))
@@ -102,11 +138,9 @@ module Seo
 
     def page_nodes
       case @page
-      when :home    then [ software ]
-      when :pricing then [ software ]
-      when :docs    then [ tech_article ]
-      when :faq     then [ faq_page ]
-      when :about   then [ software, maintainer_node ]
+      when :home then [ software ]
+      when :docs then [ tech_article ]
+      else Array(instance_exec(&self.class.registered_pages.fetch(@page)))
       end
     end
 
@@ -134,55 +168,17 @@ module Seo
       node
     end
 
-    # Only where this instance can actually take money. A self-hosted install
-    # publishing an Offer is advertising a price nobody there can charge, and a
-    # deployment with no Stripe keys would be doing the same — the same condition
-    # that keeps /pricing out of the sitemap and out of llms.txt.
+    # What this instance sells, if anything.
+    #
+    # Empty in the community edition and that is not a placeholder: an Offer node
+    # names a price and a currency, and the community edition has no checkout to
+    # honour one. The hosted edition registers the real offers, which is also
+    # where the `Billing::Plan::UNLIMITED` guard lives — `Float::INFINITY` is
+    # correct everywhere else in this application and is not representable in
+    # JSON, so `JSON.generate` raises on it and takes down every page carrying
+    # this node. Keep that guard with the code that interpolates a limit.
     def plan_offers
-      return [] unless Tastatur.billing_enabled?
-
-      Billing::Plan::OFFERED.map do |plan|
-        {
-          "@type" => "Offer",
-          "name" => plan.name,
-          "price" => plan.price_display,
-          "priceCurrency" => plan.currency.upcase,
-          "url" => pricing_url(**@url_options),
-          "availability" => "https://schema.org/InStock",
-          "priceSpecification" => {
-            "@type" => "UnitPriceSpecification",
-            "price" => plan.price_display,
-            "priceCurrency" => plan.currency.upcase,
-            # Per month. UN/CEFACT code MON, which is what schema.org's
-            # unitCode expects and what Google's parser reads.
-            "referenceQuantity" => {
-              "@type" => "QuantitativeValue", "value" => 1, "unitCode" => "MON"
-            }
-          },
-          "description" => offer_description(plan)
-        }
-      end
-    end
-
-    # NEVER interpolate a limit without this guard. Billing::Plan::UNLIMITED is
-    # Float::INFINITY, which is deliberate and correct everywhere else in the
-    # application — and is not representable in JSON. `JSON.generate` raises
-    # `NaN/Infinity not allowed in JSON` on it, which would take down every page
-    # carrying this node the moment a plan with no ceiling became purchasable.
-    # Only FREE and PRO are in OFFERED today, so this is a guard against a future
-    # edit rather than a live bug; it is here because the failure would be a 500
-    # on the marketing page and the cause would be three files away.
-    def offer_description(plan)
-      events = quota(plan.monthly_event_limit, "events a month")
-      sites = quota(plan.site_limit, "site".pluralize(plan.site_limit == 1 ? 1 : 2))
-
-      "#{events}, #{sites}, unlimited teammates."
-    end
-
-    def quota(value, noun)
-      return "Unlimited #{noun}" if value == Billing::Plan::UNLIMITED
-
-      "#{ActiveSupport::NumberHelper.number_to_delimited(value)} #{noun}"
+      self.class.registered_offers.values.flat_map { |block| instance_exec(&block) }
     end
 
     def tech_article
@@ -198,32 +194,6 @@ module Seo
         "about" => { "@id" => id_for("software") },
         "inLanguage" => "en",
         "license" => LICENSE_URL
-      }
-    end
-
-    # The node this whole file is worth writing for. `mainEntity` is a flat list
-    # of Question nodes, each with exactly one acceptedAnswer, which is the shape
-    # every answer engine reads — and the answers come from Seo::Faq, the same
-    # catalogue the visible page renders, so the two cannot disagree. A FAQPage
-    # whose JSON-LD answers differ from the answers on the page is treated as
-    # cloaking, and it is an easy mistake to make when the markup is written by
-    # hand next to the prose.
-    def faq_page
-      {
-        "@type" => "FAQPage",
-        "@id" => "#{faq_url(**@url_options)}#faq",
-        "url" => faq_url(**@url_options),
-        "name" => "Tastatur — frequently asked questions",
-        "isPartOf" => { "@id" => id_for("website") },
-        "inLanguage" => "en",
-        "mainEntity" => Faq.entries.map do |entry|
-          {
-            "@type" => "Question",
-            "@id" => "#{faq_url(**@url_options)}##{entry.anchor}",
-            "name" => entry.question,
-            "acceptedAnswer" => { "@type" => "Answer", "text" => entry.answer_text }
-          }
-        end
       }
     end
 

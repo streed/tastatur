@@ -122,11 +122,9 @@ RSpec.describe "Billing when Stripe is not configured", type: :request do
       expect(response).to redirect_to(sites_path)
     end
 
-    it "publishes no prices, because they could not be charged" do
-      get "/pricing"
-
-      expect(response).to redirect_to(root_path)
-    end
+    # The /pricing half of this — that an unconfigured instance publishes no
+    # prices — is asserted in the edition that owns the page. There is no
+    # pricing route here to assert against.
 
     it "shows no billing links anywhere" do
       get "/sites"

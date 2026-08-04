@@ -215,7 +215,12 @@
                         form: { data: { turbo: false } } %>
         <% end %>
 
-        <%= link_to "Compare plans", pricing_path, class: "btn btn-quiet" %>
+        <%# /pricing belongs to the marketing site, which is an edition. Billing
+            itself is not: a deployment can have a checkout without having a page
+            that advertises one. -%>
+        <% if Tastatur.marketing_site? %>
+          <%= link_to "Compare plans", pricing_path, class: "btn btn-quiet" %>
+        <% end %>
       </div>
 
       <p class="text-[12px] text-muted mt-5 leading-relaxed">

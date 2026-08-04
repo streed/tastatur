@@ -160,29 +160,16 @@ Rails.application.routes.draw do
 
   # --- Documentation --------------------------------------------------------
   get "docs", to: "docs#show"
-  get "about", to: "pages#about"
-  get "pricing", to: "pricing#show"
 
-  # The questions people ask before choosing an analytics tool. No `format:
-  # false` here, unlike llms.txt below: this one WANTS Rails' implicit
-  # `(.:format)` segment, because /faq.md is how a machine reader fetches it
-  # without content negotiation — exactly as /docs.md does.
-  get "faq", to: "pages#faq"
-
-  # The revenue-attribution marketing page. Same two-format contract as /faq:
-  # /revenue.md is the machine reader's copy.
-  get "revenue", to: "pages#revenue"
-
-  # The llms.txt convention (https://llmstxt.org): a markdown index at a
-  # well-known path telling an AI agent what is here and where the
-  # markdown-native pages live. `format: false` keeps ".txt" as a literal part
-  # of the path instead of letting Rails read it as a format; the default then
-  # pins the response to markdown regardless of the Accept header. /index.md is
-  # the marketing page's directly fetchable markdown URL — the root route has no
-  # format segment, and an index that says "send this Accept header" is a worse
-  # index than a link.
-  get "llms.txt", to: "pages#llms", as: :llms, format: false, defaults: { format: :md }
-  get "index.md", to: "pages#home", as: :markdown_root, format: false, defaults: { format: :md }
+  # NOTE: /about, /pricing, /faq, /revenue, /llms.txt, /index.md and the
+  # waitlist are NOT here. They belong to the marketing site, which is an
+  # edition (config/application.rb) rather than part of the community edition —
+  # a page selling a hosted service has nothing to say on somebody's own
+  # hardware. An edition prepends them, along with its own `/`.
+  #
+  # This is why a view must guard on `Tastatur.marketing_site?` before naming
+  # `pricing_path` or `faq_path`: here those helpers do not exist at all, so an
+  # unguarded call raises NameError rather than rendering a dead link.
 
   # robots.txt and sitemap.xml, served by the application rather than out of
   # public/ — see CrawlersController for the two bugs that decision avoids, and

@@ -99,6 +99,11 @@ an amount is sent: without one, a total would silently mix euros and yen.
 
 ## Revenue attribution
 
+<%# One line, because ERB trims a line holding only a scriptlet tag — newline
+    included — and a conditional split across lines would close the paragraph
+    early. See CLAUDE.md §17 on whitespace in markdown templates. -%>
+**Not shipped yet.** The shapes below are settled and the endpoints are not open<% if Tastatur.marketing_site? %>; there is a list to join at <%= revenue_url %> for the one email that goes out when they are<% end %>.
+
 Connect Stripe and see which channel produced paying customers, not just
 visitors. Three steps, and the middle one is the only code you write.
 

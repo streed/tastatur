@@ -134,6 +134,24 @@ templates are silently absent and the page renders half-styled with no error.
 `bin/tailwind-watch` polls mtimes instead, and `app/assets/tailwind/application.css`
 declares explicit `@source` globs so content detection is deterministic.
 
+### The flag font is first in the font stack, and moving it breaks Windows
+
+`app/assets/fonts/twemoji-country-flags.woff2` exists because the country
+breakdown draws its flags from the country code itself — two regional indicator
+letters that an emoji font composes into one glyph. macOS and Linux do that with
+their own emoji fonts. Windows does not: Segoe UI Emoji ships no flag glyphs at
+all, and because it *does* cover the two letters individually, font fallback
+stops there and draws two boxed capitals. Listing our font anywhere but FIRST in
+`--font-sans` means Windows never reaches it, which is why
+`spec/requests/country_flags_spec.rb` asserts the position rather than only that
+the panel renders. The `unicode-range` is the other half: it keeps the 76KB off
+every page that has no flag on it.
+
+The alternative was ~250 vendored SVGs to licence-check and keep in step with ISO
+3166. Third-party attribution: the file is Twemoji Mozilla, taken from
+`country-flag-emoji-polyfill` 0.1.10 (MIT); the artwork is Twemoji, © Twitter
+Inc. and contributors, CC-BY 4.0.
+
 ### Files written by the container are root-owned
 
 The dev container runs as root, so `rails generate` produces root-owned files on

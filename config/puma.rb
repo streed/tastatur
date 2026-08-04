@@ -52,6 +52,29 @@ port ENV.fetch("PORT", 3000)
 # stack an oversized body is dropped before it reaches Ruby at all.
 http_content_length_limit 64 * 1024
 
+# A SECOND, HTTPS BINDING FOR LOCAL DEVELOPMENT ONLY, and it exists for exactly
+# one reason: Stripe refuses a non-HTTPS redirect URI.
+#
+# `stripe-app/stripe-app.json` therefore lists `https://localhost:3443/...` as an
+# allowed redirect, so the Stripe App's OAuth install cannot be walked through on
+# a laptop without a TLS listener on that port. Everything else in development is
+# happier on plain HTTP, so this is additive rather than a replacement: with
+# SSL_PORT set puma serves 3000 and 3443 at once, and the app is reachable either
+# way.
+#
+# Off unless SSL_PORT is set, so production — which terminates TLS at the edge —
+# never evaluates it. `bin/dev-ssl-cert` mints the self-signed pair.
+if ENV["SSL_PORT"].present?
+  ssl_key  = ENV.fetch("SSL_KEY_FILE", "tmp/ssl/localhost.key")
+  ssl_cert = ENV.fetch("SSL_CERT_FILE", "tmp/ssl/localhost.crt")
+
+  unless File.exist?(ssl_key) && File.exist?(ssl_cert)
+    raise "SSL_PORT is set but #{ssl_cert} is missing. Run bin/dev-ssl-cert first."
+  end
+
+  ssl_bind "127.0.0.1", ENV["SSL_PORT"], key: ssl_key, cert: ssl_cert
+end
+
 # Allow puma to be restarted by `bin/rails restart` command.
 plugin :tmp_restart
 

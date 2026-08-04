@@ -3,10 +3,13 @@ Sidekiq.configure_server do |config|
   config.concurrency = Integer(ENV.fetch("SIDEKIQ_CONCURRENCY", 5))
 
   config.on(:startup) do
-    schedule_file = Rails.root.join("config", "schedule.yml")
-    if File.exist?(schedule_file)
-      Sidekiq::Cron::Job.load_from_hash(YAML.load_file(schedule_file))
-    end
+    # Merged across this repository and any editions, because an edition ships
+    # jobs and a job with no cron entry is a job that never runs — the exact
+    # failure spec/jobs/queue_names_spec.rb exists to prevent, arriving by a new
+    # route. `Tastatur.cron_schedule` is also what that spec reads, so the two
+    # cannot drift.
+    schedule = Tastatur.cron_schedule
+    Sidekiq::Cron::Job.load_from_hash(schedule) if schedule.any?
   end
 end
 

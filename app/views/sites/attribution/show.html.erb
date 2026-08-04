@@ -58,6 +58,21 @@
           <%= button_to "Connect Stripe", site_stripe_connection_path(@site), class: "btn btn-primary btn-sm",
                         form: { data: { turbo: false } },
                         data: { analytics_event: "Stripe Connect Started" } %>
+        <% elsif !Tastatur.revenue_enabled? && !Tastatur.self_hosted? %>
+          <%# Reachable by any customer — the Attribution link sits on every
+              dashboard by design, because the unconnected state is the page that
+              explains why to connect. So the message here has to be the one a
+              customer can act on. "An operator needs to set an environment
+              variable" is true of a self-hosted install and useless on the
+              hosted service, where the reader is not the operator and cannot
+              set anything. The list lives on /revenue rather than being a fourth
+              copy of the form. -%>
+          <p class="text-sm text-ink-2">
+            This is not available yet.
+            <% if Tastatur.marketing_site? %>
+              <%= link_to "Hear when it ships", revenue_path, class: "underline hover:text-ink" %>.
+            <% end %>
+          </p>
         <% elsif !Tastatur.revenue_enabled? %>
           <p class="text-sm text-ink-2">
             Stripe Connect is not configured on this instance. An operator needs to set

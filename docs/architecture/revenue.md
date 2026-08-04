@@ -3,10 +3,24 @@
 Which acquisition channel produced paying customers, rather than which produced
 visitors.
 
-This is the only part of Tastatur that stores data about identifiable people, and
-the only part that is not anonymous by construction. That is deliberate, it is
-confined to five tables, and this document exists so nobody has to reverse-engineer
-why from the schema.
+> **Status: not shipped.** The design below is settled and most of it is built.
+> What it is not is available: the three Stripe Connect variables are unset on the
+> hosted service, so `Tastatur.revenue_enabled?` is false and every endpoint here
+> is dark. Nothing was removed or gated further to achieve that — launching is a
+> deploy, not a rewrite. `/revenue`, `/revenue.md`, the docs section and the
+> pricing page all say it is coming, and the in-app Revenue card offers the
+> waitlist in place of a connect button. `spec/requests/waitlist_spec.rb` pins
+> that wording so a half-launch cannot leave one surface claiming otherwise.
+>
+> People who want to hear about it are in `waitlist_signups`, double opt-in, and
+> leaving deletes the row rather than suppressing it. See CLAUDE.md §19.
+
+This is the only *pipeline* in Tastatur that stores data about identifiable
+people, and the only part that is not anonymous by construction. That is
+deliberate, it is confined to five tables, and this document exists so nobody has
+to reverse-engineer why from the schema. (The waitlist above is the other place an
+address is held; it is a marketing list rather than a measurement pipeline, and
+nothing joins the two.)
 
 ## The two pipelines
 

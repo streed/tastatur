@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# Mints the self-signed certificate the development HTTPS listener uses.
+#
+# WHY THIS EXISTS AT ALL: Stripe will not accept an `http://` redirect URI, so
+# the Stripe App's OAuth install (docs/architecture/revenue.md) cannot be
+# exercised locally without TLS. `stripe-app/stripe-app.json` pins
+# `https://localhost:3443/stripe/connect/callback`, which is what the port and
+# the `localhost` SAN below have to match.
+#
+# The pair lands in tmp/, which is gitignored — a committed private key is a
+# committed private key even when it only signs for localhost.
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+dir="tmp/ssl"
+key="$dir/localhost.key"
+crt="$dir/localhost.crt"
+
+if [ -f "$key" ] && [ -f "$crt" ]; then
+  echo "Certificate already present at $crt"
+  openssl x509 -in "$crt" -noout -subject -dates
+  exit 0
+fi
+
+mkdir -p "$dir"
+
+# `-addext subjectAltName` rather than only a CN: browsers have ignored the
+# common name for host matching since Chrome 58, so a CN-only certificate is
+# rejected with ERR_CERT_COMMON_NAME_INVALID and no obvious cause.
+openssl req -x509 -nodes -newkey rsa:2048 \
+  -keyout "$key" -out "$crt" -days 825 \
+  -subj "/CN=localhost" \
+  -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" 2>/dev/null
+
+chmod 600 "$key"
+
+echo "Wrote $crt and $key"
+echo
+echo "Start the server with TLS on 3443 alongside the usual HTTP on 3000:"
+echo "  SSL_PORT=3443 bin/dev"
+echo
+echo "The certificate is self-signed, so the first visit to"
+echo "https://localhost:3443 needs the browser's 'Proceed anyway'."

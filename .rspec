@@ -1,1 +1,23 @@
+# `-I spec` because `--default-path .` below takes spec/ off the load path, and
+# both `--require spec_helper` here and the `require "rails_helper"` at the top
+# of every spec — including an edition's — resolve through it.
+-I spec
 --require spec_helper
+
+# Editions (config/application.rb) ship their own specs, and they have to run in
+# the same process as this repository's: an edition is loaded into this
+# application, so the only meaningful question about it is whether the combined
+# thing works. Running them separately would say nothing about the combination,
+# which is the only configuration anybody deploys.
+#
+# Rooting the default path at the repository rather than at spec/ is all that
+# takes — RSpec's own default pattern then finds spec/**/*_spec.rb and
+# editions/*/spec/**/*_spec.rb alike, and finds nothing extra where no edition is
+# checked out, which is the community edition and is what this repository's CI
+# runs.
+#
+# DO NOT ADD `--pattern` HERE to make that explicit. It reads like documentation
+# and it silently breaks running one file: with a pattern configured, RSpec globs
+# it and ignores the paths on the command line, so `rspec spec/models/site_spec.rb`
+# runs the entire suite. Measured, not guessed.
+--default-path .

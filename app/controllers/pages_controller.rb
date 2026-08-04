@@ -1,62 +1,27 @@
 class PagesController < ApplicationController
-  skip_before_action :authenticate_user!, only: %i[home about faq revenue llms]
+  skip_before_action :authenticate_user!, only: %i[home]
   # The landing page is genuinely public and touches no records, so there is
   # nothing to authorize. Noted explicitly because CLAUDE.md requires a stated
   # reason whenever Pundit verification is skipped.
   skip_after_action :verify_authorized
 
-  # /about and /llms.txt are public information and stay readable before
-  # first-run setup, like the other informational pages. The root path
-  # deliberately does NOT: on a fresh self-hosted install, sending the operator
-  # to the setup wizard is the helpful thing to do.
-  always_reachable only: %i[about faq revenue llms]
-
-  def about; end
-
-  # The revenue-attribution page: what the feature is, how the three
-  # integration points work, and what it deliberately will not do. Public in
-  # both formats like the FAQ — the reader deciding whether to adopt this is
-  # increasingly an agent reading on somebody's behalf.
-  def revenue
-    respond_to do |format|
-      format.html
-      format.md
-    end
-  end
-
-  # The FAQ. Public, and public in both formats for the same reason the docs
-  # are: the most common reason somebody reads it is to decide whether to use
-  # Tastatur at all, and increasingly that somebody is an agent answering the
-  # question on a person's behalf.
+  # The community edition's landing page: what this software is, who wrote it,
+  # what it refuses to collect, and where the documentation is.
   #
-  # The entries come from Seo::Faq rather than from either template, so the HTML
-  # page, the markdown rendering and the FAQPage JSON-LD in the layout are three
-  # renderings of one catalogue. A FAQPage whose structured answers differ from
-  # its visible ones is treated as cloaking, and hand-maintaining two copies is
-  # how that happens by accident.
-  def faq
-    @entries = Seo::Faq.entries
-
-    respond_to do |format|
-      format.html
-      format.md
-    end
-  end
-
-  # The llms.txt index for AI agents. Its format is pinned to markdown by the
-  # route, so there is nothing to negotiate here; the template is what matters.
-  def llms; end
-
+  # It is NOT a marketing page and should not become one. A page arguing for a
+  # hosted service has nothing to say to somebody who has already installed this
+  # on their own hardware — they made that decision before they got here. The
+  # hosted service's landing page lives in an edition (config/application.rb) and
+  # takes over `/` by prepending its own route.
+  #
+  # HTML only, deliberately. The marketing page has a markdown rendering because
+  # its job is to be read by machine readers deciding whether to adopt the
+  # product; this page's job is done by /docs, which has one.
+  #
+  # Deliberately NOT `always_reachable`: on a fresh self-hosted install, sending
+  # the operator to the setup wizard is the helpful thing to do.
   def home
-    # A signed-in visitor almost never wants the marketing page.
-    return redirect_to sites_path if user_signed_in?
-
-    # HTML for people; markdown for machine readers that ask with
-    # `Accept: text/markdown`. Same content, none of the layout.
-    respond_to do |format|
-      format.html
-      format.md
-    end
+    redirect_to sites_path if user_signed_in?
   end
 
   # `/dashboard` exists because the starter template and Devise's default

@@ -179,7 +179,35 @@
 
     <% connection = @site.stripe_connection %>
     <div class="card-body space-y-4">
-      <% if !Tastatur.revenue_enabled? %>
+      <%# THREE STATES, and the middle one is new. "Not configured" is an
+          operator's problem and the right thing to say to somebody who can fix
+          it — which on a self-hosted install is the person reading. On the
+          hosted service it is not: nobody reading this can set an environment
+          variable on our servers, and telling them to is both useless and a
+          leak of how the sausage is made. There the honest message is that the
+          feature is not out yet, with the way to hear about it. -%>
+      <% if !Tastatur.revenue_enabled? && !Tastatur.self_hosted? %>
+        <p class="text-sm text-ink-2 max-w-2xl">
+          <strong>Revenue attribution is not available yet.</strong> It will show which acquisition
+          channel produced paying customers — connect Stripe read-only, and read it here.
+          <% if Tastatur.marketing_site? %>
+            <%= link_to "What it does", revenue_path, class: "underline hover:text-ink" %>.
+          <% end %>
+        </p>
+        <div class="max-w-xl">
+          <%# Prefilled, because we are talking to somebody who is signed in and
+              asking them to type an address we already have would be theatre.
+              It is still confirmed like any other: the list has one rule about
+              proving the mailbox, and an account holder is not an exception to
+              it — people sign up with addresses they later lose access to.
+
+              A slot rather than a render: the waitlist is an edition, and the
+              community edition holds no addresses for anyone. There, this
+              paragraph states the fact and stops, which is the honest version
+              anyway — there is no list for a self-hoster to be added to. -%>
+          <%= edition_partial "waitlist_signups/form", source: "site_settings", email: current_user.email %>
+        </div>
+      <% elsif !Tastatur.revenue_enabled? %>
         <p class="text-sm text-ink-2">
           Stripe Connect is not configured on this instance, so revenue attribution is unavailable.
           An operator needs to set <code>STRIPE_CONNECT_CLIENT_ID</code> and

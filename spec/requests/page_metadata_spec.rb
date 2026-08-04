@@ -74,9 +74,6 @@ RSpec.describe "Page metadata", type: :request do
 
   describe "the markdown alternate" do
     it "points at the markdown rendering of the same document" do
-      expect(head_of("/").at_css('link[rel="alternate"][type="text/markdown"]')["href"])
-        .to eq("/index.md")
-
       expect(head_of("/docs").at_css('link[rel="alternate"][type="text/markdown"]')["href"])
         .to eq("/docs.md")
     end
@@ -105,17 +102,10 @@ RSpec.describe "Page metadata", type: :request do
       expect(json_ld("/")["@context"]).to eq("https://schema.org")
     end
 
-    it "describes the software on the marketing page" do
+    it "describes the software on the landing page" do
       types = json_ld("/")["@graph"].map { |n| n["@type"] }
 
       expect(types).to include("WebSite", "SoftwareApplication")
-    end
-
-    it "describes the questions on the FAQ" do
-      faq = json_ld("/faq")["@graph"].find { |n| n["@type"] == "FAQPage" }
-
-      expect(faq["mainEntity"].map { |q| q["name"] })
-        .to include("Do I need a cookie banner if I use Tastatur?")
     end
 
     # The one character that must not survive into a <script> block. Nothing in

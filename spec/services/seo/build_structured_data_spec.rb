@@ -31,7 +31,6 @@ RSpec.describe Seo::BuildStructuredData do
     website_id = node(:home, "WebSite")["@id"]
 
     expect(node(:docs, "TechArticle")["isPartOf"]).to eq("@id" => website_id)
-    expect(node(:faq, "FAQPage")["isPartOf"]).to eq("@id" => website_id)
   end
 
   describe "the software node" do
@@ -89,80 +88,67 @@ RSpec.describe Seo::BuildStructuredData do
     end
   end
 
-  describe "offers" do
-    it "publishes one per plan on offer, priced per month" do
-      offers = node(:pricing, "SoftwareApplication")["offers"]
-
-      expect(offers.map { |o| o["name"] }).to eq(%w[Free Pro])
-      expect(offers.last).to include("price" => "30", "priceCurrency" => "USD")
-      expect(offers.last.dig("priceSpecification", "referenceQuantity"))
-        .to include("value" => 1, "unitCode" => "MON")
-    end
-
-    # An instance that cannot take a payment must not advertise a price. Same
-    # condition, and the same reasoning, as the pricing entries in
-    # Seo::BuildSitemap and llms.txt.
-    it "are omitted where this instance cannot charge for anything" do
-      allow(Tastatur).to receive(:billing_enabled?).and_return(false)
-
-      expect(node(:home, "SoftwareApplication")).not_to have_key("offers")
-    end
-
-    # THE ONE THAT WOULD HAVE BEEN A 500 ON THE MARKETING PAGE.
-    # Billing::Plan::UNLIMITED is Float::INFINITY, which is correct everywhere
-    # else in the application and is not representable in JSON — `JSON.generate`
-    # raises on it. Nothing in OFFERED is unlimited today, so this pins the guard
-    # against the edit that adds one, three files away from the page that breaks.
-    it "survives a plan with no ceiling instead of producing unserialisable JSON" do
-      stub_const("Billing::Plan::OFFERED", [ Billing::Plan.self_hosted ])
-
-      offer = node(:pricing, "SoftwareApplication")["offers"].first
-
-      expect(offer["description"]).to eq("Unlimited events a month, Unlimited sites, unlimited teammates.")
-      expect { JSON.generate(graph_for(:pricing)) }.not_to raise_error
-    end
-  end
-
-  describe "the FAQ page node" do
-    subject(:faq) { node(:faq, "FAQPage") }
-
-    it "asks every question in the catalogue, with one accepted answer each" do
-      questions = faq["mainEntity"]
-
-      expect(questions.map { |q| q["name"] }).to eq(Seo::Faq.entries.map(&:question))
-      expect(questions.map { |q| q["@type"] }.uniq).to eq(["Question"])
-      expect(questions.map { |q| q.dig("acceptedAnswer", "@type") }.uniq).to eq(["Answer"])
-    end
-
-    # THE ANTI-CLOAKING GUARANTEE. A FAQPage whose structured answers differ
-    # from the ones a reader sees is treated as cloaking and the markup is
-    # discarded at best. Both come from Seo::Faq, and this is the example that
-    # says a future refactor may not quietly reintroduce a second copy.
-    it "answers each question with the same text the page shows a reader" do
-      Seo::Faq.entries.each do |entry|
-        question = faq["mainEntity"].find { |q| q["name"] == entry.question }
-
-        expect(question.dig("acceptedAnswer", "text")).to eq(entry.answer_text)
-        expect(question["@id"]).to end_with("/faq##{entry.anchor}")
-      end
-    end
-
-    it "drops the pricing question where there is nothing to buy" do
-      allow(Tastatur).to receive(:billing_enabled?).and_return(false)
-
-      names = node(:faq, "FAQPage")["mainEntity"].map { |q| q["name"] }
-
-      expect(names).not_to include(a_string_matching(/cost/i))
-      expect(names).to include(a_string_matching(/cookie banner/i))
-    end
-  end
+  # The `offers` on a SoftwareApplication and the whole FAQPage node are
+  # registered by an edition, and are asserted in the repository that registers
+  # them. What belongs here is that the extension points exist and are used —
+  # see the two examples at the end of this file.
 
   it "serialises to JSON that parses back to the same graph" do
-    data = described_class.call(page: :faq, url_options: url_options).value!
+    data = described_class.call(page: :home, url_options: url_options).value!
 
     round_tripped = JSON.parse(JSON.generate(data.to_json_ld))
 
     expect(round_tripped["@context"]).to eq("https://schema.org")
     expect(round_tripped["@graph"]).to eq(data.graph)
+  end
+
+  # --- The edition extension points ----------------------------------------
+  #
+  # These exist because the marketing pages moved to an edition and the graph
+  # they contribute has to keep referencing the community nodes — an edition
+  # that could not reach `software` or `id_for` would grow a second copy of the
+  # @id discipline, and a drifting copy publishes a graph whose nodes do not
+  # join up. That is valid JSON-LD no consumer can use, and nothing raises.
+  describe "edition registrations" do
+    after do
+      described_class.registered_pages.delete(:test_edition_page)
+      described_class.registered_offers.delete(:test_edition_offers)
+    end
+
+    it "accepts a page, and runs its block against the service's own nodes" do
+      described_class.register_page(:test_edition_page) do
+        [ { "@type" => "CollectionPage", "isPartOf" => { "@id" => id_for("website") } } ]
+      end
+
+      website_id = node(:home, "WebSite")["@id"]
+
+      expect(node(:test_edition_page, "CollectionPage")["isPartOf"]).to eq("@id" => website_id)
+    end
+
+    it "names a registered page as known rather than refusing it" do
+      described_class.register_page(:test_edition_page) { [] }
+
+      expect { described_class.call(page: :test_edition_page, url_options: url_options) }
+        .not_to raise_error
+    end
+
+    # Both examples empty the registry first, so they stay assertions about THIS
+    # repository even when an edition is checked out and has registered real
+    # offers. Otherwise they would assert something different depending on what
+    # is on disk, and fail on the hosted deployment for the one reason that is
+    # not a bug.
+    it "publishes no offers of its own, so a deployment with no checkout advertises no price" do
+      allow(described_class).to receive(:registered_offers).and_return({})
+
+      expect(node(:home, "SoftwareApplication")).not_to have_key("offers")
+    end
+
+    it "hangs registered offers off the software node" do
+      offers = proc { [ { "@type" => "Offer", "price" => "0", "url" => root_url(**@url_options) } ] }
+      allow(described_class).to receive(:registered_offers).and_return(test_edition_offers: offers)
+
+      expect(node(:home, "SoftwareApplication")["offers"].first)
+        .to include("@type" => "Offer", "url" => "https://analytics.example.org/")
+    end
   end
 end

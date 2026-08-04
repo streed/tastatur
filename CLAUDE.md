@@ -388,6 +388,17 @@ Before "fixing" any of these, read the linked document.
   the pageview first — a click and the page it fired on arrive in separate
   beacons and tie often, and two window functions over an unstable order will
   number the steps one way and collapse the repeats another.
+- **`"Tastatur Flags"` is first in `--font-sans`, and that position is the
+  feature.** The country breakdown composes a flag out of the country code — two
+  regional indicator letters — which macOS and Linux render from their own emoji
+  fonts and **Windows does not**: Segoe UI Emoji ships no flag glyphs, and since
+  it covers the two letters individually, fallback stops there and draws two
+  boxed capitals. So we ship a 76KB webfont covering exactly `U+1F1E6-1F1FF`, and
+  it has to be ahead of every system emoji family or Windows never reaches it.
+  Tidying it to the end of the list, or dropping the `unicode-range` that keeps
+  it off pages with no flags, are both invisible from Ruby —
+  `spec/requests/country_flags_spec.rb` asserts the stack order for that reason.
+  `docs/development.md`
 - **A funnel step's matcher lives in `funnel_step_conditions`, not on the step,**
   and the `kind` / `match_value` / `match_type` columns were REMOVED from
   `funnel_steps` rather than kept alongside it. A step is satisfied by any ONE of
@@ -615,7 +626,10 @@ back via the referer, and the two bounce forever.
 ### 17. What a crawler and an answer engine are told
 
 Four surfaces publish this instance to machines: `robots.txt` and `sitemap.xml`
-(§12), `llms.txt`, and the metadata block in the application layout. The rules:
+(§12), `llms.txt`, and the metadata block in the application layout. The
+mechanisms are all here; `llms.txt` and the marketing pages they describe are an
+edition (§20), which contributes its entries through the two registries below.
+The rules:
 
 - **The metadata block is opt-in, page by page.** `SeoHelper#seo` sets the title,
   description, canonical, Open Graph and Twitter tags and the JSON-LD; a page that
@@ -647,21 +661,23 @@ Four surfaces publish this instance to machines: `robots.txt` and `sitemap.xml`
   `Billing::Plan::UNLIMITED` is `Float::INFINITY`, which is correct everywhere else
   and is not representable in JSON — `JSON.generate` raises on it. Only `FREE` and
   `PRO` are in `OFFERED` today, so the failure is one edit away and would surface
-  as a 500 on the marketing page, three files from the cause.
+  as a 500 on the marketing page, three files from the cause. The guard now lives
+  with the edition that registers the offers (§20); this repository publishes no
+  `Offer` node at all, because it has no checkout to honour a price.
 - **The `.md` renderings are `rel="alternate"`, never sitemap entries.** Two copies
   of one document are not two pages; `alternate` points a machine reader at the
   markdown while telling a search engine which copy is canonical.
-- **`Seo::Faq` is a code catalogue, like `Billing::Plan`.** Three things render it —
-  `/faq`, `/faq.md`, and the `FAQPage` JSON-LD — and a `FAQPage` whose structured
-  answers differ from its visible ones is treated as cloaking. Answers are plain-text
-  paragraphs with links in a separate typed field, because markup that suits one of
-  those three renderings corrupts the other two.
-- **Every FAQ answer is bound by `docs/privacy/claims.md`,** and this is the most
-  likely place in the codebase for a banned claim to reappear, because a FAQ is
-  written in the voice of the question and the question is usually the banned claim
-  ("Is Tastatur GDPR compliant?"). The ban therefore applies to **answers, not
-  questions** — a heading quoting a reader asserts nothing. `spec/values/seo/faq_spec.rb`
-  enforces both halves.
+- **The FAQ and the marketing pages are an edition (§20), and `docs/privacy/claims.md`
+  still binds them.** That file is here because the claims are the product's, not
+  one deployment's — a self-hoster quoting our copy inherits the same ban. The FAQ
+  is the most likely place in either repository for a banned claim to reappear,
+  because a FAQ is written in the voice of the question and the question is usually
+  the banned claim ("Is Tastatur GDPR compliant?"). The ban applies to **answers,
+  not questions** — a heading quoting a reader asserts nothing.
+- **Adding a public page here means adding it to `Seo::BuildSitemap` by hand,** and
+  an edition's pages go through `register` for the same reason: the list is written
+  out, never derived. `spec/requests/sitemap_spec.rb` fetches every URL the service
+  returns with no session, so a careless line fails the suite instead of shipping.
 - **Markdown templates are whitespace-sensitive and ERB eats whitespace.** Rails
   trims any line holding only a scriptlet tag, newline included. Paragraphs emitted
   one per line through a loop arrive with nothing between them and render as one
@@ -672,9 +688,21 @@ Four surfaces publish this instance to machines: `robots.txt` and `sitemap.xml`
 
 ### 18. Revenue attribution, and the one place identifiable data lives
 
-The revenue layer answers "which channel produced paying customers". It is the
-only part of this codebase that stores data about identifiable people, it is
-confined to five tables, and full reasoning is in `docs/architecture/revenue.md`.
+The revenue layer answers "which channel produced paying customers". Along with
+`waitlist_signups` (§19) it is one of the two places in this codebase that store
+data about identifiable people — it is the only *pipeline* that does, confined to
+five tables, and full reasoning is in `docs/architecture/revenue.md`.
+
+**The feature is not shipped.** `/revenue`, `/revenue.md`, the docs section and
+the pricing page all say so, and the in-app Revenue card offers the waitlist
+instead of a connect button wherever `Tastatur.revenue_enabled?` is false and the
+instance is not self-hosted. None of the code below was removed or gated further:
+it is dark because the three Stripe Connect variables are unset, which is also
+what makes launching it a deploy rather than a rewrite. When it does ship, the
+list is what gets mailed, and `spec/requests/waitlist_spec.rb` pins the
+not-yet-available wording on all four surfaces so a half-launch cannot leave one
+of them claiming otherwise.
+
 The rules an agent must not break:
 
 - **The two pipelines never join on a visitor.** There is no column linking a
@@ -730,6 +758,95 @@ The rules an agent must not break:
   NAME to a person, so it is bcrypt-digested, prefix-indexed (one comparison per
   request, or the endpoint is a bcrypt DoS), shown once, and revoked rather than
   deleted.
+
+### 19. The waitlist lives in an edition, and so does the marketing site
+
+`waitlist_signups` — the addresses held for the unshipped revenue feature (§18) —
+and the whole marketing site moved to a private edition (§20). The rules that
+governed them did not change and are restated in that repository's own
+`CLAUDE.md`. Two things about the move matter *here*:
+
+- **The privacy policy still lists the waitlist table**, because the policy is
+  public and describes what the hosted service holds. Code can move to a private
+  repository; a claim made on a public page cannot. A row added to
+  `waitlist_signups` over there is a row edited in
+  `app/views/compliance/privacy_policy.html.erb` over here, and a table that
+  omitted the one place we hold addresses for people who are not customers would
+  make every other row in it less believable.
+- **The community edition holds no addresses for people who are not users at
+  all**, which is the stronger position and is what `/privacy` describes on a
+  self-hosted install. Do not reintroduce a waitlist here to "keep parity".
+
+### 20. Editions, and the rule that keeps this repository whole
+
+This repository is the community edition, and it is complete: it runs, and this
+entire suite passes, with no `editions/` directory present. **That is the property
+every change here has to preserve**, and nothing else in the suite will catch you
+breaking it — the deployment you are probably testing on has an edition checked
+out.
+
+An edition is a Rails engine in `editions/<name>`, kept in its own repository,
+ignored by this one, and loaded by `config/application.rb`. The hosted service
+loads `editions/private`: the marketing site and the waitlist. The test for
+which side a file belongs on is not "is it secret" — it is **would a self-hoster
+running this on their own hardware be worse off without it?** If yes, it stays
+here. That is why billing, revenue attribution and the compliance pages all
+stayed, and only the pages that sell *our* deployment left.
+
+**Nothing here may name an edition.** Not a constant, not a path, not a
+conditional. There are four extension points and no others:
+
+| | |
+|---|---|
+| `Tastatur.marketing_site?`, `.waitlist_enabled?` | predicates, in the house style — a view branches on what a deployment *does*, never on which repository is on disk |
+| `Seo::BuildSitemap.register(key)` | an edition's literal URL list |
+| `Seo::BuildStructuredData.register_page` / `.register_offers` | its JSON-LD nodes |
+| `EditionHelper#edition_partial` | a view slot that renders nothing when unfilled |
+
+Both registries are **keyed**, because `config.to_prepare` re-registers on every
+reload in development and an appending registry grows all afternoon.
+
+A view must guard on the predicate **before naming a helper an edition owns**:
+`pricing_path` is genuinely undefined here, so an unguarded call is a `NameError`,
+not a dead link. Markup that only exists over there gets an `edition_partial`
+slot instead of a guarded `render` — see `EditionHelper` for the production 500
+that distinction avoids.
+
+Adding a fifth extension point is a real design decision, not a mechanical one.
+Each is a promise this repository has to keep.
+
+**Migrations are the sharp edge, because §8 keeps no schema file.** Migrations
+*are* the schema, in every environment, forever, and now two repositories write
+them into one database. `spec/db/migration_paths_spec.rb` enforces what can be
+enforced; these are the rules behind it:
+
+- **Versions must be unique across both.** A collision is not a merge conflict
+  somebody resolves — `ActiveRecord::Migrator` keys applied migrations by version
+  and skips one it has already seen, so on a fresh install one of them silently
+  never runs. Both repositories are edited by the same person on the same day, so
+  this is a live risk and not a theoretical one.
+- **Dependencies run one way only: an edition may reference this repository's
+  tables, never the reverse.** A migration here that needed an edition's table
+  would break every community install, and the hosted deployment — which has
+  both — would not notice.
+- **An edition's migrations must be dated after this repository's newest**, never
+  back-dated to interleave. Interleaved, the order they apply in depends on which
+  repositories happen to be checked out, which means two deployments of the same
+  commit can end up with different schemas.
+- **An edition may add a column to a table here; this repository must never
+  assume it exists.** The attribute is present on the hosted deployment and
+  absent in the community edition, so any public code reading it works in
+  development and raises for a self-hoster.
+- **Never run `install:migrations`.** It copies an engine's migrations into
+  `db/migrate` — here, a private migration into a public repository. It is also
+  pointless: there is no schema dump to reconcile against.
+
+Run both configurations before believing a change works:
+
+```bash
+bundle exec rspec                     # combined; discovers editions/*/spec too
+mv editions ../editions-stash && bundle exec rspec; mv ../editions-stash editions
+```
 
 ## Testing rules
 

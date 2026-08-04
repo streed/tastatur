@@ -67,7 +67,14 @@
              ["Sign-in IP address", "The IP of your two most recent sign-ins to this dashboard, so you can recognise a login that was not you. This is the one place we store an IP address against an identity, it applies to you as an account holder rather than to visitors of any measured site, and it is overwritten as you sign in again.", "Legitimate interest"],
              ["Team membership", "Which accounts you belong to and your role in each.", "Contract"],
              ["Billing records", "On the hosted service only, and held by our payment processor rather than by us. We store a customer reference, never card details.", "Contract"],
-             ["Server logs", "Standard web logs, which include IP addresses, retained briefly for security and debugging.", "Legitimate interest"]
+             ["Server logs", "Standard web logs, which include IP addresses, retained briefly for security and debugging.", "Legitimate interest"],
+             # Listed even though most readers of this page never joined it: a
+             # table headed "what we hold about you" that omits a table holding
+             # email addresses is the kind of omission that makes every other row
+             # in it less believable. Consent rather than contract, because
+             # joining is necessary neither for an account nor for anything we
+             # owe you.
+             ["Waitlist address", "Only if you asked to hear about a feature before it ships. We keep the address, the date you confirmed it and which page you joined from — nothing else, and no record of whether you open what we send. You confirm the address before it counts, an address never confirmed is deleted within a week, and leaving deletes it rather than moving it to a suppression list.", "Consent"]
            ].each do |what, why, basis| %>
           <div class="px-5 py-4 border-b border-rule last:border-b-0">
             <div class="flex items-baseline justify-between gap-4">

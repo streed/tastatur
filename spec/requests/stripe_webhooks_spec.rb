@@ -210,8 +210,10 @@ RSpec.describe "Stripe webhooks", type: :request do
     end
 
     it "still throttles an ordinary path, so the exemption is specific" do
+      # /docs rather than /pricing: the control needs a path this edition
+      # actually serves, and /pricing belongs to the marketing site.
       statuses = Array.new(310) do
-        get "/pricing"
+        get "/docs"
         response.status
       end
 

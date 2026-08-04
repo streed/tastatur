@@ -1,0 +1,80 @@
+<%# The community edition's landing page.
+    Not a sales page — see PagesController#home for why, and for where the
+    hosted service's landing page lives instead. The description is
+    Tastatur::DESCRIPTION rather than a sentence written here, so the meta tag,
+    the link preview and the JSON-LD cannot end up describing the product three
+    different ways. -%>
+<% seo title: "Tastatur — cookieless web analytics",
+       description: Tastatur::DESCRIPTION,
+       structured_data: :home %>
+
+<div class="shell">
+  <section class="rule-heavy pt-8 pb-16 grid lg:grid-cols-12 gap-10">
+    <div class="lg:col-span-7">
+      <p class="label mb-5">Web analytics · no cookies · AGPL-3.0</p>
+      <h1 class="text-[clamp(2.25rem,5vw,3.75rem)] font-semibold leading-[1.04] tracking-[-0.035em]">
+        Know how people<br>use your site.<br>
+        <span class="text-signal">Learn nothing<br>about them.</span>
+      </h1>
+      <p class="text-lg text-ink-2 mt-7 max-w-xl leading-relaxed">
+        <%= Tastatur::DESCRIPTION %>
+      </p>
+
+      <div class="flex flex-wrap items-center gap-3 mt-9">
+        <%= link_to "Read the docs", docs_path, class: "btn btn-primary" %>
+        <%= link_to "What it collects", privacy_path, class: "btn" %>
+        <% if user_signed_in? %>
+          <%= link_to "Your sites", sites_path, class: "btn btn-quiet" %>
+        <% else %>
+          <%= link_to "Sign in", new_user_session_path, class: "btn btn-quiet" %>
+        <% end %>
+      </div>
+    </div>
+
+    <div class="lg:col-span-5 flex items-end">
+      <dl class="w-full text-sm border-t border-rule">
+        <div class="flex justify-between py-3 border-b border-rule">
+          <dt class="text-ink-2">This instance</dt>
+          <dd class="font-medium">v<%= Tastatur.version %></dd>
+        </div>
+        <div class="flex justify-between py-3 border-b border-rule">
+          <dt class="text-ink-2">Licence</dt>
+          <dd><%= link_to "AGPL-3.0", "https://www.gnu.org/licenses/agpl-3.0.html",
+                          class: "underline hover:text-ink", rel: "noopener" %></dd>
+        </div>
+        <div class="flex justify-between py-3 border-b border-rule">
+          <dt class="text-ink-2">Source</dt>
+          <dd><%= link_to "GitHub", Tastatur.maintainer[:source],
+                          class: "underline hover:text-ink", rel: "noopener" %></dd>
+        </div>
+        <div class="flex justify-between py-3">
+          <dt class="text-ink-2">Built by</dt>
+          <dd><%= link_to Tastatur.maintainer[:name], Tastatur.maintainer[:url],
+                          class: "underline hover:text-ink", rel: "noopener" %></dd>
+        </div>
+      </dl>
+    </div>
+  </section>
+
+  <%# The one substantive claim this page makes, and the one an operator is
+      accountable for once they deploy it. Kept here rather than summarised,
+      because the shared partial is what /privacy renders too — one wording. -%>
+  <section class="py-14 rule-heavy">
+    <h2 class="text-2xl font-semibold tracking-[-0.02em] mb-6">What it does not collect</h2>
+    <%= render "shared/cookie_distinction" %>
+    <p class="text-sm text-ink-2 mt-6">
+      The full account of what is stored, what is discarded and how long anything
+      lasts is on <%= link_to "the privacy page", privacy_path, class: "underline hover:text-ink" %>.
+    </p>
+  </section>
+
+  <section class="py-14">
+    <h2 class="text-2xl font-semibold tracking-[-0.02em] mb-4">Getting started</h2>
+    <p class="text-ink-2 max-w-2xl leading-relaxed">
+      Add a site, paste one script tag, and the dashboard starts filling in.
+      <%= link_to "The documentation", docs_path, class: "underline hover:text-ink" %>
+      covers custom events, goals and funnels, single-page apps, and calling the
+      ingest API directly.
+    </p>
+  </section>
+</div>

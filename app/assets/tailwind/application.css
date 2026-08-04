@@ -13,6 +13,16 @@
 @source "../../javascript/**/*.js";
 @source "../../controllers/**/*.rb";
 
+/* The same directories inside any edition (CLAUDE.md §20). One stylesheet is
+   built for the whole application, so an edition's templates have to be scanned
+   here or every utility class used only by them is absent from the build — and
+   the failure is a marketing page rendered with no styling at all, with nothing
+   logged and nothing raised. The globs match nothing where no edition is checked
+   out, which is the community edition. */
+@source "../../../editions/*/app/views/**/*.{erb,html}";
+@source "../../../editions/*/app/helpers/**/*.rb";
+@source "../../../editions/*/app/controllers/**/*.rb";
+
 /* ===========================================================================
    Tastatur — "Papier"
 
@@ -36,6 +46,40 @@
    against this exact paper surface. Substituting them means re-running it.
    =========================================================================== */
 
+/* Country flags, and why 76KB of font is the cheap option.
+ *
+ * The country breakdown draws a flag from the country code itself: two regional
+ * indicator letters, which every emoji font composes into one flag glyph
+ * (DashboardHelper#country_flag). That is free and stays in sync with the
+ * country list forever — on macOS and on Linux. On WINDOWS it renders nothing
+ * of the kind, and no font stack can fix it: Segoe UI Emoji ships no flag
+ * glyphs at all, as a deliberate decision by Microsoft, and it *does* cover the
+ * two letters individually. So the browser never falls through to another
+ * family looking for the pair — it draws two boxed capitals and stops. Every
+ * Windows reader has been getting "U S" where a flag should be.
+ *
+ * The alternative to this file is an image per country: ~250 SVGs to vendor,
+ * optimise, licence-check and keep in step with ISO 3166 as it changes, several
+ * megabytes in the repository, and markup that has to know where they live.
+ * This is one 76KB file that the browser fetches ONLY on a page containing the
+ * code points below — the unicode-range is what buys that — and it leaves the
+ * helper, the partial and the "no image set to ship" property exactly as they
+ * were. It is listed FIRST in --font-sans for the Windows reason above: after
+ * Segoe UI Emoji it would never be reached.
+ *
+ * Twemoji Mozilla, from country-flag-emoji-polyfill 0.1.10 (MIT). The artwork
+ * is Twemoji, © Twitter Inc. and contributors, CC-BY 4.0. COLRv0 with GSUB
+ * ligatures, which every browser that can render this dashboard supports.
+ */
+@font-face {
+  font-family: "Tastatur Flags";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("twemoji-country-flags.woff2") format("woff2");
+  unicode-range: U+1F1E6-1F1FF;
+}
+
 @font-face {
   font-family: "Archivo";
   font-style: normal;
@@ -58,16 +102,12 @@
 }
 
 @theme {
-  /* The emoji families at the end are not decoration: the country breakdown
-     draws its flags from regional indicator pairs (DashboardHelper#country_flag),
-     and none of the text families above covers U+1F1E6–1F1FF. Without a named
-     emoji family the browser falls through to whatever the operating system's
-     font configuration happens to offer for those code points, which is a color
-     emoji font on some machines and a monochrome font with no flags at all on
-     others — so the flags render for one reader and silently vanish for the
-     next. This is the tail Tailwind's own default stack carries and this
-     override had dropped. */
-  --font-sans: "Archivo", "Helvetica Neue", Helvetica, Arial, sans-serif,
+  /* THE FLAG FONT COMES FIRST, and that position is the whole point — see the
+     @font-face above. Everything after it is the ordinary text stack; the
+     emoji families at the end are the tail Tailwind's own default carries, so
+     that any other emoji we ever render comes from an emoji font rather than
+     from whatever the operating system's font configuration happens to guess. */
+  --font-sans: "Tastatur Flags", "Archivo", "Helvetica Neue", Helvetica, Arial, sans-serif,
                "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji",
                "Twemoji Mozilla", "Segoe UI Symbol";
 

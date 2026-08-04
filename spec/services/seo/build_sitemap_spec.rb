@@ -12,14 +12,18 @@ RSpec.describe Seo::BuildSitemap do
   # Pinned as a set rather than spot-checked, so adding a page to the sitemap is
   # an edit somebody makes on purpose. The class comment explains why a derived
   # list would be a disclosure rather than a convenience.
+  #
+  # The registry is emptied first so this stays an assertion about THIS
+  # repository's list even when an edition is checked out and has added its own.
+  # Without that, the example would assert something different depending on what
+  # happens to be on disk, and would fail on the hosted deployment for the one
+  # reason that is not a bug.
   it "lists exactly the public content pages" do
+    allow(described_class).to receive(:registrations).and_return({})
+
     expect(locs).to contain_exactly(
       "https://analytics.example.org/",
       "https://analytics.example.org/docs",
-      "https://analytics.example.org/faq",
-      "https://analytics.example.org/about",
-      "https://analytics.example.org/revenue",
-      "https://analytics.example.org/pricing",
       "https://analytics.example.org/privacy",
       "https://analytics.example.org/privacy-policy",
       "https://analytics.example.org/terms",
@@ -34,29 +38,31 @@ RSpec.describe Seo::BuildSitemap do
     expect(locs).to all(start_with("https://analytics.example.org/"))
   end
 
-  describe "the pricing page" do
-    it "is listed where there is something to buy" do
-      expect(locs).to include("https://analytics.example.org/pricing")
+  # The pricing and FAQ entries are registered by an edition and asserted in the
+  # repository that registers them. What belongs here is that the registry
+  # exists, is used, and cannot silently double up — below.
+  describe "edition registrations" do
+    after { described_class.registrations.delete(:test_edition) }
+
+    it "includes what an edition registers" do
+      described_class.register(:test_edition) do |opts|
+        [ Seo::SitemapEntry.new(loc: "#{opts[:protocol]}#{opts[:host]}/registered") ]
+      end
+
+      expect(locs).to include("https://analytics.example.org/registered")
     end
 
-    # PricingController redirects to the root wherever billing is off, and a
-    # sitemap entry that redirects is reported back as an error rather than
-    # followed. Same condition, and the same reasoning, as llms.txt.
-    it "is omitted where there is not, rather than pointing a crawler at a bounce" do
-      allow(Tastatur).to receive(:billing_enabled?).and_return(false)
+    # Keyed rather than appended, because config.to_prepare re-registers on
+    # every reload in development. An appended registry would list every edition
+    # page once per reload and the sitemap would grow all afternoon.
+    it "replaces a registration rather than listing the page twice" do
+      2.times do
+        described_class.register(:test_edition) do |opts|
+          [ Seo::SitemapEntry.new(loc: "#{opts[:protocol]}#{opts[:host]}/registered") ]
+        end
+      end
 
-      expect(locs).not_to include(a_string_including("/pricing"))
-    end
-
-    # The FAQ is the near miss here. It carries an entry about price, so the
-    # instinct is to gate it the same way — but Seo::Faq drops that one entry
-    # where there is nothing to buy and the page keeps answering the nine
-    # questions that have nothing to do with money. Gating the whole page would
-    # take the consent-banner and GDPR answers off every self-hosted install.
-    it "does not take the FAQ down with it" do
-      allow(Tastatur).to receive(:billing_enabled?).and_return(false)
-
-      expect(locs).to include("https://analytics.example.org/faq")
+      expect(locs.count("https://analytics.example.org/registered")).to eq(1)
     end
   end
 

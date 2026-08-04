@@ -183,11 +183,13 @@
     </section>
 
     <section class="rule pt-6 text-sm text-muted">
-      <p>
-        Shorter answers to the questions this page gets asked about — consent banners, GDPR,
-        why the numbers differ from Google Analytics — are on the
-        <%= link_to "FAQ", faq_path, class: "underline hover:text-signal" %>.
-      </p>
+      <% if Tastatur.marketing_site? %>
+        <p>
+          Shorter answers to the questions this page gets asked about — consent banners, GDPR,
+          why the numbers differ from Google Analytics — are on the
+          <%= link_to "FAQ", faq_path, class: "underline hover:text-signal" %>.
+        </p>
+      <% end %>
       <p class="mt-2">
         Tastatur is free software under the AGPL-3.0. If you want to verify anything on this page,
         the source is the authority — this document only describes it.

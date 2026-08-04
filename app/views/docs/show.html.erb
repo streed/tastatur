@@ -61,9 +61,12 @@
 
       <p class="label mt-8 mb-3">Deeper</p>
       <ul class="border-t border-rule text-[13px]">
-        <% [["What we collect", privacy_path],
-            ["Common questions", faq_path],
-            ["Processor terms", dpa_path]].each do |title, path| %>
+        <%# "Common questions" is the FAQ, which belongs to the marketing site and
+            so exists only where an edition provides it. -%>
+        <% links = [["What we collect", privacy_path]]
+           links << ["Common questions", faq_path] if Tastatur.marketing_site?
+           links << ["Processor terms", dpa_path] %>
+        <% links.each do |title, path| %>
           <li class="border-b border-rule">
             <%= link_to title, path, class: "block py-2 text-ink-2 hover:text-signal" %>
           </li>
@@ -156,7 +159,18 @@
 
       <%= render layout: "docs/section",
                  locals: { id: "attribution", title: "Revenue attribution",
-                           lede: "Connect Stripe and see which channel produced paying customers, not just visitors. Three steps, and the middle one is the only code you write." } do %>
+                           lede: "Not shipped yet. Connect Stripe and see which channel produced paying customers, not just visitors. Three steps, and the middle one is the only code you write." } do %>
+        <%# The API shapes below are documented before the feature is available on
+            purpose — they are what somebody deciding whether to adopt needs to
+            read. The status has to be said in the section itself: a reader who
+            lands on this anchor from a search result never sees the page's own
+            framing. -%>
+        <div class="notice text-[13px]">
+          <strong>This is not available yet.</strong> The shapes below are settled and the
+          endpoints are not open.<% if Tastatur.marketing_site? %>
+            <%= link_to "Hear when it ships", revenue_path, class: "underline" %>.<% end %>
+        </div>
+
         <div class="card card-body space-y-2.5 text-[13px] text-ink-2">
           <p><strong>Why it needs your help.</strong> The browser knows where somebody came from.
             The payment happens somewhere else, possibly days later, possibly on another device.
