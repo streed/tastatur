@@ -97,11 +97,41 @@ three are required to clear the banner.
 | `LEGAL_EMAIL` | `privacy@yourdomain.com` |
 | `LEGAL_JURISDICTION` | `England and Wales` |
 | `LEGAL_DPO_EMAIL` | `dpo@yourdomain.com` |
+| `LEGAL_UPDATED_ON` | `2026-08-04` |
 
 A policy naming no entity, and terms governed by no jurisdiction, are worse than
 none: they look like diligence while providing neither the disclosure the law
 requires nor the protection you wanted. Have your own counsel review both before
 relying on them.
+
+### The sub-processor list
+
+Section 6 of the DPA commits you to publishing a current list of sub-processors,
+dated, with notice before it changes. The list lives on the privacy policy at
+`/privacy-policy#subprocessors`, and these fill in the row for whoever runs your
+servers. Both are optional.
+
+| Variable | Example | Effect |
+|---|---|---|
+| `LEGAL_HOSTING_PROVIDER` | `Hetzner` | Names the provider instead of the generic "Hosting provider" |
+| `LEGAL_HOSTING_REGION` | `Germany` | Adds "Data is held in Germany." to that row |
+| `LEGAL_SUBPROCESSORS_UPDATED_ON` | `2026-08-04` | Dates the list; falls back to `LEGAL_UPDATED_ON` |
+
+**Why these are variables rather than text in the template.** The privacy policy
+is public code that you serve too, so a provider name written into it would
+publish *our* sub-processor as *yours* — the same mistake as a `Sitemap:` line
+advertising our host on your install (see the SEO rules in `CLAUDE.md` §17).
+Unset, the page reads exactly as it did before they existed.
+
+**Why it is worth setting them.** A controller cannot exercise the right to
+object that the DPA grants them against a party you have not named, and cannot
+assess their transfer position without knowing the region. That is Art. 28(3)(d),
+and an unnamed sub-processor is the most common way to be technically in breach
+of a DPA you wrote yourself.
+
+`LEGAL_SUBPROCESSORS_UPDATED_ON` is separate from `LEGAL_UPDATED_ON` on purpose:
+fixing a typo in the policy should not reset the date on the sub-processor list,
+or a customer cannot tell whether they missed a notice.
 
 ## Email
 

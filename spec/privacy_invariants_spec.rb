@@ -110,6 +110,43 @@ RSpec.describe "Privacy invariants" do
     end
   end
 
+  # "Revenue is never shown on a public or shared dashboard" is a claim on
+  # /revenue, and today it holds only because nothing in the shared render path
+  # happens to mention revenue. That is true and structurally fragile: the shared
+  # dashboard renders the same widgets the private one does, so a revenue widget
+  # added to DashboardWidget::KINDS would inherit the public path by default and
+  # break the claim silently. Exactly the "new code in a new place" failure this
+  # file exists for.
+  describe "revenue on a public shared dashboard" do
+    # The widget kinds that have been looked at and judged safe to render to an
+    # unauthenticated reader. Adding a kind to DashboardWidget::KINDS without
+    # adding it here fails this spec — which is the entire point. If the new kind
+    # is safe, add it and say so in the commit; if it is not, it needs gating out
+    # of Dashboards::Render for the share path first.
+    REVIEWED_FOR_PUBLIC_SHARING = %w[stat timeseries breakdown goals funnel].freeze
+
+    it "has no widget kind that has not been reviewed for the public path" do
+      expect(DashboardWidget::KINDS).to match_array(REVIEWED_FOR_PUBLIC_SHARING)
+    end
+
+    # The templates and the service that a share URL actually renders through.
+    # `revenue`, `mrr` and `currency` are the vocabulary the revenue layer uses;
+    # none of them belongs on an unauthenticated page.
+    it "renders through no source that reads the revenue layer" do
+      offenders = source_files(
+        "app/controllers/shared_dashboards_controller.rb",
+        "app/views/shared_dashboards/*.erb",
+        "app/views/sites/_dashboard.html.erb",
+        "app/views/sites/dashboards/_widgets.html.erb",
+        "app/views/sites/dashboards/widgets/*.erb",
+        "app/services/dashboards/render.rb"
+      ).select { |file| file.read.match?(/\b(revenue|mrr|revenue_cents|Revenue::)\b/i) }
+
+      expect(offenders).to be_empty,
+                           "revenue reaches the public share path via:\n#{offenders.join("\n")}"
+    end
+  end
+
   describe "the salt Redis service definition" do
     # Parsed rather than grepped. A `grep -A 12` for persistence flags near
     # `redis-privacy` reads twelve lines past the end of the service and into

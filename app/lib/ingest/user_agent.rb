@@ -1,6 +1,13 @@
 module Ingest
-  # Reduces a user-agent string to four coarse, low-entropy facts — and then
+  # Reduces a user-agent string to five coarse, low-entropy facts — and then
   # throws the string away.
+  #
+  # FIVE, and #to_h is the list. This said "four" while returning five since it
+  # was written, and app/views/compliance/privacy.html.erb copied the wrong
+  # number onto a public page: the operating system's major version is a real
+  # column and was simply never disclosed. It is major-version-only and entirely
+  # defensible; not saying so was the defect. A field added here is a field that
+  # page has to list.
   #
   # The UA string itself is never stored. A full user-agent is a strong
   # fingerprinting signal (often 10+ bits of entropy on its own); "Firefox /

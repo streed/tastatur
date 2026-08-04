@@ -19,9 +19,19 @@ class CreateEventsHypertable < ActiveRecord::Migration[8.1]
       t.text :event_name, null: false, default: "pageview"
 
       # --- Cookieless identity ---------------------------------------------
-      # SHA-256(daily_salt || ip || user_agent || site_id), truncated to 16
-      # bytes. The salt is destroyed every 24h, so these are unlinkable across
-      # days by construction — nobody, including us, can rejoin them.
+      # HMAC-SHA-256(key: daily_salt, message: ip || user_agent || site_id),
+      # truncated to 16 bytes.
+      #
+      # HMAC, not SHA-256(salt || message) — this comment described the bare
+      # concatenation that Ingest::Identifier explicitly rejects as
+      # length-extension weak, which is the construction a reader checking the
+      # digest claim would find first, since the schema is the obvious place to
+      # look before the service object. Read identifier.rb for the real one.
+      #
+      # The salt is rotated every 24h and destroyed at most 24h after that (see
+      # Ingest::SaltStore::PREVIOUS_TTL, which keeps the retiring salt alive so a
+      # visit spanning midnight is not cut in half). Once it is gone these are
+      # unlinkable — nobody, including us, can rejoin them.
       #
       # Truncation is deliberate: 128 bits is far beyond collision risk for a
       # single day of one site's traffic, and holding less of the digest means

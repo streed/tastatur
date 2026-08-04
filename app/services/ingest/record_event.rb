@@ -7,8 +7,10 @@ module Ingest
   # are never assigned to the row, never logged, and never leave this object.
   class RecordEvent < ApplicationService
     # Screen width is a well-known fingerprinting vector — the exact pixel
-    # value carries several bits of entropy. Six buckets answer "does my site
-    # get used on phones" while carrying almost none.
+    # value carries several bits of entropy. Five buckets answer "does my site
+    # get used on phones" while carrying almost none — and five is what
+    # app/views/compliance/privacy.html.erb publishes, so the count here is a
+    # claim, not a note.
     SCREEN_BUCKETS = [
       [576,   "xs"],
       [768,   "sm"],

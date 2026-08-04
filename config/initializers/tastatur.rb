@@ -241,6 +241,37 @@ module Tastatur
     "0.0.0-dev"
   end
 
+  # --- The size of the tracker, measured rather than typed -------------------
+  #
+  # MEASURED AT BOOT, because a number typed into six files drifts and did.
+  # DESCRIPTION below claimed 4.4 KB — a figure left over from before a
+  # comment-condensing pass — while the five places a reader can actually see
+  # said 3.6 KB, and the stale one is the one that feeds every link preview and
+  # both JSON-LD nodes. Nobody notices a wrong number in a `<meta>` tag.
+  #
+  # ROUNDED UP, ALWAYS. docs/privacy/claims.md forbids rounding a published
+  # figure in the direction we would prefer, and this is the one number where
+  # that rule has teeth: what we compress here is not byte-for-byte what the edge
+  # compresses. Measured against tastatur.dev on 2026-08-04, an ordinary browser
+  # request (`Accept-Encoding: gzip, br, zstd`) received 3,782 bytes of gzip,
+  # against 3,729 for zlib level 6 locally — the edge's deflate is a little less
+  # aggressive than ours, so the honest published figure is the ceiling of the
+  # local measurement, not its rounding. Both land on 3.7 KB. Brotli is 3,763
+  # and zstd 3,891; gzip is what the edge actually negotiates.
+  #
+  # Reading the file here rather than TrackerController::SOURCE: an initializer
+  # must not reference an autoloaded constant, and this is the same file.
+  TRACKER_GZIP_BYTES = begin
+    deflate = Zlib::Deflate.new(Zlib::DEFAULT_COMPRESSION, Zlib::MAX_WBITS + 16)
+    (deflate.deflate(Rails.root.join("lib/tracker/t.js").read) + deflate.finish).bytesize
+  rescue Errno::ENOENT
+    0
+  end
+
+  # "3.7 KB". One decimal, always rounded up, so the string can be dropped
+  # straight into prose.
+  TRACKER_SIZE = "#{((TRACKER_GZIP_BYTES / 1024.0) * 10).ceil / 10.0} KB".freeze
+
   # --- How this instance describes itself -----------------------------------
   #
   # One sentence, in one place, because five separate things quote it and they
@@ -250,12 +281,10 @@ module Tastatur
   # Seo::BuildStructuredData. Four of those five are invisible in a browser, so a
   # drifting copy is not something anybody would notice by looking at the site.
   #
-  # It is bound by docs/privacy/claims.md like every other claim we publish. The
-  # size is the measured gzipped size of lib/tracker/t.js — re-measure it here if
-  # the script changes rather than rounding it in the direction we would prefer.
-  DESCRIPTION = "Cookieless, privacy-first web analytics. One script tag, 4.4 KB over the wire. " \
-                "No cookies, no device storage, no fingerprinting, and visitor identifiers stop " \
-                "working after 24 hours.".freeze
+  # It is bound by docs/privacy/claims.md like every other claim we publish.
+  DESCRIPTION = "Cookieless, privacy-first web analytics. One script tag, #{TRACKER_SIZE} over " \
+                "the wire. No cookies, no device storage, no fingerprinting, and visitor " \
+                "identifiers stop working after 24 hours.".freeze
 
   # The image a link preview shows when somebody pastes a URL from this instance
   # into Slack, a group chat or a social network.
@@ -322,7 +351,26 @@ module Tastatur
       email: ENV["LEGAL_EMAIL"].presence,
       jurisdiction: ENV["LEGAL_JURISDICTION"].presence,
       dpo_email: ENV["LEGAL_DPO_EMAIL"].presence,
-      updated_on: legal_updated_on
+      # Who actually runs the servers, and where.
+      #
+      # CONFIGURED, NEVER HARDCODED, for the reason §17 gives about the
+      # Organization node: the privacy policy is public code that a self-hoster
+      # serves too, so a literal provider name in the template would publish OUR
+      # sub-processor as THEIRS. Unset, the list says "Hosting provider" exactly
+      # as it always did.
+      #
+      # Art. 28(3)(d) is why this exists at all: a controller cannot exercise an
+      # opportunity to object against an unnamed party, and cannot assess the
+      # transfer position without knowing who and where.
+      hosting_provider: ENV["LEGAL_HOSTING_PROVIDER"].presence,
+      hosting_region: ENV["LEGAL_HOSTING_REGION"].presence,
+      updated_on: legal_updated_on,
+      # DPA §6 promises the sub-processor list carries the date it last CHANGED,
+      # which is not the date the policy was last edited — a typo fix would
+      # otherwise reset it and a controller could not tell whether they had
+      # missed a notice. Its own variable, falling back to the policy's date so
+      # an unset deployment still shows something rather than nothing.
+      subprocessors_updated_on: iso_date_env("LEGAL_SUBPROCESSORS_UPDATED_ON") || legal_updated_on
     }
   end
 
@@ -336,21 +384,43 @@ module Tastatur
   #
   # Returns nil when unset, and the pages then say nothing rather than inventing a
   # date. Set LEGAL_UPDATED_ON to an ISO date when you edit them.
+  def self.legal_updated_on
+    iso_date_env("LEGAL_UPDATED_ON")
+  end
+
+  # A date from the environment, or nil.
+  #
   # `Date.iso8601`, not `Date.parse`. The latter is startlingly lenient: it reads
   # "last tuesday" as a real date, because it recognises the day name and fills in
   # the rest. A typo in a config file then becomes a confident, wrong date printed
   # on a legal document. Strict parsing turns the same typo into a warning and no
   # date at all, which is the failure everyone would prefer.
-  def self.legal_updated_on
-    raw = ENV["LEGAL_UPDATED_ON"].presence
+  def self.iso_date_env(name)
+    raw = ENV[name].presence
     return nil if raw.nil?
 
     Date.iso8601(raw)
   rescue Date::Error
     Rails.logger.warn(
-      "[tastatur] LEGAL_UPDATED_ON is not an ISO date (YYYY-MM-DD): #{raw.inspect}. No date will be shown."
+      "[tastatur] #{name} is not an ISO date (YYYY-MM-DD): #{raw.inspect}. No date will be shown."
     )
     nil
+  end
+
+  # The sub-processor row for whoever runs the servers. Named when the
+  # deployment says who that is, generic when it does not — so a self-hosted
+  # policy page reads exactly as it did before this existed.
+  def self.hosting_provider_label
+    legal[:hosting_provider] || "Hosting provider"
+  end
+
+  def self.hosting_provider_description
+    region = legal[:hosting_region]
+
+    [
+      "Runs the servers and the database.",
+      ("Data is held in #{region}." if region.present?)
+    ].compact.join(" ")
   end
 
   def self.legal_configured?
