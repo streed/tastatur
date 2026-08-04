@@ -82,19 +82,34 @@ COPY . .
 #
 # A directory already present is left alone, so a local build with the edition
 # checked out (`docker build .` from a working tree) needs no token at all.
+#
+# FETCH, NOT CLONE, AND EDITION_REF IS USUALLY A COMMIT SHA. `git clone --branch`
+# accepts only a branch or a tag; handed a SHA it fails with "Remote branch <sha>
+# not found in upstream origin". That matters because the private repository's
+# deploy workflow sets EDITION_REF to the commit it is deploying, which is the
+# only thing that makes a push over there reach production: the clone layer's
+# cache key is this stage's parent plus these four ARGs, so a ref left at the
+# string "main" is byte-identical between builds, the layer is reused, and the
+# PREVIOUS edition is baked into the new image. Green deploy, nothing changed.
+# `git fetch` takes a SHA, a branch or a tag alike, so both work here.
+#
+# `git -C` rather than `cd`: a cd would persist into the guard below, whose paths
+# are relative to WORKDIR.
 ARG EDITION_REPO=""
 ARG EDITION_REF="main"
 ARG EDITION_NAME="private"
 ARG EDITION_TOKEN=""
 RUN if [ -n "$EDITION_REPO" ] && [ ! -d "editions/${EDITION_NAME}" ]; then \
       echo "Fetching edition ${EDITION_NAME} from ${EDITION_REPO}@${EDITION_REF}" && \
-      git clone --depth 1 --branch "$EDITION_REF" \
-        "https://x-access-token:${EDITION_TOKEN}@github.com/${EDITION_REPO}.git" \
-        "editions/${EDITION_NAME}" && \
+      git init -q "editions/${EDITION_NAME}" && \
+      git -C "editions/${EDITION_NAME}" remote add origin \
+        "https://x-access-token:${EDITION_TOKEN}@github.com/${EDITION_REPO}.git" && \
+      git -C "editions/${EDITION_NAME}" fetch --depth 1 origin "$EDITION_REF" && \
+      git -C "editions/${EDITION_NAME}" checkout -q --detach FETCH_HEAD && \
       rm -rf "editions/${EDITION_NAME}/.git"; \
     fi && \
     # Fail loudly rather than shipping a half-built image. An edition that failed
-    # to clone would otherwise produce a perfectly healthy container serving the
+    # to arrive would otherwise produce a perfectly healthy container serving the
     # community edition's landing page on the hosted domain — no error, no alert,
     # and the marketing site simply gone.
     if [ -n "$EDITION_REPO" ] && [ ! -f "editions/${EDITION_NAME}/lib/edition.rb" ]; then \
