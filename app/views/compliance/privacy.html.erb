@@ -29,8 +29,15 @@
         <p><strong>No fingerprinting.</strong> No canvas, WebGL, font, audio, plugin, battery or
           hardware probing. You can read the entire tracking script — it is
           <a href="/t.js" class="underline">served unminified at /t.js</a>.</p>
+        <%# NOT "under 24 hours by construction". The salt key is named by the
+            SITE-LOCAL date and its TTL is derived from end_of_day on a zoned
+            time, precisely because a local day is 23 or 25 hours long on the two
+            DST changeover dates (Ingest::SaltStore#ttl_from says so). Naming the
+            boundary rather than a duration is both accurate and the better
+            claim, because it is the same fact as "a day on your dashboard is a
+            day where you are". -%>
         <p><strong>No cross-site or cross-device identity.</strong> The identifier is scoped to one
-          site and lasts under 24 hours by construction.</p>
+          site and expires at midnight in that site's own timezone.</p>
         <p><strong>No advertising, no data sales, no third parties.</strong> Your data is never
           pooled with another customer's and is never used to improve our own product.</p>
       </div>
@@ -72,11 +79,23 @@
           <strong>1.</strong> They are combined with a rotating secret and a site identifier into
           an HMAC-SHA-256 digest, truncated to 128 bits.
         </p>
+        <%# A LIST, not a prose count. This said "four coarse facts" and named
+            four while Ingest::UserAgent#to_h has always returned five — the
+            operating system's major version is a real column and was simply
+            never disclosed. A number in a sentence is the kind of thing a sixth
+            field would silently falsify; a list item that has to be added is
+            not. Keep this in step with UserAgent#to_h. -%>
         <p>
-          <strong>2.</strong> The user-agent is reduced to four coarse facts — browser family,
-          major version, operating system, and one of desktop/mobile/tablet. The string itself is
-          discarded.
+          <strong>2.</strong> The user-agent is reduced to five coarse facts, and the string itself
+          is discarded:
         </p>
+        <ul class="list-disc pl-5 space-y-1">
+          <li>browser family</li>
+          <li>browser major version</li>
+          <li>operating system</li>
+          <li>operating system major version</li>
+          <li>one of desktop/mobile/tablet</li>
+        </ul>
         <p>
           <strong>3.</strong> The IP is used once more to look up a two-letter country code. No
           region, no city, no coordinates, no network operator.
@@ -102,10 +121,28 @@
 
     <section>
       <h2 class="text-lg font-semibold mb-3">Why the identifier stops working every day</h2>
+      <%# THE OVERLAP IS STATED, not glossed. This used to say the old secret was
+          destroyed on rotation, full stop — which docs/privacy/identity.md
+          contradicts in one line ("the maximum life of any salt is therefore
+          about 48 hours"), because Ingest::Identifier deliberately reads the
+          retiring salt to carry an in-flight visit across midnight.
+          Ingest::SaltStore::PREVIOUS_TTL is the 24 hours that buys it.
+
+          A page headed "written to be checked rather than believed" cannot make
+          a claim its own repository refutes in the second file a curious reader
+          opens. Stating the mechanism is also the stronger claim: it shows the
+          midnight edge case was thought about at all. -%>
       <p class="mb-4">
-        The secret in step 1 is replaced every 24 hours and the old value is destroyed. Once it
-        is gone, the digests made with it cannot be recomputed or matched against anything —
-        not by an attacker with our database, and not by us.
+        The secret in step 1 is replaced every 24 hours, at midnight in the site's own timezone.
+        The retiring secret is kept for one further day and then destroyed, so that a visit which
+        began before midnight is not cut in half and a visitor who was reading at the moment of
+        rotation is not counted twice. That puts the maximum life of any secret at about 48 hours.
+      </p>
+      <p class="mb-4">
+        Once a secret is gone, the digests made with it cannot be recomputed or matched against
+        anything — not by an attacker with our database, and not by us. Until it is gone, they can
+        be, by whoever holds it; that is the honest characterisation, and it is why we describe
+        data derived from a live secret as pseudonymous rather than anonymous.
       </p>
       <p class="mb-4">
         That secret lives only in a Redis instance running with persistence disabled and excluded

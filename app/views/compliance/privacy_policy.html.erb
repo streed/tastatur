@@ -129,18 +129,45 @@
         We do not sell your data, we do not share it for anyone else's marketing, and we do not
         use it to train models.
       </p>
-      <p class="mb-3">On the hosted service, these third parties process data on our behalf:</p>
+      <%# THIS IS THE SUB-PROCESSOR LIST THE DPA PROMISES, and it now says so.
+          §6 of the DPA committed us to publishing a current list and to notice
+          before it changes; this table was that list, but it was not labelled as
+          one, not linked from the DPA, not dated, and left the hosting provider
+          unnamed — so a controller had no way to exercise the opportunity to
+          object that the same sentence grants them (Art. 28(3)(d)). The anchor
+          is what the DPA links to; keep it. -%>
+      <p class="mb-3" id="subprocessors">
+        On the hosted service, these third parties process data on our behalf. This is the
+        sub-processor list referred to in
+        <%= link_to "section 6 of the data processing agreement", "#{dpa_path}#subprocessors",
+                    class: "underline hover:text-signal" %>.
+      </p>
       <div class="card">
-        <% [["Hosting provider", "Runs the servers and the database."],
+        <% [[Tastatur.hosting_provider_label, Tastatur.hosting_provider_description],
             ["Resend", "Delivers transactional email: confirmations, password resets, service notices."],
             ["Stripe", "Processes payments. Card details go to Stripe and never reach us."],
-            ["Sentry", "Receives error reports, which can incidentally include an IP address. Optional and disabled if unconfigured."]].each do |who, what| %>
+            # send_default_pii is false in config/initializers/sentry.rb, so an
+            # IP is not attached to an error report. This said one "can
+            # incidentally" be included, which over-disclosed relative to the
+            # code — the right direction to be wrong, but still wrong.
+            ["Sentry", "Receives error reports. IP addresses are not attached to them (Sentry's PII " \
+                       "collection is switched off), though a report can include the path of the " \
+                       "request that failed. Optional, and disabled if unconfigured."]].each do |who, what| %>
           <div class="px-5 py-3 border-b border-rule last:border-b-0">
             <p class="text-sm font-medium"><%= who %></p>
             <p class="text-[13px] text-ink-2 mt-1"><%= what %></p>
           </div>
         <% end %>
       </div>
+      <% if Tastatur.legal[:subprocessors_updated_on] %>
+        <p class="text-[13px] text-ink-2 mt-3">
+          This list last changed on
+          <%= Tastatur.legal[:subprocessors_updated_on].to_fs(:long) %>. We give the account owner
+          at least 30 days' notice by email before adding or replacing anyone on it — see
+          <%= link_to "section 6 of the DPA", "#{dpa_path}#subprocessors",
+                      class: "underline hover:text-signal" %>.
+        </p>
+      <% end %>
       <p class="text-[13px] text-ink-2 mt-4">
         <strong class="text-ink">On a self-hosted instance there are none of these</strong> unless
         the operator configures them. The operator is the only party involved.

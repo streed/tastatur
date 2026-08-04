@@ -124,12 +124,26 @@
       </div>
     </section>
 
-    <section>
+    <%# A PUBLISHED LIST THAT IS NOT LINKED IS NOT USEFULLY PUBLISHED. This
+        promised both a current list and an opportunity to object, and gave a
+        reader no way to reach the first or exercise the second: the list existed
+        on /privacy-policy but was unlabelled, unlinked, undated and left the
+        hosting provider unnamed. Art. 28(3)(d) wants all four. The `id` here is
+        what that list links back to. -%>
+    <section id="subprocessors">
       <h2 class="text-lg font-semibold mb-3">6. Sub-processors</h2>
-      <p>
+      <p class="mb-3">
         A self-hosted installation has none — you are the only processor involved. For the hosted
-        service, the current list is published and you will be notified before it changes, with an
-        opportunity to object.
+        service, the current list is published at
+        <%= link_to "who else sees it", "#{privacy_policy_path}#subprocessors",
+                    class: "underline hover:text-signal" %>,
+        with the date it was last changed.
+      </p>
+      <p>
+        Before adding or replacing a sub-processor we email the account owner at least 30 days
+        beforehand. If you object within those 30 days we will work with you to find an
+        alternative; if there is none, you may terminate the affected service and we will refund
+        any unused prepaid fees.
       </p>
     </section>
 
@@ -162,5 +176,17 @@
         banner, you still need one. Take your own advice on this.
       </p>
     </section>
+
+    <%# DATED, like the policy and the terms. This page carried no date at all,
+        which matters more here than on either of those: a DPA is a contract a
+        customer accepts a VERSION of, and an undated one gives them no way to
+        tell which version that was — or whether §6's promised notice of a
+        sub-processor change is one they missed. Same LEGAL_UPDATED_ON the other
+        two read, and silent when it is unset rather than inventing a date. -%>
+    <% if Tastatur.legal[:updated_on] %>
+      <section class="rule pt-6 text-sm text-muted">
+        <p>Last updated <%= Tastatur.legal[:updated_on].to_fs(:long) %>.</p>
+      </section>
+    <% end %>
   </div>
 </div>
