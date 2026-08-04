@@ -1,5 +1,19 @@
 # syntax=docker/dockerfile:1
-# check=error=true
+#
+# SecretsUsedInArgOrEnv is skipped for one argument, EDITION_TOKEN, and the
+# skip is file-wide because BuildKit has no way to scope it to a line.
+#
+# The rule is right in general and its recommended fix — `RUN --mount=type=secret`
+# — is not available to us: Railway supplies build credentials as build arguments
+# and offers no way to pass a BuildKit secret. The mitigation is structural
+# instead, and it is the one the editions block below explains at length: the ARG
+# is declared inside the throw-away `build` stage, and the final stage copies only
+# /rails and the bundle out of it, so neither the value nor the metadata recording
+# it reaches the image that ships.
+#
+# WHAT THIS COSTS: a genuine misuse elsewhere in this file — `ENV STRIPE_SECRET_KEY=…`
+# — would no longer be caught here. Everything else `check=error=true` covers stays on.
+# check=skip=SecretsUsedInArgOrEnv;error=true
 
 # This Dockerfile is designed for production, not development. Use with Kamal or build'n'run by hand:
 # docker build -t tastatur .
