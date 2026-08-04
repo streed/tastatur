@@ -41,8 +41,8 @@ Two rules specific to this project:
   system deliberately cannot check.
 - An email on the first event a site receives, since the gap between installing the
   snippet and seeing anything is the point where people give up.
-- Two plans on the hosted service: Free (100,000 events a month, one site) and Pro
-  ($40 a month, 10,000,000 events, twenty sites). Teammates are unlimited on both —
+- Two plans on the hosted service: Free (500,000 events a month, one site) and Pro
+  ($30 a month, 10,000,000 events, twenty sites). Teammates are unlimited on both —
   per-seat pricing on an analytics tool means the person who most needs the numbers
   is the person nobody wants to pay for. A self-hosted install has neither plans nor
   limits and never touches Stripe.
@@ -67,9 +67,10 @@ Two rules specific to this project:
   guards the recurring charge. Every link in the interface that needs a permission is
   now shown only to somebody who has it.
 - Billing stays switched off until Stripe is actually configured, not just until
-  `SELF_HOSTED` says so. A deployment with no Stripe keys previously enforced plan
-  limits — one site, 100,000 events — behind an upgrade button whose only possible
-  answer was "payments are not configured on this instance". Now there are no limits,
+  `SELF_HOSTED` says so. A deployment with no Stripe keys previously enforced the
+  free plan's limits — one site, and its monthly event allowance — behind an upgrade
+  button whose only possible answer was "payments are not configured on this
+  instance". Now there are no limits,
   no upgrade interface, no pricing page and no webhook endpoint until the keys are
   present, at which point it switches itself on. The boot log says
   `BILLING IS DISABLED` and names what is missing, because the safe state is not
@@ -91,12 +92,12 @@ Two rules specific to this project:
   cannot turn it on. That asymmetry is the point: the off switch is the remedy for a
   person locked out because the mailbox their codes go to stopped working, and an on
   switch would let an operator aim a customer's codes at an address they control.
-- The marketing page and the docs answer `Accept: text/markdown` with a markdown
-  rendering of the same content (also fetchable directly as `/index.md` and
-  `/docs.md`), for LLM agents and AI crawlers that read pages as text. Browsers
-  are unaffected — a request that prefers HTML still gets HTML. An `/llms.txt`
-  index (llmstxt.org) points agents at the markdown pages and the policy
-  documents, listing pricing only where billing is actually enabled.
+- The docs answer `Accept: text/markdown` with a markdown rendering of the same
+  content (also fetchable directly as `/docs.md`), for LLM agents and AI crawlers
+  that read pages as text. Browsers are unaffected — a request that prefers HTML
+  still gets HTML. A deployment that also serves a marketing site gets `/index.md`
+  and an `/llms.txt` index (llmstxt.org) pointing agents at the markdown pages and
+  the policy documents, listing pricing only where billing is actually enabled.
 
 ### Privacy
 
@@ -202,6 +203,23 @@ Two rules specific to this project:
 
 ### Changed
 
+- This repository is now the **community edition**, and the pages that advertise
+  one particular deployment — a hosted service's landing page, pricing, about and
+  FAQ — along with the waitlist for the unshipped revenue feature, moved into an
+  *edition*: a Rails engine in `editions/`, kept in its own repository and ignored
+  here. The test for what left was not whether it was secret but whether somebody
+  running this on their own hardware would be worse off without it, so billing,
+  revenue attribution and the compliance pages all stayed. There is no landing
+  page here at all: `/` is the sign-in form, because a page arguing for Tastatur
+  has nothing to say to somebody who has already installed it, and what such a
+  page would tell them is on `/privacy`, on `/docs` and in the footer of every
+  screen. It is not listed in the sitemap for the same reason. Nothing here names an
+  edition; there are four extension points and no others
+  (`Tastatur.marketing_site?` / `.waitlist_enabled?`, `Seo::BuildSitemap.register`,
+  `Seo::BuildStructuredData.register_page` / `.register_offers`, and
+  `EditionHelper#edition_partial`), each of which renders nothing when nothing has
+  filled it. This changes nothing about what a self-hosted install can do, and the
+  suite is required to pass with no edition present. See [CLAUDE.md](CLAUDE.md) §20.
 - The dashboard's eight breakdown panels now come from a single scan instead of
   eight. They ran the same query with the same conditions once per panel, which was
   effectively the entire cost of the page: measured on 600,000 events over 90 days,

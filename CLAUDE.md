@@ -481,6 +481,21 @@ Before "fixing" any of these, read the linked document.
   it with a one-year cache header — the `/t.js` bug again. `Sitemap:` also has
   no relative form, so a static file would advertise our host on every
   self-hosted install. `CrawlersController`
+- **`/` forwards to the sign-in form, and this repository has no landing page at
+  all.** A page arguing for Tastatur has nothing to say to somebody who has
+  already installed it on their own hardware, and everything such a page would
+  tell them is somewhere better: what it collects on `/privacy`, how to install
+  it on `/docs`, and the version, the licence and the author in the footer of
+  every screen. What remains of a front door on an instance you must sign in to
+  use is the sign-in form. An edition serving a marketing site prepends its own
+  `/` ahead of it (§20). Two consequences that look like omissions: it is
+  **absent from `Seo::BuildSitemap`**, because a form is not public content and
+  the entry would be a redirect, which a search console reports as an error —
+  the edition registers it instead; and it **forwards rather than routing root
+  into `users/sessions#new`**, because Devise's `require_no_authentication`
+  answers an already-signed-in visitor with "You are already signed in." and a
+  redirect to `signed_in_root_path`, which is `root_path` itself — so the header
+  logo, which links there from every screen, would loop or scold. `PagesController`
 
 ### 13. The privacy invariants
 
@@ -678,6 +693,8 @@ The rules:
   an edition's pages go through `register` for the same reason: the list is written
   out, never derived. `spec/requests/sitemap_spec.rb` fetches every URL the service
   returns with no session, so a careless line fails the suite instead of shipping.
+  The list here is `/docs` and the four compliance pages; `/` is not on it, for
+  the reason §12 gives.
 - **Markdown templates are whitespace-sensitive and ERB eats whitespace.** Rails
   trims any line holding only a scriptlet tag, newline included. Paragraphs emitted
   one per line through a loop arrive with nothing between them and render as one
@@ -688,20 +705,24 @@ The rules:
 
 ### 18. Revenue attribution, and the one place identifiable data lives
 
-The revenue layer answers "which channel produced paying customers". Along with
-`waitlist_signups` (§19) it is one of the two places in this codebase that store
-data about identifiable people — it is the only *pipeline* that does, confined to
-five tables, and full reasoning is in `docs/architecture/revenue.md`.
+The revenue layer answers "which channel produced paying customers". It is the
+only place in THIS repository that stores data about identifiable people — the
+only *pipeline* anywhere that does — confined to five tables, and full reasoning is
+in `docs/architecture/revenue.md`. A deployment loading the edition that ships the
+waitlist (§19) has one more, which is that edition's own concern and joins to
+nothing here.
 
-**The feature is not shipped.** `/revenue`, `/revenue.md`, the docs section and
-the pricing page all say so, and the in-app Revenue card offers the waitlist
-instead of a connect button wherever `Tastatur.revenue_enabled?` is false and the
-instance is not self-hosted. None of the code below was removed or gated further:
-it is dark because the three Stripe Connect variables are unset, which is also
-what makes launching it a deploy rather than a rewrite. When it does ship, the
-list is what gets mailed, and `spec/requests/waitlist_spec.rb` pins the
-not-yet-available wording on all four surfaces so a half-launch cannot leave one
-of them claiming otherwise.
+**The feature is not shipped.** The docs section says so, and the in-app Revenue
+card says so wherever `Tastatur.revenue_enabled?` is false and the instance is not
+self-hosted. None of the code below was removed or gated further: it is dark
+because the three Stripe Connect variables are unset, which is also what makes
+launching it a deploy rather than a rewrite. A deployment that also serves a
+marketing site repeats the same status on `/revenue`, `/revenue.md` and the
+pricing page and offers the waitlist in place of a connect button — the card
+carries an `edition_partial` slot for exactly that, and pins its own wording in
+its own suite. Here the slot renders nothing and the card states the fact and
+stops, which is the honest version anyway: there is no list for a self-hoster to
+join.
 
 The rules an agent must not break:
 
@@ -898,7 +919,7 @@ Seeds are idempotent — re-running `db:seed` is safe.
 
 ## Routes provided out of the box
 
-- `/`            — public home page
+- `/`            — the sign-in form, unless an edition serves a landing page (§12)
 - `/dashboard`   — authenticated landing page
 - `/up`          — health check (DB + Redis ping), returns JSON
 - `/sidekiq`     — Sidekiq web UI, gated on `current_user.admin?`

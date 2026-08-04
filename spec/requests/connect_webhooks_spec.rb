@@ -151,6 +151,45 @@ RSpec.describe "Stripe Connect webhooks", type: :request do
       expect(site.customers.find_by(stripe_customer_id: "cus_1").lifetime_revenue_cents).to eq(48_000)
     end
 
+    # THE SHAPE ABOVE IS THE OLD ONE, AND NO CURRENT ACCOUNT SENDS IT. Stripe's
+    # 2025-03-31 Basil release moved an invoice's subscription to
+    # `parent.subscription_details.subscription`, leaving no top-level key — so a
+    # spec that builds `subscription:` by hand passes against a payload Stripe has
+    # not sent for over a year, while every real recurring payment was recorded as
+    # `one_time`. Found by seeding a real connected account, not by this suite.
+    # Both shapes are kept: the account's own pinned API version decides which
+    # arrives, and that is the customer's choice rather than ours.
+    it "records cash as a recurring payment when the subscription arrives under parent" do
+      create(:customer, site: site, stripe_customer_id: "cus_1", external_id: nil)
+      payload = stripe_connect_event_payload(
+        type: "invoice.paid",
+        object: { id: "in_2", customer: "cus_1", currency: "usd", amount_paid: 48_000,
+                  billing_reason: "subscription_create",
+                  parent: { type: "subscription_details",
+                            subscription_details: { subscription: "sub_1" } },
+                  status_transitions: { paid_at: Time.current.to_i } },
+        account: "acct_1"
+      )
+      deliver(payload)
+
+      event = site.revenue_events.find_by(stripe_object_id: "in_2")
+      expect(event.kind).to eq(RevenueEvent::PAYMENT)
+      expect(event.amount_cents).to eq(48_000)
+    end
+
+    it "records cash as one_time when an invoice belongs to no subscription" do
+      create(:customer, site: site, stripe_customer_id: "cus_1", external_id: nil)
+      payload = stripe_connect_event_payload(
+        type: "invoice.paid",
+        object: { id: "in_3", customer: "cus_1", currency: "usd", amount_paid: 9_900,
+                  status_transitions: { paid_at: Time.current.to_i } },
+        account: "acct_1"
+      )
+      deliver(payload)
+
+      expect(site.revenue_events.find_by(stripe_object_id: "in_3").kind).to eq(RevenueEvent::ONE_TIME)
+    end
+
     it "records a refund as negative cash" do
       create(:customer, site: site, stripe_customer_id: "cus_1", external_id: nil)
       payload = stripe_connect_event_payload(

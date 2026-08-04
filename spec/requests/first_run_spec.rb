@@ -51,7 +51,9 @@ RSpec.describe "First-run setup", type: :request do
   end
 
   describe "pages that should send you to setup" do
-    %w[/ /sites /account].each do |path|
+    # /users/sign_in among them: an install with no users yet has nobody to sign
+    # in as, and without a marketing edition it is where `/` forwards to.
+    %w[/ /sites /account /users/sign_in].each do |path|
       it "redirects #{path}" do
         get path
         expect(response).to redirect_to(first_run_path)
@@ -124,10 +126,14 @@ RSpec.describe "First-run setup", type: :request do
   context "when not self-hosted" do
     before { allow(Tastatur).to receive(:self_hosted?).and_return(false) }
 
+    # Asserted on the sign-in form rather than on `/`, which is a landing page on
+    # a deployment carrying a marketing edition and a redirect to this form on
+    # one that is not. This page is the same on both and is subject to the same
+    # redirect, so it is what proves the wizard has stood down.
     it "does not force setup, because the hosted service uses normal signup" do
       expect(Tastatur.needs_first_run_setup?).to be(false)
 
-      get "/"
+      get "/users/sign_in"
       expect(response).to have_http_status(:ok)
     end
 

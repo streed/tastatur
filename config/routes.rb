@@ -175,9 +175,9 @@ Rails.application.routes.draw do
   # public/ — see CrawlersController for the two bugs that decision avoids, and
   # note that public/robots.txt must stay deleted or the first of these is never
   # reached, since ActionDispatch::Static runs ahead of the router.
-  # `format: false` keeps the extension a literal part of the path exactly as it
-  # does for llms.txt above, so ".xml" is not read as a format and negotiated
-  # away by an Accept header.
+  # `format: false` keeps the extension a literal part of the path, so ".xml" is
+  # not read as a format and negotiated away by an Accept header. An edition
+  # declaring /llms.txt needs the same flag for the same reason.
   get "robots.txt", to: "crawlers#robots", as: :robots, format: false, defaults: { format: :text }
   get "sitemap.xml", to: "crawlers#sitemap", as: :sitemap, format: false, defaults: { format: :xml }
 
@@ -192,6 +192,15 @@ Rails.application.routes.draw do
   post "setup", to: "first_run#create"
 
   get "dashboard", to: "pages#dashboard"
+
+  # `/` forwards: to the site list for anybody signed in, and to the sign-in form
+  # for everybody else. There is no landing page in this repository — see
+  # PagesController#home for why one would have nothing to say here, and for why
+  # this forwards rather than routing the root path into Devise's own controller.
+  #
+  # An edition that serves a marketing site prepends its own `/` ahead of this
+  # one, so on that deployment this action is never reached. The route stays
+  # named `root`, which is what makes `root_path` mean "/" in both repositories.
   root to: "pages#home"
 
   # --- Instance administration ----------------------------------------------

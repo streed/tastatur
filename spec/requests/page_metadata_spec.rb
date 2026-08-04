@@ -15,22 +15,27 @@ RSpec.describe "Page metadata", type: :request do
     head.at_css(selector)&.[]("content")
   end
 
+  # /docs, because it is the only page every deployment publishes: `/` is a
+  # landing page on a deployment carrying a marketing edition and the sign-in
+  # form on one that is not, so an example asserting on it would be asserting
+  # something different depending on what is checked out. The edition's own
+  # pages are covered in the repository that ships them.
   describe "a public page" do
-    subject(:head) { head_of("/") }
+    subject(:head) { head_of("/docs") }
 
     it "describes itself in one sentence" do
-      expect(meta(head, 'meta[name="description"]')).to include("Cookieless, privacy-first web analytics")
+      expect(meta(head, 'meta[name="description"]')).to include("Install Tastatur with one script tag")
     end
 
     it "names its own canonical URL, absolutely and on the host that was asked" do
-      expect(head.at_css('link[rel="canonical"]')["href"]).to eq("http://www.example.com/")
+      expect(head.at_css('link[rel="canonical"]')["href"]).to eq("http://www.example.com/docs")
     end
 
     it "carries a social card" do
-      expect(meta(head, 'meta[property="og:title"]')).to eq("Tastatur — cookieless web analytics")
-      expect(meta(head, 'meta[property="og:type"]')).to eq("website")
+      expect(meta(head, 'meta[property="og:title"]')).to eq("Documentation · Tastatur")
+      expect(meta(head, 'meta[property="og:type"]')).to eq("article")
       expect(meta(head, 'meta[property="og:site_name"]')).to eq("Tastatur")
-      expect(meta(head, 'meta[property="og:url"]')).to eq("http://www.example.com/")
+      expect(meta(head, 'meta[property="og:url"]')).to eq("http://www.example.com/docs")
       expect(meta(head, 'meta[property="og:image"]')).to eq("http://www.example.com/icon.png")
       expect(meta(head, 'meta[name="twitter:card"]')).to eq("summary")
     end
@@ -50,7 +55,7 @@ RSpec.describe "Page metadata", type: :request do
       allow(Tastatur).to receive(:social_image_configured?).and_return(true)
       allow(Tastatur).to receive(:social_image_url).and_return("https://cdn.example.org/card.png")
 
-      head = head_of("/")
+      head = head_of("/docs")
 
       expect(meta(head, 'meta[name="twitter:card"]')).to eq("summary_large_image")
       expect(meta(head, 'meta[property="og:image"]')).to eq("https://cdn.example.org/card.png")
@@ -61,15 +66,15 @@ RSpec.describe "Page metadata", type: :request do
   # Consolidating the campaign-tagged copies of a shared link onto one URL is the
   # single thing it is for.
   it "drops the query string from the canonical URL" do
-    head = head_of("/?utm_source=news.ycombinator.com&utm_campaign=launch")
+    head = head_of("/docs?utm_source=news.ycombinator.com&utm_campaign=launch")
 
-    expect(head.at_css('link[rel="canonical"]')["href"]).to eq("http://www.example.com/")
+    expect(head.at_css('link[rel="canonical"]')["href"]).to eq("http://www.example.com/docs")
   end
 
   it "publishes whatever host it was asked on, never a compiled-in one" do
-    head = head_of("/", headers: { "HOST" => "analytics.self-hosted.example" })
+    head = head_of("/docs", headers: { "HOST" => "analytics.self-hosted.example" })
 
-    expect(head.at_css('link[rel="canonical"]')["href"]).to eq("http://analytics.self-hosted.example/")
+    expect(head.at_css('link[rel="canonical"]')["href"]).to eq("http://analytics.self-hosted.example/docs")
   end
 
   describe "the markdown alternate" do
@@ -99,20 +104,31 @@ RSpec.describe "Page metadata", type: :request do
     end
 
     it "parses, and declares the schema.org context" do
-      expect(json_ld("/")["@context"]).to eq("https://schema.org")
+      expect(json_ld("/docs")["@context"]).to eq("https://schema.org")
     end
 
-    it "describes the software on the landing page" do
-      types = json_ld("/")["@graph"].map { |n| n["@type"] }
+    it "says what the page is and what site it belongs to" do
+      types = json_ld("/docs")["@graph"].map { |n| n["@type"] }
 
-      expect(types).to include("WebSite", "SoftwareApplication")
+      expect(types).to include("WebSite", "TechArticle")
+    end
+
+    # ONE SENTENCE DESCRIBES THE PRODUCT and it is Tastatur::DESCRIPTION. Five
+    # things quote it and four of them are invisible in a browser, so a copy that
+    # drifts is not something anybody would notice by looking at the site. This
+    # is the one that is rendered on every deployment — the meta description and
+    # og:description on the landing page belong to whoever serves `/`.
+    it "describes the product in the sentence there is only one of" do
+      website = json_ld("/docs")["@graph"].find { |n| n["@type"] == "WebSite" }
+
+      expect(website["description"]).to eq(Tastatur::DESCRIPTION)
     end
 
     # The one character that must not survive into a <script> block. Nothing in
     # the graph is visitor-controlled today, which is a property of the current
     # call sites rather than of the renderer — see SeoHelper#structured_data_tag.
     it "escapes angle brackets so the block cannot be closed early" do
-      get "/"
+      get "/docs"
       raw = response.body[%r{<script type="application/ld\+json">(.*?)</script>}m, 1]
 
       expect(raw).not_to include("<")
@@ -155,7 +171,10 @@ RSpec.describe "Page metadata", type: :request do
   end
 
   # A page nobody has thought about gets the old behaviour — a title and nothing
-  # else — rather than a description guessed from somewhere.
+  # else — rather than a description guessed from somewhere. Worth pinning on
+  # this page in particular: without a marketing edition it is where `/` sends
+  # everybody, and a sign-in form is the last thing that should be describing
+  # itself to a link scraper.
   it "leaves a page that never declared itself public alone" do
     head = head_of("/users/sign_in")
 

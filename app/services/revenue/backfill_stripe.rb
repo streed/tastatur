@@ -153,7 +153,7 @@ module Revenue
 
     def record_payment(customer, invoice, amount)
       currency = invoice[:currency].to_s.upcase.presence || @site.base_currency
-      kind = invoice[:subscription].present? ? RevenueEvent::PAYMENT : RevenueEvent::ONE_TIME
+      kind = subscription_id_on(invoice).present? ? RevenueEvent::PAYMENT : RevenueEvent::ONE_TIME
 
       @site.revenue_events.create!(
         customer: customer, kind: kind, amount_cents: amount, currency: currency,
@@ -182,6 +182,24 @@ module Revenue
       return nil if value.blank?
 
       Time.zone.at(value.to_i)
+    end
+
+    # See the long note on ApplyConnectEvent#subscription_id_on: Stripe's Basil
+    # release moved an invoice's subscription under `parent`, and reading only the
+    # old top-level key files every recurring payment as `one_time`. The webhook
+    # path and this one must agree, because they write the same rows for the same
+    # invoices and a backfill deliberately overlaps live delivery.
+    #
+    # Here `invoice` is a Stripe::Invoice rather than a Hash, and `[]` on a
+    # removed attribute can raise KeyError rather than return nil — verified that
+    # `subscription` returns nil, unlike `payment_intent`, which raises.
+    def subscription_id_on(invoice)
+      direct = id_of(invoice[:subscription])
+      return direct if direct.present?
+
+      parent = invoice[:parent]
+      details = parent && parent[:subscription_details]
+      id_of(details && details[:subscription])
     end
 
     def id_of(value)

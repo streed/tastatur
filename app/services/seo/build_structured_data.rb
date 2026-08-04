@@ -36,9 +36,16 @@ module Seo
     # the class of failure nothing else would notice, since the page still looks
     # perfect to a human.
     #
-    # Only the two pages every deployment has. An edition's pages — /pricing,
-    # /faq and /about are the hosted service's — arrive through `register_page`
-    # below and are just as much a hard error when misspelled.
+    # `:home` stays here even though this repository serves no landing page — its
+    # graph is the SoftwareApplication node, and what Tastatur is, who wrote it
+    # and what licence it carries are facts about the software rather than about
+    # one deployment. So the graph is this repository's to state; whether there
+    # is a page to publish it on is a separate question, and today only an
+    # edition puts one at `/`.
+    #
+    # An edition's own pages — /pricing, /faq and /about are the hosted
+    # service's — arrive through `register_page` below and are just as much a
+    # hard error when misspelled.
     PAGES = %i[home docs].freeze
 
     # --- Edition extension points --------------------------------------------

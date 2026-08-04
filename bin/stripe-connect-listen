@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# Forwards Stripe CONNECT webhook deliveries to the local server.
+#
+# CONNECT, NOT ACCOUNT, and the distinction is the whole reason this script is
+# separate from anything billing-related. A Stripe webhook endpoint is either
+# "account" or "connect", never both: account events are our own subscription
+# billing (`Billing::`), connect events are a customer's revenue arriving from an
+# account that installed the Tastatur app. They have different payload shapes,
+# different endpoints and DIFFERENT SIGNING SECRETS, and pointing one at the
+# other fails every signature check — which our controller answers 400 to, which
+# Stripe responds to by disabling the endpoint after three days.
+#
+# `--forward-connect-to` on its own forwards only connect deliveries, which is
+# what we want: run bin/stripe-billing-listen or a second `stripe listen` if you
+# also need account events.
+#
+# THE SECRET THIS PRINTS MUST BE IN .env.development AS
+# STRIPE_CONNECT_WEBHOOK_SECRET. It is stable per account+device, so it is
+# normally already correct — but if every delivery is refused, that is the first
+# thing to check, and `stripe listen --print-secret` is how.
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+target="${TARGET:-localhost:3000/stripe/connect/webhook}"
+
+# The CLI must be logged in as the account that OWNS the app — the platform —
+# not as the sandbox that installed it. Connect deliveries are addressed to the
+# platform; a listener on the connected account sees nothing at all and looks
+# exactly like a broken integration.
+account=$(stripe config --list 2>/dev/null | awk '/^\[default\]/{f=1} f && /^account_id/{gsub(/[ '"'"']/,"",$3); print $3; exit}')
+echo "Listening as platform account: ${account:-unknown}"
+echo "Forwarding connect events to:  $target"
+echo
+
+expected=$(grep '^STRIPE_CONNECT_WEBHOOK_SECRET=' .env.development 2>/dev/null | cut -d= -f2- || true)
+actual=$(stripe listen --print-secret 2>/dev/null || true)
+
+if [ -n "$actual" ] && [ "$expected" != "$actual" ]; then
+  echo "WARNING: STRIPE_CONNECT_WEBHOOK_SECRET in .env.development does not match"
+  echo "the secret this listener signs with. Every delivery will be refused, the"
+  echo "connection will look fine, and no revenue will ever arrive — which is the"
+  echo "exact failure Tastatur.revenue_enabled? requires the variable to prevent."
+  echo
+  echo "Set it to:  $(stripe listen --print-secret)"
+  echo
+fi
+
+exec stripe listen --forward-connect-to "$target"

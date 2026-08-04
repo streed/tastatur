@@ -26,6 +26,7 @@ Developed, maintained and supported by **[Reedster LLC](https://reedster.llc)**.
 
 - [What it does](#what-it-does)
 - [What it deliberately does not do](#what-it-deliberately-does-not-do)
+- [What this repository is](#what-this-repository-is)
 - [Quick start](#quick-start)
 - [How it works](#how-it-works)
 - [Documentation](#documentation)
@@ -68,6 +69,33 @@ telling you about it.
   ePrivacy Article 5(3); the rest is your counsel's call. See
   [docs/privacy/claims.md](docs/privacy/claims.md) for the language this project
   refuses to use, and why.
+
+## What this repository is
+
+The **community edition**, and it is complete: it boots, and the whole test suite
+passes, with nothing else checked out. The measurement pipeline, the dashboard,
+goals, funnels, journeys, shared dashboards, teams, two-factor, the compliance
+pages, and the billing and revenue-attribution code are all here. Billing switches
+itself off under `SELF_HOSTED=1` or when Stripe is unconfigured; revenue
+attribution asks only whether Stripe Connect is configured — deliberately, since
+that is a customer connecting their own processor to see their own numbers, and
+refusing it on your own hardware would remove the point of it.
+
+The hosted deployment runs this code plus one **edition**: a Rails engine in
+`editions/`, kept in its own repository and ignored by this one, holding the pages
+that advertise that deployment — its landing page, pricing, about and FAQ — and the
+waitlist for the revenue feature, which has not shipped. The test for which side
+something belongs on is not whether it is secret. It is **whether somebody running
+this on their own hardware would be worse off without it**, which is why billing,
+revenue attribution and the compliance pages all stayed and only the pages selling
+one instance left.
+
+You will see the seam in four places and nowhere else — `Tastatur.marketing_site?`
+and `.waitlist_enabled?`, `Seo::BuildSitemap.register`,
+`Seo::BuildStructuredData.register_page` / `.register_offers`, and
+`EditionHelper#edition_partial` — each of which renders nothing when nothing has
+filled it. The rules are in [CLAUDE.md](CLAUDE.md) §20, and what they mean for a
+change is in [CONTRIBUTING.md](CONTRIBUTING.md#editions).
 
 ## Quick start
 

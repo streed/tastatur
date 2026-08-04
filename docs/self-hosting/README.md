@@ -1,8 +1,20 @@
 # Self-hosting Tastatur
 
 Tastatur is AGPL-3.0 and designed to be run by the person who owns the data.
-Everything in the hosted service is in this repository; the only difference is
-that `SELF_HOSTED=1` removes billing.
+
+This repository is the **community edition**, and every part of the product is in
+it: the tracker, the ingest pipeline, the dashboard, goals, funnels, journeys,
+shared dashboards, teams, two-factor, the compliance pages, and the billing and
+revenue-attribution code. Billing is what `SELF_HOSTED=1` switches off, and it
+also stays off until Stripe is configured. Revenue attribution is not gated on
+either — it asks only whether Stripe Connect is configured, because it shows
+*your* customers' revenue, and refusing it here would remove the point of it. What
+the hosted
+deployment adds is one *edition* (a Rails engine in `editions/`, kept in its own
+repository) holding the pages that advertise that particular deployment: its
+landing page, pricing, about and FAQ. Nothing you would want on your own hardware
+is behind it, which is the test used to decide what stayed. See
+[CLAUDE.md](../../CLAUDE.md) §20 if you want the whole rule.
 
 ## Deploying to Railway
 

@@ -37,7 +37,10 @@ chmod 600 "$key"
 echo "Wrote $crt and $key"
 echo
 echo "Start the server with TLS on 3443 alongside the usual HTTP on 3000:"
-echo "  SSL_PORT=3443 bin/dev"
+echo "  bin/dev-ssl"
+echo
+echo "NOT 'SSL_PORT=3443 bin/dev' — 'rails server' clears the binds config/puma.rb"
+echo "declares, so the TLS listener is dropped without any error at all."
 echo
 echo "The certificate is self-signed, so the first visit to"
 echo "https://localhost:3443 needs the browser's 'Proceed anyway'."

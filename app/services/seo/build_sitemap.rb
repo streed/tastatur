@@ -58,15 +58,21 @@ module Seo
 
     private
 
-    # The pages every deployment has. The landing page describes the software,
-    # and /docs explains how to use it; both say the same thing on the hosted
-    # service and on somebody's own hardware, which is the test for belonging
-    # here rather than in an edition.
+    # The pages every deployment has, which in this repository is /docs and
+    # nothing else: it explains how to use the software, and says the same thing
+    # on the hosted service as on somebody's own hardware. That is the test for
+    # belonging here rather than in an edition.
+    #
+    # `/` IS DELIBERATELY ABSENT. Without an edition the root path is the
+    # sign-in form (PagesController#home), and every line in this file is a page
+    # of public *content* — something written to be read by anyone, that says the
+    # same thing to everyone. A sign-in form is neither, it declares no metadata
+    # for a crawler to read, and the entry would be a redirect, which every
+    # search console reports back as an error rather than following. A deployment
+    # that serves a landing page at `/` registers it below, by hand, exactly like
+    # every other page it adds.
     def pages
-      [
-        SitemapEntry.new(loc: root_url(**@url_options)),
-        SitemapEntry.new(loc: docs_url(**@url_options))
-      ]
+      [ SitemapEntry.new(loc: docs_url(**@url_options)) ]
     end
 
     def editions

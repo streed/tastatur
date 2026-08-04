@@ -2,9 +2,11 @@
 
 # Deployment-mode configuration.
 #
-# Tastatur ships as one codebase in two shapes: the hosted SaaS, and an
-# AGPL-licensed self-hosted install. Everything that differs between them is
-# decided here, so no feature has to reach for `Rails.env` or guess.
+# This repository is the AGPL-licensed community edition and runs on its own. A
+# hosted SaaS is the same code with an edition loaded (see the block below) and
+# billing configured. Everything that differs between one deployment and another
+# is decided here, as a predicate, so no feature has to reach for `Rails.env`,
+# inspect the filesystem, or guess.
 
 module Tastatur
   # --- Editions -------------------------------------------------------------
@@ -33,8 +35,8 @@ module Tastatur
   # Does this instance serve the marketing site — /pricing, /about, /faq,
   # /revenue and the landing page that sells the hosted service?
   #
-  # False in the community edition, where `/` is a plain description of the
-  # software and those routes do not exist. Views must guard with this before
+  # False in the community edition, where `/` is the sign-in form and those
+  # routes do not exist at all. Views must guard with this before
   # naming any of their helpers: `pricing_path` is genuinely undefined here, so
   # an unguarded call is a NameError rather than a broken link.
   def self.marketing_site?

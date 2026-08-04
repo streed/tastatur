@@ -1,0 +1,15 @@
+# Same as Procfile.dev, but the web process is puma directly rather than
+# `bin/rails server`.
+#
+# THAT SUBSTITUTION IS THE ENTIRE REASON THIS FILE EXISTS. `rails server` builds
+# its own bind list from -b/-p and clears whatever config/puma.rb declared, so the
+# `ssl_bind` that the Stripe App's OAuth callback needs is silently discarded:
+# puma boots, reports "Listening on http://127.0.0.1:3000", never mentions 3443,
+# and nothing anywhere says a binding was dropped. Measured, not assumed — the
+# same config file produces both listeners under `bundle exec puma` and only the
+# plain one under `bin/rails server`.
+#
+# Started by `bin/dev-ssl`, which is where SSL_PORT is set.
+web: bundle exec puma -C config/puma.rb
+css: bin/tailwind-watch
+worker: bundle exec sidekiq

@@ -7,20 +7,22 @@ visitors.
 > What it is not is available: the three Stripe Connect variables are unset on the
 > hosted service, so `Tastatur.revenue_enabled?` is false and every endpoint here
 > is dark. Nothing was removed or gated further to achieve that — launching is a
-> deploy, not a rewrite. `/revenue`, `/revenue.md`, the docs section and the
-> pricing page all say it is coming, and the in-app Revenue card offers the
-> waitlist in place of a connect button. `spec/requests/waitlist_spec.rb` pins
-> that wording so a half-launch cannot leave one surface claiming otherwise.
+> deploy, not a rewrite. The docs section and the in-app Revenue card both say it
+> is coming.
 >
-> People who want to hear about it are in `waitlist_signups`, double opt-in, and
-> leaving deletes the row rather than suppressing it. See CLAUDE.md §19.
+> A deployment that also serves a marketing site repeats that status on
+> `/revenue`, `/revenue.md` and the pricing page, and offers a waitlist in place
+> of a connect button — all of which live in an edition (CLAUDE.md §19, §20) and
+> are pinned by that edition's own suite, so a half-launch cannot leave one
+> surface claiming otherwise. The community edition holds no addresses for people
+> who are not users, so here the card states the fact and stops.
 
 This is the only *pipeline* in Tastatur that stores data about identifiable
 people, and the only part that is not anonymous by construction. That is
 deliberate, it is confined to five tables, and this document exists so nobody has
 to reverse-engineer why from the schema. (The waitlist above is the other place an
-address is held; it is a marketing list rather than a measurement pipeline, and
-nothing joins the two.)
+address is held on the hosted service; it lives in an edition, it is a mailing list
+rather than a measurement pipeline, and nothing joins the two.)
 
 ## The two pipelines
 
@@ -290,6 +292,93 @@ Two things learned the hard way, both invisible until they refuse you:
   self-install the app — enough to verify webhooks and the platform-key read
   path — but minting an install link another account can use requires the app
   uploaded to a live account.
+
+### Exercising the whole thing on a laptop
+
+Four things have to be true at once, and each of them fails in a way that looks
+like one of the others.
+
+**1. HTTPS, because Stripe will not accept an `http://` redirect URI.**
+
+```bash
+bin/dev-ssl    # mints the certificate if needed, then serves 3000 AND 3443
+```
+
+`stripe-app/stripe-app.json` pins `https://localhost:3443/stripe/connect/callback`,
+so the port is not a preference — a different one is not in the manifest and the
+install is refused with a redirect-uri mismatch. The certificate is self-signed,
+so the browser needs one "Proceed anyway" on `https://localhost:3443` before the
+OAuth round trip will complete; taken during the redirect it looks like Stripe
+failing rather than a certificate prompt.
+
+**It is a separate script from `bin/dev` because `bin/rails server` cannot do
+this, and fails at it silently.** `rails server` builds its own bind list and
+clears whatever `config/puma.rb` declared, so the `ssl_bind` is discarded: puma
+boots, announces the plain listener, never mentions 3443, and reports no error.
+`Procfile.dev.ssl` therefore runs `bundle exec puma -C config/puma.rb` instead,
+which is the only entry point that honours the config file's binds. Measured both
+ways — the same config produces two listeners under puma and one under `rails
+server`.
+
+Note also that `config/puma.rb` must use plain Ruby rather than `.present?` in
+that block. Puma loads the file itself, before any Rails boot, so ActiveSupport's
+core extensions are not there — and the resulting NoMethodError appears only
+under `bundle exec puma`, which is to say only in production and in this script.
+
+**2. Connect deliveries forwarded, signed with the secret the app is configured with.**
+
+```bash
+bin/stripe-connect-listen
+```
+
+The CLI must be logged in as the account that **owns** the app, not the one that
+installed it — connect deliveries are addressed to the platform, and a listener on
+the connected account sees nothing while looking exactly like a broken
+integration. The script checks that `STRIPE_CONNECT_WEBHOOK_SECRET` matches what
+the listener signs with, because a mismatch there is the specific silent failure
+`revenue_enabled?` requires the variable to prevent: connecting works, the
+backfill works, historical revenue appears, and nothing new ever arrives.
+
+**3. A SECOND Stripe account playing the customer.** A self-install works and
+proves less than it appears to: it cannot distinguish "the platform key reads
+installed accounts" from "it read my own account", which is the open question in
+the note above. Install from a sandbox via the **External test** link
+(`STRIPE_CONNECT_INSTALL_URL`) — not the published `/oauth/v2/authorize` form,
+which answers "The provided OAuth link is invalid" until the app is published and
+names no cause.
+
+**4. Data, created with the connected account's own key.**
+
+```bash
+STRIPE_SANDBOX_SECRET_KEY=sk_test_… bin/rails tastatur:revenue:seed SITE=<public_token>
+bin/rails runner 'RollupAttributionJob.perform_now(Site.find_by(public_token: "…").id)'
+bin/rails tastatur:revenue:status SITE=<public_token>
+```
+
+**That key is deliberately a different variable from `STRIPE_SECRET_KEY`, and the
+task refuses a live one.** Creating subscriptions and refunds is a *write*, and
+the access model this whole document describes — platform key plus
+`Stripe-Account`, against a manifest where every permission ends in `_read` —
+cannot make one and must never be able to. So the seed writes as the customer's
+own application would: with the customer's own test key, used nowhere else in the
+codebase. If `tastatur:revenue:seed` could run on the platform key, that would be
+the bug.
+
+The scenarios exist to cover the traps this document records rather than to look
+like a business: both `kind` families, an expansion and a churn so the sign
+convention is exercised in both directions, a EUR subscription so
+`normalized_cents` stays NULL and `unconverted_events` has something to count, a
+customer with no attribution at all that the backfill must label `(pre-install)`
+rather than folding into Direct, and an untagged referral — the case
+`tst_referrer_host` was added for, and the one that silently collapsed to Direct
+without it. `tastatur:revenue:sweep` deletes the Stripe side afterwards; the local
+rows are left alone.
+
+`checkout.session.completed` is the one path the seed cannot drive: completing a
+Checkout Session needs a browser. Attribution metadata is written onto the Stripe
+**customer** instead, which `ApplyConnectEvent` and `BackfillStripe` both read
+through the same `Checkout.extract_attribution`. Drive the session path by hand,
+or with `stripe trigger`, when it is specifically what is being tested.
 
 `Tastatur.revenue_enabled?` is the only gate. It is deliberately **not** gated on
 `billing_enabled?`: billing is about whether *we* can charge, this is about whether

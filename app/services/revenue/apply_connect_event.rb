@@ -123,7 +123,7 @@ module Revenue
       amount = object[:amount_paid].to_i
       return Success(:zero_invoice) if amount.zero?
 
-      kind = object[:subscription].present? ? RevenueEvent::PAYMENT : RevenueEvent::ONE_TIME
+      kind = subscription_id_on(object).present? ? RevenueEvent::PAYMENT : RevenueEvent::ONE_TIME
       write_cash(customer, kind: kind, amount_cents: amount,
                  currency: object[:currency], stripe_object_id: object[:id])
     end
@@ -295,6 +295,30 @@ module Revenue
         params: { external_id: customer.external_id, stripe_customer_id: customer.stripe_customer_id,
                   attribution: attribution }
       )
+    end
+
+    # THE INVOICE'S SUBSCRIPTION, FROM EITHER SHAPE STRIPE HAS SENT, and reading
+    # only the first one is how every recurring payment came to be filed as
+    # `one_time`.
+    #
+    # It was a top-level `subscription` on the invoice. Stripe's 2025-03-31 Basil
+    # release moved it to `parent.subscription_details.subscription` and left the
+    # old key ABSENT rather than deprecated. A webhook payload is a plain Hash, so
+    # `object[:subscription]` is simply nil — nothing raises, nothing logs, and
+    # `RevenueEvent::PAYMENT` becomes unreachable while cash totals stay correct.
+    # Measured against 2026-07-29.dahlia, where an invoice carries no
+    # `subscription` key at all.
+    #
+    # BOTH SHAPES ARE READ, because which one arrives depends on the API version
+    # pinned on the CONNECTED account, and that is the customer's choice rather
+    # than ours — an account still pinned before Basil sends the old shape today.
+    def subscription_id_on(invoice)
+      direct = id_of(invoice[:subscription])
+      return direct if direct.present?
+
+      parent = invoice[:parent]
+      details = parent && parent[:subscription_details]
+      id_of(details && details[:subscription])
     end
 
     # Stripe fields referencing another object are an id string by default and a

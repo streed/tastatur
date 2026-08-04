@@ -44,7 +44,7 @@ body:
         - Self-hosted with docker compose
         - Self-hosted on Railway
         - Self-hosted, some other way
-        - The hosted service at tastatur.app
+        - The hosted service at tastatur.dev
         - Local development checkout
     validations:
       required: true

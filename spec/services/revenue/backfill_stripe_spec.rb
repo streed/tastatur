@@ -36,6 +36,18 @@ RSpec.describe Revenue::BackfillStripe do
       created: 30.days.ago.to_i, status_transitions: { paid_at: 30.days.ago.to_i } }
   end
 
+  # The shape a CURRENT account sends. Stripe's 2025-03-31 Basil release moved the
+  # subscription under `parent` and left no top-level key, so the helper above
+  # describes a payload no live account has produced for over a year — which is
+  # why the misclassification of every recurring payment as `one_time` survived a
+  # green suite and had to be found by seeding a real connected account.
+  def stripe_invoice_basil(id: "in_1", customer: "cus_1", amount: 4_000, subscription: "sub_1")
+    { id: id, customer: customer, currency: "usd", amount_paid: amount,
+      billing_reason: "subscription_create",
+      parent: { type: "subscription_details", subscription_details: { subscription: subscription } },
+      created: 30.days.ago.to_i, status_transitions: { paid_at: 30.days.ago.to_i } }
+  end
+
   describe "importing" do
     it "creates customers, subscriptions and payments" do
       stub_stripe(customers: [stripe_customer], subscriptions: [stripe_subscription],
@@ -47,6 +59,24 @@ RSpec.describe Revenue::BackfillStripe do
       expect(site.customers.count).to eq(1)
       expect(site.customer_subscriptions.find_by(stripe_subscription_id: "sub_1").mrr_cents).to eq(4_000)
       expect(site.revenue_events.find_by(kind: RevenueEvent::PAYMENT).amount_cents).to eq(4_000)
+    end
+
+    it "records a payment when the subscription arrives under parent" do
+      stub_stripe(customers: [stripe_customer], subscriptions: [stripe_subscription],
+                  invoices: [stripe_invoice_basil])
+
+      described_class.call(connection: connection)
+
+      expect(site.revenue_events.find_by(stripe_object_id: "in_1").kind).to eq(RevenueEvent::PAYMENT)
+    end
+
+    it "records one_time for an invoice belonging to no subscription" do
+      stub_stripe(customers: [stripe_customer],
+                  invoices: [stripe_invoice_basil(subscription: nil).except(:parent)])
+
+      described_class.call(connection: connection)
+
+      expect(site.revenue_events.find_by(stripe_object_id: "in_1").kind).to eq(RevenueEvent::ONE_TIME)
     end
 
     it "marks the connection as backfilled" do

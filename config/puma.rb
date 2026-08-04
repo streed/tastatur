@@ -64,7 +64,13 @@ http_content_length_limit 64 * 1024
 #
 # Off unless SSL_PORT is set, so production — which terminates TLS at the edge —
 # never evaluates it. `bin/dev-ssl-cert` mints the self-signed pair.
-if ENV["SSL_PORT"].present?
+#
+# PLAIN RUBY, NOT `.present?`. Puma loads this file itself, before any Rails
+# boot, so ActiveSupport's core extensions do not exist here — `.present?` raises
+# NoMethodError under `bundle exec puma` while working fine under `bin/rails
+# server`, which is the worst of both worlds: it looks correct in development and
+# fails at the one entry point production uses.
+unless ENV["SSL_PORT"].to_s.strip.empty?
   ssl_key  = ENV.fetch("SSL_KEY_FILE", "tmp/ssl/localhost.key")
   ssl_cert = ENV.fetch("SSL_CERT_FILE", "tmp/ssl/localhost.crt")
 

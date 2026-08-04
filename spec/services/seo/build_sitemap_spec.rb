@@ -22,13 +22,24 @@ RSpec.describe Seo::BuildSitemap do
     allow(described_class).to receive(:registrations).and_return({})
 
     expect(locs).to contain_exactly(
-      "https://analytics.example.org/",
       "https://analytics.example.org/docs",
       "https://analytics.example.org/privacy",
       "https://analytics.example.org/privacy-policy",
       "https://analytics.example.org/terms",
       "https://analytics.example.org/dpa"
     )
+  end
+
+  # THE ROOT PATH IS NOT ONE OF THEM, and the omission is the point. Without an
+  # edition `/` is the sign-in form (PagesController#home), which is not written
+  # to be read by anyone and declares no metadata for a crawler — and the entry
+  # would be a redirect, which every search console reports back as an error
+  # rather than following. A deployment that serves a landing page there
+  # registers it, and that registration is asserted where it lives.
+  it "does not list the root path, because a sign-in form is not public content" do
+    allow(described_class).to receive(:registrations).and_return({})
+
+    expect(locs).not_to include("https://analytics.example.org/")
   end
 
   # Every URL is absolute on the host that was asked for, never a compiled-in

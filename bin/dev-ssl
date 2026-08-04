@@ -1,0 +1,37 @@
+#!/usr/bin/env sh
+# `bin/dev` plus an HTTPS listener on 3443.
+#
+# Only needed for the Stripe App's OAuth install, which is the one flow that
+# cannot run over plain HTTP: Stripe refuses a non-HTTPS redirect URI, and
+# stripe-app/stripe-app.json pins `https://localhost:3443/stripe/connect/callback`
+# — so the port is fixed by the manifest, not chosen here.
+#
+# Everything is still served on http://localhost:3000 as usual; the TLS listener
+# is additional. See docs/architecture/revenue.md.
+
+if ! gem list foreman -i --silent; then
+  echo "Installing foreman..."
+  gem install foreman
+fi
+
+cd "$(dirname "$0")/.." || exit 1
+
+if [ ! -f tmp/ssl/localhost.crt ]; then
+  echo "No certificate yet — generating one."
+  ./bin/dev-ssl-cert || exit 1
+  echo
+fi
+
+export PORT="${PORT:-3000}"
+export SSL_PORT="${SSL_PORT:-3443}"
+
+export RUBY_DEBUG_OPEN="true"
+export RUBY_DEBUG_LAZY="true"
+
+echo "http://localhost:$PORT and https://localhost:$SSL_PORT"
+echo "The certificate is self-signed: visit https://localhost:$SSL_PORT once and"
+echo "accept it BEFORE starting the Stripe install, or the prompt appears mid-redirect"
+echo "and looks like Stripe failing."
+echo
+
+exec foreman start -f Procfile.dev.ssl "$@"
