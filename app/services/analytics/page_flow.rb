@@ -47,15 +47,47 @@ module Analytics
   # pageview and an event fired on it are different steps and never collapse
   # into each other.
   #
-  # PERFORMANCE. The steps CTE sorts the period's events by
-  # (session_hash, occurred_at), which no current index provides. Measured on the
-  # development set (17,971 events, 8,438 sessions, 30 days): 21-24 ms. Adding
+  # THE PREFIX IS MATCHED WITH LEAD, NOT WITH A CHAIN OF SELF-JOINS, and that is
+  # a performance fix rather than a tidy-up. Do not put the joins back.
+  #
+  # This walked the prefix by joining `steps` to itself once per hop — r0 for the
+  # anchor, then r1 JOIN steps ON s.n = r0.n + 1, and so on. It was correct and
+  # it was catastrophic past depth one. `steps` is a CTE referenced several
+  # times, so PostgreSQL materialises it, and **a materialised CTE carries no
+  # statistics**: every scan of it is estimated at rows=1 regardless of what is
+  # really in there. On that estimate the planner picks a nested loop, and the
+  # nested loop rescans the whole materialised CTE once per outer row. Measured
+  # on the development set (32,440 events, 18,354 sessions, 30 days):
+  #
+  #     depth 1     33 ms          depth 2   2,338 ms          depth 3   3,124 ms
+  #
+  # with the depth-2 plan discarding 5,118,092 rows in the join filter — 2,855
+  # loops over a 12,241-row CTE scan to produce 923 rows. The whole Journeys page
+  # was 5.7 s of database time. Nothing was wrong with the data or the index; the
+  # shape of the query was unplannable.
+  #
+  # LEAD and LAG answer the same question over the window the steps CTE is
+  # already sorting for, so the joins are gone entirely: a session's row for its
+  # anchor step carries the following steps in its own columns, the prefix test
+  # is an ordinary WHERE over those columns, and the branch is one more of them.
+  # One sort, no joins, nothing for the planner to get wrong. Same set of
+  # measurements: 35 ms / 36 ms / 37 ms — depth no longer costs anything, because
+  # a deeper path only adds a column.
+  #
+  # LEAD ALSO REPLACES THE LEFT JOIN that produced the terminal row. Past the end
+  # of a session LEAD returns NULL, which is exactly the "left the site" branch,
+  # arrived at for free rather than through an outer join that an INNER JOIN
+  # refactor could quietly drop.
+  #
+  # THE SORT ITSELF. The steps CTE sorts the period's events by
+  # (session_hash, occurred_at), which no current index provides. Adding
   # (site_id, session_hash, occurred_at) was tried and the planner did not choose
-  # it — it preferred the existing idx_events_site_time plus a 711 kB quicksort,
-  # and the timing was unchanged at 26 ms. So the index is deliberately NOT there:
-  # it would be permanent write cost on the ingest hot path for a plan PostgreSQL
-  # declined. If this report ever does get slow, re-measure before assuming that
-  # index is the answer. Note also that CREATE INDEX CONCURRENTLY is rejected
+  # it — it preferred the existing idx_events_site_time plus a quicksort, and the
+  # timing was unchanged. So the index is deliberately NOT there: it would be
+  # permanent write cost on the ingest hot path for a plan PostgreSQL declined.
+  # If this report ever does get slow again, re-measure before assuming that index
+  # is the answer — it was not the answer last time, and it was not the answer
+  # this time either. Note also that CREATE INDEX CONCURRENTLY is rejected
   # outright on a hypertable ("hypertables do not support concurrent index
   # creation", verified on TimescaleDB 2.29); the per-chunk form
   # `WITH (timescaledb.transaction_per_chunk)` is what works.
@@ -127,46 +159,50 @@ module Analytics
 
     def execute
       where, binds = conditions
-      ctes = [labelled_cte(where), ordered_cte, steps_cte]
+      ctes = [labelled_cte(where), ordered_cte, steps_cte, anchored_cte, matched_cte]
+
+      # In the order the `?`s appear in the assembled string: the period and site
+      # first, then the anchor step, then one pair per remaining prefix step.
       cte_binds = binds.dup
+      @prefix.each { |step| cte_binds.push(step.kind, step.value) }
 
-      @prefix.each_with_index do |step, index|
-        ctes << (index.zero? ? anchor_cte : chain_cte(index))
-        cte_binds.push(step.kind, step.value)
-      end
-
-      last = "r#{@prefix.size - 1}"
-
-      # LEFT JOIN, so the sessions with nothing on the far side survive as a NULL
-      # row. That row is the whole point of the panel — "left the site" is the
-      # most common thing that happens after any page, and an INNER JOIN would
-      # silently drop it and inflate every percentage beside it.
-      #
       # The total rides along as a scalar subquery over the same CTE: it is
       # COUNT(DISTINCT visitor_hash) at this node, which cannot be recovered by
       # summing the branches (one visitor can hold several sessions that diverge).
+      # It is also the only second reference to `matched`, which is what keeps
+      # that one CTE materialised — deliberately, since it is one row per session
+      # and recomputing it would mean redoing the sort.
       @scope.select_all(<<~SQL, cte_binds)
         WITH #{ctes.join(", ")}
         SELECT
-          s.kind                       AS kind,
-          s.value                      AS value,
-          COUNT(DISTINCT r.visitor_hash) AS visitors,
+          #{branch_kind}  AS kind,
+          #{branch_value} AS value,
+          COUNT(DISTINCT visitor_hash) AS visitors,
           COUNT(*)                     AS sessions,
-          (SELECT COUNT(DISTINCT visitor_hash) FROM #{last}) AS total
-        FROM #{last} r
-        LEFT JOIN steps s
-          ON s.session_hash = r.session_hash
-         AND s.n = #{step_offset}
+          (SELECT COUNT(DISTINCT visitor_hash) FROM matched) AS total
+        FROM matched
         GROUP BY 1, 2
         ORDER BY visitors DESC, sessions DESC, 2 ASC, 1 ASC
       SQL
     end
 
-    # Forward extends from the end of the walked path; backward from its start,
-    # which is what `anchor` is carried through the chain for.
-    def step_offset
-      @direction == :backward ? "r.anchor - 1" : "r.n + 1"
+    # Which shifted copies of the step sequence this query needs.
+    #
+    # Offsets 1..n-1 test the rest of the walked prefix. Walking forward, one
+    # more — offset n — IS the branch being reported. Walking backward the branch
+    # is behind the anchor instead, so LAG(1) supplies it and no extra LEAD is
+    # needed. Bounded by MAX_DEPTH, so this is at most six pairs of columns over
+    # one window that was being computed anyway.
+    def lead_offsets
+      offsets = (1...@prefix.size).to_a
+      offsets << @prefix.size if @direction == :forward
+      offsets
     end
+
+    # Forward reports the step at the end of the walked path; backward the one
+    # immediately before its start.
+    def branch_kind = @direction == :backward ? "prev_step_kind" : "kind_#{@prefix.size}"
+    def branch_value = @direction == :backward ? "prev_step_value" : "value_#{@prefix.size}"
 
     # Every row becomes a (kind, value) pair before anything else looks at it,
     # and the two CASEs are the only place in this query that knows how the
@@ -201,23 +237,45 @@ module Analytics
       SQL
     end
 
-    # WHERE is evaluated before the window function, so the repeats are gone
-    # before ROW_NUMBER counts — the positions are 1..n over the collapsed
-    # sequence, which is what the n + 1 joins above rely on.
+    # WHERE is evaluated before the window functions, so the repeats are gone
+    # before any of them run — LEAD lands on the next DISTINCT step rather than
+    # on a reload of the current one, which is the whole reason the collapse and
+    # the shift have to happen in this order and in this one SELECT.
     #
     # Both halves of the key are tested. `IS DISTINCT FROM` on the value alone
     # would collapse the `Signup` event that fired on `/signup` into the
     # pageview before it whenever a customer names the two the same way, which
     # is neither rare nor something they did wrong.
+    #
+    # Every window function names the same `w`, so this is one sort and one pass
+    # however many offsets the walked path asks for.
     def steps_cte
       <<~SQL
         steps AS (
           SELECT session_hash, visitor_hash, kind, value,
-                 ROW_NUMBER() OVER (PARTITION BY session_hash ORDER BY #{STEP_ORDER}) AS n
+                 ROW_NUMBER() OVER w AS n#{shifted_columns}
           FROM ordered
           WHERE prev_value IS DISTINCT FROM value OR prev_kind IS DISTINCT FROM kind
+          WINDOW w AS (PARTITION BY session_hash ORDER BY #{STEP_ORDER})
         )
       SQL
+    end
+
+    # The step sequence, shifted. Reading a session's row for its anchor step,
+    # `kind_1`/`value_1` are the step it took next, `kind_2`/`value_2` the one
+    # after that, and NULL means the visit ended there.
+    def shifted_columns
+      columns = lead_offsets.map do |offset|
+        ",\n LEAD(kind, #{offset})  OVER w AS kind_#{offset}" \
+        ",\n LEAD(value, #{offset}) OVER w AS value_#{offset}"
+      end
+
+      if @direction == :backward
+        columns << ",\n LAG(kind)  OVER w AS prev_step_kind" \
+                   ",\n LAG(value) OVER w AS prev_step_value"
+      end
+
+      columns.join
     end
 
     # DISTINCT ON, not GROUP BY, and the difference is load-bearing. A session
@@ -225,11 +283,16 @@ module Analytics
     # visitor, so grouping by (session_hash, visitor_hash) would emit that
     # session twice and count its journey twice. One row per session, carrying
     # the visitor_hash observed at the anchor step.
-    def anchor_cte
+    #
+    # The FIRST arrival at the start step is the anchor, which is why the rest of
+    # the prefix is tested in a separate CTE below rather than in this WHERE. A
+    # session that reached the start step twice and only took the walked route
+    # the second time did not take it from where this report is standing; folding
+    # the two tests together would silently re-anchor onto the later arrival.
+    def anchored_cte
       <<~SQL
-        r0 AS (
-          SELECT DISTINCT ON (session_hash)
-                 session_hash, visitor_hash, n AS anchor, n
+        anchored AS (
+          SELECT DISTINCT ON (session_hash) *
           FROM steps
           WHERE kind = ? AND value = ?
           ORDER BY session_hash, n
@@ -237,21 +300,16 @@ module Analytics
       SQL
     end
 
-    # The kind test stays INSIDE the branch, beside the value it qualifies —
-    # the rule CLAUDE.md §12 states for a funnel step's conditions, and it is
-    # load-bearing for the same reason: `WHERE s.value = ?` alone would let a
-    # custom event named `/welcome` satisfy a step that asked for the page.
-    def chain_cte(index)
-      <<~SQL
-        r#{index} AS (
-          SELECT p.session_hash, p.visitor_hash, p.anchor, s.n
-          FROM r#{index - 1} p
-          JOIN steps s
-            ON s.session_hash = p.session_hash
-           AND s.n = p.n + 1
-          WHERE s.kind = ? AND s.value = ?
-        )
-      SQL
+    # The rest of the walked path, as a test on the shifted columns.
+    #
+    # The kind test stays beside the value it qualifies — the rule CLAUDE.md §12
+    # states for a funnel step's conditions, and it is load-bearing for the same
+    # reason: `value_1 = ?` alone would let a custom event named `/welcome`
+    # satisfy a step that asked for the page.
+    def matched_cte
+      tests = (1...@prefix.size).map { |offset| "kind_#{offset} = ? AND value_#{offset} = ?" }
+
+      "matched AS (SELECT * FROM anchored#{" WHERE #{tests.join(' AND ')}" if tests.any?})"
     end
 
     # k-anonymity, through the same Analytics::Suppression every other panel

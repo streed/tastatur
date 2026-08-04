@@ -474,6 +474,74 @@
     color: var(--color-ink-2);
   }
 
+  /* --- Flow map -----------------------------------------------------------
+     The journeys tree drawn as a directed graph (FlowMapHelper). Nodes are
+     ordinary anchors positioned over one SVG edge layer, rather than SVG text,
+     so a long path truncates with an ellipsis, takes the standard focus ring,
+     and stays at its designed size instead of scaling with the canvas.
+
+     The canvas is a fixed pixel size the helper computes, so this scrolls
+     sideways rather than reflowing — a topology map that rewrapped would move
+     every node on a window resize and stop being the same picture. */
+
+  .flow-map { position: relative; overflow-x: auto; padding: 4px 0; }
+
+  /* Centred while it fits, scrolled once it does not. `margin-inline: auto`
+     rather than `justify-content: center` on a flex parent: centring a flex
+     item wider than its container puts its left edge out of reach of the
+     scroll, so the root of a deep tree becomes unreachable. Auto margins
+     resolve to zero in that case instead. */
+  .flow-map-canvas { position: relative; margin-inline: auto; }
+  .flow-edges { position: absolute; top: 0; left: 0; }
+
+  .flow-node {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 1px;
+    padding: 4px 9px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-rule-2);
+    overflow: hidden;
+  }
+
+  /* The walked route. Ink, not the accent — the accent is spent on the edges,
+     which is where the data is. */
+  .flow-node[data-spine="true"] { border-color: var(--color-ink); }
+
+  /* Where the reader is standing. */
+  .flow-node[data-current="true"] {
+    background: var(--color-ink);
+    border-color: var(--color-ink);
+    color: var(--color-surface);
+  }
+  .flow-node[data-current="true"] .flow-node-sub,
+  .flow-node[data-current="true"] .label { color: var(--color-rule); }
+
+  /* Left the site, and withheld. Both are ends of the tree rather than places,
+     so neither gets a solid box to look clickable. */
+  .flow-node[data-quiet="true"] {
+    background: transparent;
+    border-style: dashed;
+    color: var(--color-muted);
+  }
+
+  a.flow-node:hover { border-color: var(--color-ink); background: var(--color-surface-2); }
+  a.flow-node[data-current="true"]:hover { background: var(--color-ink); }
+
+  .flow-node-label {
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.25;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .flow-node-sub { font-size: 11px; line-height: 1.2; color: var(--color-muted); }
+
+  .flow-edge-label { font-size: 10px; fill: var(--color-muted); font-variant-numeric: tabular-nums; }
+
   /* --- Chart chrome ------------------------------------------------------ */
 
   .axis-text { font-size: 10px; fill: var(--color-muted); font-variant-numeric: tabular-nums; }

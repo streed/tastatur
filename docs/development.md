@@ -19,6 +19,12 @@ Fill the dashboard with plausible traffic:
 docker compose exec web bin/rails tastatur:demo_data DAYS=90
 ```
 
+That also builds four funnels on the demo site and sends a share of the traffic
+walking them, dropping out step by step — so the funnel screens have something
+to report rather than the flat lines independently-drawn pages produce. It is
+idempotent: the site's events are replaced and the funnels are rebuilt from the
+declaration in `lib/tasks/demo_data.rake` on every run.
+
 Prefer running Ruby on the host?
 
 ```bash

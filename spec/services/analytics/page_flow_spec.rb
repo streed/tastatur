@@ -95,6 +95,33 @@ RSpec.describe Analytics::PageFlow do
       expect(branch(flow(["/pricing"]), "/docs").visitors).to eq(1)
       expect(branch(flow(["/pricing"]), "/checkout")).to be_nil
     end
+
+    # THE ANCHOR IS CHOSEN BEFORE THE REST OF THE PREFIX IS TESTED, and the two
+    # halves must stay in separate CTEs for it. Folding the prefix test into the
+    # WHERE that picks the anchor would make DISTINCT ON select the first arrival
+    # THAT MATCHES, silently re-anchoring onto a later pass through the same page
+    # — and this visitor, who did not take the route from where the report is
+    # standing, would appear on it.
+    it "does not re-anchor onto a later arrival that does match" do
+      visit("s1", ["/pricing", "/docs", "/pricing", "/checkout", "/done"])
+
+      expect(flow(["/pricing", "/checkout"]).visitors).to be_zero
+    end
+
+    # Depth three and beyond is where the chained self-join this used to use fell
+    # over — see the note in Analytics::PageFlow. The shifted-column form has to
+    # keep counting the same thing at every depth, including the divergence.
+    it "chains past the second hop, and drops the visits that diverge" do
+      2.times { |i| visit("both#{i}", ["/", "/pricing", "/checkout", "/done"]) }
+      visit("away", ["/", "/pricing", "/checkout", "/help"])
+      visit("early", ["/", "/pricing", "/faq", "/done"])
+
+      result = flow(["/", "/pricing", "/checkout"])
+      expect(result.visitors).to eq(3)
+      expect(branch(result, "/done").visitors).to eq(2)
+      expect(branch(result, "/help").visitors).to eq(1)
+      expect(branch(result, "/faq")).to be_nil
+    end
   end
 
   describe "the branch that leaves the tree" do

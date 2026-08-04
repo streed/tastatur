@@ -3,29 +3,75 @@
   <div class="flex flex-wrap items-end justify-between gap-4 mb-8 pt-5 rule-heavy">
     <div class="mt-5">
       <h1 class="text-2xl font-semibold">Funnels</h1>
-      <p class="label mt-2"><%= @site.domain %></p>
+      <p class="label mt-2"><%= @site.domain %><span class="mx-2">·</span><%= @period.label %></p>
     </div>
-    <div class="flex gap-3">
+    <div class="flex flex-wrap gap-3">
+      <% if @summaries.any? %>
+        <div class="segmented">
+          <% %w[7d 30d 90d].each do |key| %>
+            <%# The same control the funnel's own page carries, and the same
+                `view` prop: a funnel is read over a different span than a
+                traffic report, and one number for both would hide that. %>
+            <%= link_to Analytics::Period::PRESETS[key].sub("Last ", ""),
+                        site_funnels_path(@site, period: key),
+                        class: "segment", "aria-current": (@period.key == key).to_s,
+                        data: { analytics_event: "Period Changed",
+                                analytics_props: { period: key, view: "funnels" } } %>
+          <% end %>
+        </div>
+      <% end %>
       <%= link_to "Dashboard", site_path(@site), class: "btn btn-quiet" %>
       <%= link_to "New funnel", new_site_funnel_path(@site), class: "btn btn-primary" %>
     </div>
   </div>
 
-  <% if @funnels.any? %>
+  <% if @summaries.any? %>
     <div class="card">
-      <% @funnels.each do |funnel| %>
-        <%= link_to site_funnel_path(@site, funnel),
-                    class: "flex items-center justify-between gap-4 px-5 py-4 border-b border-rule last:border-b-0 hover:bg-surface-2" do %>
-          <div>
-            <p class="font-semibold"><%= funnel.name %></p>
+      <% @summaries.each do |row| %>
+        <%# The period travels with the link, so opening a funnel shows the rate
+            the row just quoted rather than silently resetting to the default. %>
+        <%= link_to site_funnel_path(@site, row.funnel, **@period.to_param),
+                    class: "relative isolate flex items-center justify-between gap-4 px-5 py-4 border-b border-rule last:border-b-0 hover:bg-surface-2" do %>
+          <% if row.reportable? %>
+            <%# The rate as a wash behind the row — the same bar on the same
+                baseline the goals list and every breakdown use. %>
+            <span class="bar-fill" style="width: <%= row.report.overall_rate.clamp(0, 100) %>%"></span>
+          <% end %>
+          <div class="min-w-0">
+            <p class="font-semibold"><%= row.funnel.name %></p>
             <p class="label mt-1">
-              <%= funnel.funnel_steps.map(&:name).join(" → ") %>
+              <%= row.funnel.funnel_steps.map(&:name).join(" → ") %>
             </p>
           </div>
-          <span class="label shrink-0">View →</span>
+          <div class="shrink-0 text-right">
+            <% if row.reportable? %>
+              <p class="num font-semibold text-lg"><%= row.report.overall_rate %>%</p>
+              <p class="label num mt-1">
+                <%= metric_number(row.report.entered) %> → <%= metric_number(row.report.completed) %>
+                <%# Stated per row rather than in the footnote, because it is true
+                    of one funnel's number and not of its neighbour's. See
+                    Analytics::FunnelReport. %>
+                <% if row.funnel.window_exceeds_identity_lifetime? %>
+                  <span class="text-muted">· a floor</span>
+                <% end %>
+              </p>
+            <% else %>
+              <%# No report to show. The funnel's own page names what is missing
+                  and opens the form on it. %>
+              <p class="num text-muted text-lg">—</p>
+              <p class="label mt-1">Needs a fix</p>
+            <% end %>
+          </div>
         <% end %>
       <% end %>
     </div>
+
+    <p class="text-[12px] text-muted mt-4 max-w-2xl leading-relaxed">
+      Conversion is the share of visitors who reached step 1 that went on to reach the last step,
+      within that funnel's completion window. A funnel whose window is longer than a day is marked
+      as a floor: visitor identifiers expire daily, so a visitor who finishes on the far side of
+      that boundary cannot be followed.
+    </p>
   <% else %>
     <div class="card card-body text-center py-14">
       <p class="font-semibold">No funnels yet.</p>

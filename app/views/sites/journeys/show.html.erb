@@ -1,6 +1,11 @@
 <% content_for :title, "Journeys · #{@site.domain}" %>
 
-<div class="shell max-w-4xl">
+<%# Wider than the forms elsewhere in this section, because the map is a fixed
+    pixel canvas rather than something that reflows: at 4xl the fourth column of
+    a three-hop journey falls off the right-hand edge and has to be scrolled to
+    on a full-size screen. See FlowMapHelper for the geometry this is sized
+    against. -%>
+<div class="shell max-w-6xl">
   <div class="flex flex-wrap items-end justify-between gap-4 mb-8 pt-5 rule-heavy">
     <div class="mt-5">
       <h1 class="text-2xl font-semibold">Journeys</h1>
@@ -128,21 +133,60 @@
   <%= render "sites/known_values_payload" %>
 
   <% if @levels.any? %>
-    <%# --- The walked path ---------------------------------------------------
-        Each hop links back to itself, so stepping back up the tree is one click
-        rather than a browser-history game. Suppressed at depth one, where it
-        would be a lone "/" repeating the card heading directly beneath it. -%>
-    <% if @path.size > 1 %>
-      <nav class="mb-6 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm" aria-label="Walked path">
-        <% @path.each_with_index do |step, index| %>
-          <% if index.positive? %><span class="text-muted" aria-hidden="true">→</span><% end %>
-          <% if index == @path.size - 1 %>
-            <span class="font-semibold"><%= flow_step_label(step) %></span>
-          <% else %>
-            <%= link_to flow_step_label(step), journey_url(@site, @path.first(index + 1)), class: "link" %>
-          <% end %>
-        <% end %>
-      </nav>
+    <%# --- The map -----------------------------------------------------------
+        The same data as the cards below, drawn as the tree it actually is. See
+        FlowMapHelper for why both are on the page: the picture carries the
+        shape, the lists carry the figures and the prose that has to be exact.
+
+        Nil when there is nothing to draw — a start step nobody went anywhere
+        from — in which case the walked path falls back to the text breadcrumb
+        below, which is the only thing left that can be stepped back through. -%>
+    <% flow = flow_map(@site, @path, @levels) %>
+
+    <% if flow %>
+      <div class="card mb-6">
+        <div class="card-head">
+          <h2 class="text-sm font-semibold">
+            Where visitors go from <%= flow_step_label(@path.first) %>
+          </h2>
+          <span class="label">Line weight is the share taking that route</span>
+        </div>
+        <%# Padded vertically only. The canvas centres itself and scrolls when it
+            is wider than the card, so side padding would just be dead margin
+            inside the scroll area — and on a phone it is the difference between
+            two columns fitting and one. -%>
+        <div class="py-4 px-2"><%= flow %></div>
+
+        <%# The one sentence a reader needs to have BEFORE looking at the
+            picture, rather than after the three cards below it. "Immediately
+            next" is the whole difference between this report and the funnel,
+            and a reader who assumes otherwise misreads every edge on screen.
+            The longer note at the foot of the page is the rest of it. -%>
+        <p class="px-5 py-3 text-[12px] text-muted border-t border-rule leading-relaxed">
+          Each line is what visitors did <em>immediately</em> next, within the same visit — not
+          merely somewhere later on, which is what a funnel measures. Its weight and its
+          percentage are the share of the visitors at that node who took it, so the lines
+          leaving one node add up to 100%. Click any step to see what happened after it.
+        </p>
+      </div>
+    <% end %>
+
+    <%# The text breadcrumb that used to sit here is gone, and the map's spine is
+        why: it steps back to any hop in one click exactly as the breadcrumb did,
+        and says how many visitors are still on each one. It is not a fallback
+        either — every walked step is drawn, including one no branch accounts
+        for, so a path deeper than the start step always has a spine to click.
+        The only way to have no map is a start step with nothing after it, where
+        there was never anything to step back through. -%>
+
+    <%# The same tree as a list, level by level. Not a duplicate for its own
+        sake: it carries the exact figures, both suppression wordings and the
+        three-state distinction between "nobody went anywhere" and "we are not
+        telling you where they went" — prose that has to be read, which is not
+        something a picture can do. It is also the rendering that survives with
+        no CSS, and the accessible reading of the map above. -%>
+    <% if flow %>
+      <p class="label mb-3">Level by level</p>
     <% end %>
 
     <div class="space-y-6">
@@ -170,11 +214,13 @@
       </p>
     <% end %>
 
+    <%# The rest of the reading rules. The "immediately next" half of this moved
+        up beside the map, where a reader needs it before looking rather than
+        after — repeating it here would be the third time on one screen. -%>
     <p class="text-[12px] text-muted mt-6 max-w-2xl leading-relaxed">
-      Each row is what visitors did <em>immediately</em> next, within the same visit — not
-      merely somewhere later on, which is what a funnel measures. Percentages are shares of the
-      visitors at that point and add up to 100%. Repeats of the same step in a row are treated as
-      one, so a reload is not a journey and neither is a double-clicked button.
+      Each row is what visitors did immediately next, within the same visit. Percentages are
+      shares of the visitors at that point and add up to 100%. Repeats of the same step in a row
+      are treated as one, so a reload is not a journey and neither is a double-clicked button.
       <% if @include_events %>
         A step is a page view or a custom event; an event that fired on the page you were
         already on is a step of its own, between that page and the next.

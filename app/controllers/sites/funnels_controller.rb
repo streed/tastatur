@@ -9,6 +9,10 @@ module Sites
       # `includes`, because the view renders each funnel's step names inline and
       # was therefore issuing one query per row.
       @funnels = policy_scope(Funnel).where(site: @site).includes(:funnel_steps).ordered
+      # A conversion rate is only a number over some window, so the index needs a
+      # period exactly as the funnel's own page does — and offers the same three.
+      @period = Analytics::Period.parse(params[:period], site: @site)
+      @summaries = Analytics::FunnelSummaries.call(funnels: @funnels, period: @period).value!
     end
 
     def show
