@@ -41,9 +41,14 @@ queues:
   # accepting, so the visible symptom is "my numbers are frozen".
   - within_30_seconds
 
-  # Privacy obligations that are prompt but not interactive: salt rotation, and
-  # reconciling the aggregates after an erasure. Minutes are fine. Hours are not,
-  # because both back a claim we make in writing.
+  # Obligations that are prompt but not interactive: reconciling the aggregates
+  # after an erasure, and repairing the usage counter that decides whether an
+  # event is recorded at all. Minutes are fine. Hours are not, because both back
+  # a claim we make in writing.
+  #
+  # Salt rotation was listed here and is not a job at all — it is a property of
+  # the site-local date key and a TTL (§13). The entry outlived the code by some
+  # weeks; see the note in config/initializers/sidekiq.rb for what that cost.
   - within_5_minutes
 
   # Nightly bulk work. Retention deletion, and anything else measured in chunks

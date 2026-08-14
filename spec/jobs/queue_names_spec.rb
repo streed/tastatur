@@ -83,6 +83,40 @@ RSpec.describe "Queue names" do
 
       expect(disagreements).to be_empty, disagreements.join("; ")
     end
+
+    it "is loaded with the form that also REMOVES what this file no longer lists" do
+      # The mirror image of every other assertion here, and the only one that
+      # cannot be made by running anything: the schedule a worker obeys lives in
+      # Redis, not in this repository. sidekiq-cron's plain `load_from_hash`
+      # adds and updates but never deletes, so removing a job and its YAML entry
+      # leaves it scheduled in production forever, firing a class that no longer
+      # exists — `NameError: uninitialized constant RotateVisitorSaltJob`, weeks
+      # after the deletion, with the constant nowhere in the tree to find.
+      #
+      # Asserting on the source because there is no other seam. Loading the
+      # schedule for real needs a Sidekiq server and a Redis that survives the
+      # example, and the bug is precisely that the wrong call raises nothing and
+      # looks right.
+      source = Rails.root.join("config/initializers/sidekiq.rb").read
+                    .lines.reject { |line| line.match?(/\A\s*#/) }.join
+
+      expect(source).to include("load_from_hash!"),
+                        "config/initializers/sidekiq.rb must load the cron schedule with " \
+                        "`load_from_hash!`. The non-bang form cannot unschedule a deleted job."
+      expect(source).not_to match(/load_from_hash\(/),
+                            "A bare `load_from_hash(` call leaves deleted jobs running in production."
+    end
+
+    it "guards the destructive load against an empty schedule" do
+      # `load_from_hash!` destroys every cron entry not named in what it is
+      # given, so handing it an empty hash unschedules the deployment. Empty
+      # means the merge found no files, which is a deploy accident rather than
+      # an instruction to stop running cron.
+      source = Rails.root.join("config/initializers/sidekiq.rb").read
+
+      expect(source).to match(/load_from_hash!\(schedule\) if schedule\.any\?/),
+                        "The destructive load must stay guarded by `if schedule.any?`."
+    end
   end
 
   describe "framework defaults" do
