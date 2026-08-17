@@ -82,7 +82,7 @@
                            lede: "Paste this into your <head>. That is the entire installation, and nothing below is required to get numbers." } do %>
         <%= render "docs/snippet", code: %(<script defer data-site="#{token}" src="#{tracker}"></script>) %>
         <p class="text-[14px] text-ink-2 leading-relaxed">
-          <code>defer</code> keeps it off the critical path. The script is about 3.6 KB over the
+          <code>defer</code> keeps it off the critical path. The script is about 4.1 KB over the
           wire and makes one request per pageview. Visits from
           <code>localhost</code>, private network ranges and <code>file:</code> are ignored, so
           local development will not appear in your numbers.
@@ -403,7 +403,7 @@
                ["Browser and OS", "Family plus major version only."],
                ["Device class", "One of desktop, mobile, tablet."],
                ["Screen class", "One of five buckets. The exact pixel width is never stored."],
-               ["Visitor identifier", "A truncated HMAC of a daily-rotating secret with the IP, user-agent and site. Unlinkable once the secret is destroyed."]
+               ["Visitor identifier", "A truncated HMAC of a daily-rotating secret with the IP, site, and the coarse browser facts below — never the raw user-agent. Unlinkable once the secret is destroyed."]
              ].each do |field, note| %>
             <div class="px-4 py-3 border-b border-rule last:border-b-0">
               <p class="label text-[9px]"><%= field %></p>

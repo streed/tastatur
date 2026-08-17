@@ -11,7 +11,7 @@ RSpec.describe Ingest::Identifier do
   after { travel_back }
 
   def identify(target: site, ip: "203.0.113.10", user_agent: ua)
-    described_class.new(site: target, ip: ip, user_agent: user_agent).call
+    described_class.new(site: target, ip: ip, agent: Ingest::UserAgent.parse(user_agent)).call
   end
 
   describe "the identifier itself" do
@@ -28,8 +28,9 @@ RSpec.describe Ingest::Identifier do
         .not_to eq(identify(ip: "198.51.100.4").visitor_hex)
     end
 
-    it "differs for a different user agent" do
-      expect(identify(user_agent: "A").visitor_hex).not_to eq(identify(user_agent: "B").visitor_hex)
+    it "differs for a different browser" do
+      firefox = "Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0"
+      expect(identify(user_agent: ua).visitor_hex).not_to eq(identify(user_agent: firefox).visitor_hex)
     end
 
     # The point of mixing site_id into the message: one customer must not be
@@ -43,9 +44,49 @@ RSpec.describe Ingest::Identifier do
 
     it "uses HMAC rather than a salt-prefixed digest" do
       salt = Ingest::SaltStore.current(site)
-      expected = OpenSSL::HMAC.digest("SHA256", salt, "#{site.id}\x00203.0.113.10\x00#{ua}")
-                              .byteslice(0, 16)
+      message = "#{site.id}\x00203.0.113.10\x00#{Ingest::UserAgent.parse(ua).fingerprint}"
+      expected = OpenSSL::HMAC.digest("SHA256", salt, message).byteslice(0, 16)
       expect(identify.visitor_hash).to eq(expected)
+    end
+
+    # The message carries the COARSE user-agent, never the string itself. The
+    # verbatim form is not merely redundant here, it was actively wrong in both
+    # directions — see Ingest::UserAgent#fingerprint.
+    it "does not hash the raw user-agent string" do
+      salt = Ingest::SaltStore.current(site)
+      verbatim = OpenSSL::HMAC.digest("SHA256", salt, "#{site.id}\x00203.0.113.10\x00#{ua}")
+                              .byteslice(0, 16)
+      expect(identify.visitor_hash).not_to eq(verbatim)
+    end
+  end
+
+  # The user-agent half of the old construction split one person into two on an
+  # ordinary software update, and let anyone mint visitors out of thin air.
+  describe "coarsening the user agent" do
+    # Apple ships the point release in the string; Chrome and Firefox freeze
+    # everything below the major version, so this is where the split showed up.
+    it "keeps one visitor across an OS point release" do
+      before_update = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) AppleWebKit/605.1.15 " \
+                      "(KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1"
+      after_update  = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_2_1 like Mac OS X) AppleWebKit/605.1.15 " \
+                      "(KHTML, like Gecko) Version/17.2.1 Mobile/15E148 Safari/604.1"
+
+      expect(identify(user_agent: before_update).visitor_hex)
+        .to eq(identify(user_agent: after_update).visitor_hex)
+    end
+
+    it "still separates a major version upgrade" do
+      chrome_130 = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/130.0.0.0"
+      expect(identify(user_agent: chrome_130).visitor_hex).not_to eq(identify(user_agent: ua).visitor_hex)
+    end
+
+    # A user-agent is a header the caller picks. Hashed verbatim, one machine
+    # sending a random string per request minted an unbounded number of distinct
+    # "visitors" on somebody else's dashboard; parsed first, the garbage all
+    # lands in the same Unknown bucket.
+    it "collapses unparseable strings instead of minting a visitor for each" do
+      hashes = 5.times.map { |i| identify(user_agent: "#{SecureRandom.hex(8)}/#{i}").visitor_hex }
+      expect(hashes.uniq.size).to eq(1)
     end
   end
 

@@ -132,8 +132,26 @@ say it is configurable per account, and say what enforces it.
 ## Also avoid
 
 - **Claiming a size the tracker does not have.** State measured numbers. The
-  current script is 7,649 bytes raw, 3,180 gzipped, 2,501 brotli. If you change
-  the script, re-measure.
+  current script is **10,192 bytes raw, 4,070 gzipped, 3,310 brotli**. Comments
+  ship over the wire, so any edit to `lib/tracker/t.js` changes this.
+
+  Nothing in the suite compares these to the file, so re-measuring by hand is the
+  whole control — and it had failed three times over before 2026-08-16: this
+  figure, `Tastatur::DESCRIPTION` and the install docs each named a different
+  size, none of them the script's. The six places to update together:
+
+  | Where | Form |
+  |---|---|
+  | `docs/privacy/claims.md` (here) | exact bytes, all three encodings |
+  | `docs/architecture/ingest.md` | exact bytes, all three encodings |
+  | `Tastatur::DESCRIPTION` | rounded KB, gzipped — quoted by five SEO surfaces |
+  | `app/views/docs/show.html.erb` | rounded KB, gzipped |
+  | `app/views/docs/show.md.erb` | rounded KB, gzipped |
+  | `app/views/sites/installations/show.html.erb` | rounded KB, gzipped |
+
+  Round the KB figure **up**, not to the number we would prefer. Measure with
+  `gzip -c lib/tracker/t.js | wc -c` — an edition serving marketing copy may
+  quote it too, and that repository is not searched from here.
 - **Implying cross-day unique visitors.** The identifier rotates daily. A 30-day
   "unique visitors" figure is the sum of 30 daily figures. Label it accurately
   and explain it once, prominently.

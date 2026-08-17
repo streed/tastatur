@@ -21,7 +21,7 @@ below is required to get numbers.
 <script defer data-site="<%= token %>" src="<%= tracker %>"></script>
 ```
 
-`defer` keeps it off the critical path. The script is about 3.6 KB over the
+`defer` keeps it off the critical path. The script is about 4.1 KB over the
 wire and makes one request per pageview. Visits from `localhost`, private
 network ranges and `file:` are ignored, so local development will not appear in
 your numbers.
@@ -351,7 +351,7 @@ The short version. The long version is a page of its own.
 | Browser and OS | Family plus major version only. |
 | Device class | One of desktop, mobile, tablet. |
 | Screen class | One of five buckets. The exact pixel width is never stored. |
-| Visitor identifier | A truncated HMAC of a daily-rotating secret with the IP, user-agent and site. Unlinkable once the secret is destroyed. |
+| Visitor identifier | A truncated HMAC of a daily-rotating secret with the IP, site, and the coarse browser facts below — never the raw user-agent. Unlinkable once the secret is destroyed. |
 
 Raw IP addresses and user-agent strings are never written to the database, a
 log, or disk. A returning visitor is counted as a new visitor tomorrow, so a

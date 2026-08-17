@@ -1,7 +1,9 @@
 module Ingest
   # The rotating secret that makes visitor identity unlinkable across days.
   #
-  # Every visitor hash is HMAC-SHA256(salt, site_id ‖ ip ‖ user_agent). Because
+  # Every visitor hash is HMAC-SHA256(salt, site_id ‖ ip ‖ browser_facts), where
+  # the browser facts are the coarse tuple Ingest::UserAgent#fingerprint builds
+  # rather than the raw header. Because
   # the salt is replaced daily and the old value is destroyed, yesterday's
   # hashes cannot be recomputed or joined to today's — not by an attacker who
   # steals the database, and not by us. That property is the entire basis for

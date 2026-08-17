@@ -88,6 +88,16 @@ Two rules specific to this project:
   those devices are listed and revocable individually or all at once. Email is a
   weaker second factor than an authenticator app and the settings screen says so
   rather than implying otherwise.
+- **Hashing the coarse browser profile rather than the raw user-agent cuts both
+  ways, and the weaker half is stated too.** It stops one person being split into
+  several — an Apple OS point release between two visits would otherwise mint a
+  second visitor — and it stops a forged user-agent minting unlimited visitors,
+  since unparseable strings collapse into one bucket. But it merges more people who
+  share an address, and, while a salt is still live, confirming "was this person
+  here" now needs only somebody's browser and OS rather than their exact user-agent
+  string. What the identifier rests on was always the salt's destruction rather
+  than the entropy of its input, and that is unchanged. Full reasoning in
+  [docs/privacy/identity.md](docs/privacy/identity.md).
 - An instance administrator can turn somebody's two-factor authentication off, and
   cannot turn it on. That asymmetry is the point: the off switch is the remedy for a
   person locked out because the mailbox their codes go to stopped working, and an on
@@ -130,9 +140,11 @@ Two rules specific to this project:
 - Sign-in codes are stored as bcrypt digests, never in the clear, and are destroyed
   on use, on expiry, and after five wrong guesses.
 - Visitor identity is an HMAC-SHA-256 digest of a daily-rotating random salt, the
-  site id, the IP address and the user-agent, truncated to 128 bits. The IP and
-  user-agent exist as local variables and are never written to the database, a log,
-  or disk. IPv6 addresses are normalised to a /64 first.
+  site id, the IP address and a coarse browser profile, truncated to 128 bits. The
+  IP and user-agent exist as local variables and are never written to the database,
+  a log, or disk. Both inputs are reduced before they are hashed: IPv6 addresses to
+  a /64, and the user-agent to browser family, major version, OS, major version and
+  one of desktop/mobile/tablet. The raw user-agent string never reaches the digest.
 - The rotating salt lives only in a separate, non-persistent Redis, with RDB
   snapshots and the AOF both disabled. Once a salt is destroyed the data derived
   from it is unlinkable rather than merely pseudonymous.
@@ -239,6 +251,19 @@ Two rules specific to this project:
 
 ### Fixed
 
+- **A page the visitor really did open went uncounted if the browser had
+  prerendered it.** The ingest endpoint refuses beacons carrying `Sec-Purpose:
+  prefetch` or `prerender`, which is right and was also the whole problem: a
+  prerendered page runs the tracker in full, so the beacon fired and was refused
+  while nobody had seen the page — and the document was by then already loaded, so
+  activating the prerender re-ran nothing and fired no event the tracker listened
+  for. Measured against Chromium, three activations out of three lost. The tracker
+  now holds anything raised while `document.prerendering` and flushes it on
+  `prerenderingchange`, so an activated prerender is counted once at activation and
+  an abandoned one sends nothing at all instead of a request for the server to
+  discard. The server-side filter stays as the backstop for plain prefetches, other
+  clients, and copies of `t.js` already cached on customer sites. Nothing in Ruby
+  could have caught this: the endpoint behaved exactly as specified throughout.
 - **Filtering the dashboard by a custom event reported "0 pageviews" above panels
   full of the visitors who fired it.** The filter pins `event_name` in the WHERE
   clause and "pageviews" counts events named `pageview` — two conditions that can

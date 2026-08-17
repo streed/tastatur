@@ -65,6 +65,40 @@ module Ingest
       end
     end
 
+    # The browser half of the visitor HMAC, in place of the raw string.
+    #
+    # Ingest::Identifier used to hash the user-agent verbatim, which quietly
+    # contradicted the reasoning at the top of this class: it exists because
+    # "128.0.6613.85" identifies far fewer people than "128", and yet the digest
+    # — the one value derived from the string that actually reaches the database
+    # — was taking the whole thing. That went wrong in two directions.
+    #
+    # It SPLIT one person into several. Apple ships the full version
+    # ("Version/17.2.1", "iPhone OS 17_2_1"), so an OS point update between two
+    # visits on the same day minted a brand-new visitor for the same person.
+    # Coarsening to the major version is the same fix, for the same reason, as
+    # masking IPv6 to its /64.
+    #
+    # And it made the visitor count trivial to inflate. A user-agent is a header
+    # the caller chooses, so one machine sending a random string per request
+    # minted an unbounded number of distinct "visitors" on someone else's site.
+    # Parsed first, garbage collapses into a single Unknown bucket and the space
+    # reachable from one address is bounded by the tuples DeviceDetector emits.
+    #
+    # The cost, stated plainly: less entropy means more genuinely different
+    # people behind one address hashing alike. Two phones on one wifi at the same
+    # iOS version are now certainly one visitor rather than probably one. That is
+    # the safe direction to be wrong in — it undercounts rather than inventing
+    # people — and it is the trade the /64 mask already makes.
+    #
+    # 0x1f (unit separator) cannot occur in any component: browser and OS names
+    # come from DeviceDetector's fixed vocabulary, the versions are digits, and
+    # device_type is one of three literals. So the join is unambiguous and
+    # browser "Chrome 1" cannot collide with browser "Chrome" at version "1".
+    def fingerprint
+      [browser, browser_version, os, os_version, device_type].join("\x1f")
+    end
+
     def to_h
       {
         browser: browser,

@@ -69,13 +69,13 @@
       <p class="mb-4">Here is what happens to them:</p>
       <div class="card card-body space-y-3 text-sm">
         <p>
-          <strong>1.</strong> They are combined with a rotating secret and a site identifier into
-          an HMAC-SHA-256 digest, truncated to 128 bits.
+          <strong>1.</strong> The user-agent is reduced to four coarse facts — browser family,
+          major version, operating system, and one of desktop/mobile/tablet. The string itself is
+          discarded at that point and goes no further, including into step 2.
         </p>
         <p>
-          <strong>2.</strong> The user-agent is reduced to four coarse facts — browser family,
-          major version, operating system, and one of desktop/mobile/tablet. The string itself is
-          discarded.
+          <strong>2.</strong> Those four facts and your IP address are combined with a rotating
+          secret and a site identifier into an HMAC-SHA-256 digest, truncated to 128 bits.
         </p>
         <p>
           <strong>3.</strong> The IP is used once more to look up a two-letter country code. No

@@ -17,7 +17,8 @@ IngestEventContract         bounds every field of untrusted input
       ▼
 Ingest::RecordEvent
       ├─ Ingest::UserAgent      bot? ──► 202, nothing stored
-      ├─ Ingest::Identifier     HMAC(salt, site ‖ ip ‖ ua)     ◄── privacy Redis
+      │                         coarse facts, raw string dropped
+      ├─ Ingest::Identifier     HMAC(salt, site ‖ ip ‖ facts)   ◄── privacy Redis
       ├─ Ingest::SessionWindow  30-min sliding TTL              ◄── privacy Redis
       ├─ Ingest::PathScrubber   strips PII from path + query
       ├─ Ingest::Referrer       host + grouped source

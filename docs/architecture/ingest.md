@@ -6,8 +6,11 @@ application by a wide margin: it runs once per pageview on every measured site.
 ## The tracker
 
 `lib/tracker/t.js`. Served unminified and unbundled, deliberately — a privacy tool
-should be readable by the people it makes claims to. 7,649 bytes raw, 3,180
-gzipped, 2,501 brotli.
+should be readable by the people it makes claims to. 10,192 bytes raw, 4,070
+gzipped, 3,310 brotli. Those comments ship over the wire, which is the deal. The
+size is published in six places and nothing checks them against the file, so when
+you edit it, re-measure and walk the list in
+[claims.md](../privacy/claims.md#also-avoid).
 
 ```html
 <script defer data-site="YOUR_SITE_KEY" src="https://your-tastatur/t.js"></script>
@@ -114,6 +117,22 @@ indistinguishable from a person's.
 **Prefetch filtering** rejects `Sec-Purpose: prefetch` and `prerender`. Chrome and
 Safari speculatively fetch links the user has not clicked; counting those inflates
 everything.
+
+That filter is correct and, on its own, was also how a real pageview got lost. A
+prerendered page runs the tracker in full, so the beacon fired while nobody had
+seen the page and the endpoint refused it — but the document was then already
+loaded, so *activating* the prerender re-ran nothing and fired no event the
+tracker listened for. Measured against Chromium on 2026-08-16, three activations
+out of three: one refused beacon, and no countable pageview for a page the
+visitor really did open.
+
+So the tracker holds anything raised while `document.prerendering` and flushes it
+on `prerenderingchange`. An activated prerender is now counted once, at
+activation, with no `Sec-Purpose` header; one that is never activated sends
+nothing at all rather than a request for the server to throw away. The server
+filter stays as the backstop for other clients, for older copies of the tracker,
+and for prefetches that are not prerenders — `spec/requests/api/events_spec.rb`
+still pins it.
 
 **Rate limiting** (`config/initializers/rack_attack.rb`) uses **hashed** client
 keys, not raw IPs. A stock Rack::Attack configuration writes every visitor's IP

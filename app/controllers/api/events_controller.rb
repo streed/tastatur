@@ -205,6 +205,15 @@ module Api
 
     # Chrome and Safari speculatively fetch links the user has not clicked.
     # Counting those as pageviews inflates every number on the dashboard.
+    #
+    # This is the BACKSTOP, not the whole mechanism. A prerendered page runs the
+    # tracker in full, and refusing its beacon here — correctly — is also how the
+    # real pageview went missing: the document is already loaded, so activating
+    # the prerender re-runs nothing. t.js therefore holds a beacon raised while
+    # `document.prerendering` and sends it on `prerenderingchange`, which is why
+    # a modern tracker no longer reaches this branch on an activated prerender.
+    # Keep both: this one still covers plain prefetches, other clients, and every
+    # copy of t.js already cached on somebody's site. See docs/architecture/ingest.md.
     def reject_prefetch
       purpose = request.headers["Sec-Purpose"].to_s + request.headers["Purpose"].to_s
       head :accepted if purpose.include?("prefetch") || purpose.include?("prerender")

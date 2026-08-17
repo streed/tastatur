@@ -32,9 +32,9 @@ connection and listed every matching row, on the reasoning that the source addre
 comes from a completed TCP handshake and so cannot be pointed at anyone else.
 
 **That reasoning was wrong, and the page was removed on 2026-07-30.** The identity
-is `HMAC(salt, site_id ‖ ip ‖ user_agent)`, and only the address comes from the
-connection — the user-agent is a request header the caller sets to anything it
-likes. So the lookup was never keyed on something the caller had to prove; it was
+is `HMAC(salt, site_id ‖ ip ‖ browser_facts)`, and only the address comes from the
+connection — the browser facts are derived from a request header the caller sets
+to anything it likes. So the lookup was never keyed on something the caller had to prove; it was
 keyed on an address they shared with their whole network plus a string they could
 guess.
 
@@ -43,7 +43,9 @@ normal case (household NAT, office, café, hotel, VPN exit, mobile CGNAT), and
 `Ingest::Identifier` masks IPv6 to the /64, which is the subnet rather than the
 device. Meanwhile user-agent strings have been *deliberately* reduced by browser
 vendors — Chrome freezes the minor version at `0.0.0` — so the candidate set is
-small enough to walk through by hand. Anyone on the same network could therefore
+small enough to walk through by hand. It is smaller still now that the identifier
+hashes the coarse facts rather than the string (see identity.md): that change is
+right for counting, and it removes what little was left to guess here. Anyone on the same network could therefore
 retrieve up to 500 of a neighbour's rows: site domain, full path, timestamp,
 country, browser, OS and device type, across every site on the instance.
 

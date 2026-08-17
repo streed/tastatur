@@ -12,11 +12,18 @@ module Ingest
     # Takes the Site rather than its id, because the salt now rolls over at the
     # site's own local midnight and only the record knows which zone that is.
     # See Ingest::SaltStore for why the rollover follows the reporting day.
-    def initialize(site:, ip:, user_agent:)
+    #
+    # Takes a PARSED Ingest::UserAgent rather than the raw header, and the raw
+    # string is now never passed into this object at all. Two reasons, in that
+    # order: hashing the coarse facts instead of the verbatim string is what
+    # stops an OS point release splitting one person into two visitors (see
+    # UserAgent#fingerprint), and the caller has already parsed it, so taking the
+    # string here would mean running DeviceDetector twice on the ingest hot path.
+    def initialize(site:, ip:, agent:)
       @site = site
       @site_id = site.id
       @ip = normalize_ip(ip)
-      @user_agent = user_agent.to_s
+      @agent_fingerprint = agent.fingerprint
     end
 
     def call
@@ -55,7 +62,7 @@ module Ingest
     # handle.
     def digest(salt)
       OpenSSL::HMAC.digest(
-        "SHA256", salt, "#{@site_id}\x00#{@ip}\x00#{@user_agent}"
+        "SHA256", salt, "#{@site_id}\x00#{@ip}\x00#{@agent_fingerprint}"
       ).byteslice(0, DIGEST_BYTES)
     end
 

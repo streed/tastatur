@@ -6,11 +6,17 @@ device, and what that does and does not entitle us to claim.
 ## The construction
 
 ```
-visitor_hash = HMAC-SHA256(salt, site_id ‖ 0x00 ‖ ip ‖ 0x00 ‖ user_agent)[0..15]
+visitor_hash = HMAC-SHA256(salt, site_id ‖ 0x00 ‖ ip ‖ 0x00 ‖ browser_facts)[0..15]
+
+browser_facts = browser ‖ 0x1f ‖ major version ‖ 0x1f ‖ OS ‖ 0x1f ‖ major version
+                        ‖ 0x1f ‖ desktop | mobile | tablet
 ```
 
 Implemented in `app/lib/ingest/identifier.rb`, the only file in the codebase that
-touches an IP address.
+touches an IP address. Note that `browser_facts`, not the user-agent string, is
+what enters the digest — the reduction happens first, in
+`Ingest::UserAgent#fingerprint`, and the raw header is never passed to the
+identifier at all.
 
 Each decision in that one line:
 
@@ -34,6 +40,19 @@ Hashing the full address would mint a brand-new "visitor" for the same person
 several times a day and badly inflate the visitor count. The /64 is the network
 they are on, which is the part that behaves like an IPv4 address. IPv4 is used
 whole.
+
+**The user-agent reduced to coarse facts, for the same reason.** This is the /64
+argument applied to the other input, and it was got wrong at first: the digest
+took the verbatim string while everything stored took the coarse form. Apple
+ships the point release in the user-agent (`Version/17.2.1`, `iPhone OS 17_2_1`),
+so an ordinary overnight OS update split one person into two visitors on the same
+report — exactly the failure a full IPv6 address would cause. It also left the
+count forgeable: a user-agent is a header the caller chooses, so one machine
+sending a random string per request minted an unbounded number of distinct
+visitors on someone else's site. Parsed first, unrecognised strings collapse into
+a single `Unknown` bucket. The cost is that two devices behind one address at the
+same browser and OS version now certainly hash alike rather than probably —
+undercounting, which is the safe direction, and the same trade the /64 makes.
 
 **Neither input is stored.** The IP and user-agent exist as local variables for
 the duration of one method call. The user-agent is reduced to browser family,
@@ -169,8 +188,22 @@ better one than persisting visitor state to disk.
 ## What this entitles us to say
 
 **While a salt is live, data derived from it is pseudonymous, not anonymous.**
-The salt exists, so the mapping from (IP, user-agent) to hash is computable by
+The salt exists, so the mapping from (IP, browser facts) to hash is computable by
 whoever holds it. Calling that "fully anonymous" would be false.
+
+**Coarsening the user-agent made that confirmation easier, and it belongs here
+rather than buried.** Hashing the reduced tuple instead of the verbatim string is
+right for counting, for the reasons given above — but it shrinks the guessing
+space in the same motion. Confirming "was this person here" used to need their
+exact user-agent string; it now needs only their browser, major version, OS,
+major version and device class, which are things an attacker can often simply
+know. Against a single IP that is a handful of candidates, not a search.
+
+What the design actually rests on is unchanged, and it was never the entropy of
+the message: the salt is random rather than derived, scoped to one site and one
+local day, held only in the non-persistent Redis, and once it is gone the question
+cannot be asked at all. This is a statement about the live window, which is
+precisely the window this section already concedes is pseudonymous.
 
 **Once the salt is destroyed, the link cannot be rebuilt.** Not by an attacker
 with the database, and not by us. At that point the events are unlinkable to any

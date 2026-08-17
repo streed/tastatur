@@ -134,10 +134,11 @@ The visitor's IP address and user-agent arrive too, because every HTTP request
 carries them. They are used, in memory, to compute three things and are then
 discarded:
 
-1. a **visitor identifier**: `HMAC-SHA256(rotating_salt, site_id ‖ ip ‖ ua)`,
-   truncated to 128 bits
-2. a **coarse device profile**: browser family and major version, OS, and one of
+1. a **coarse device profile**: browser family and major version, OS, and one of
    desktop / mobile / tablet
+2. a **visitor identifier**: `HMAC-SHA256(rotating_salt, site_id ‖ ip ‖ profile)`,
+   truncated to 128 bits — built from the coarse profile above, never from the
+   raw user-agent string
 3. a **two-letter country code**
 
 Neither the IP nor the user-agent string is written to the database, to a log, or

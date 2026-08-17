@@ -253,7 +253,7 @@ module Tastatur
   # It is bound by docs/privacy/claims.md like every other claim we publish. The
   # size is the measured gzipped size of lib/tracker/t.js — re-measure it here if
   # the script changes rather than rounding it in the direction we would prefer.
-  DESCRIPTION = "Cookieless, privacy-first web analytics. One script tag, 4.4 KB over the wire. " \
+  DESCRIPTION = "Cookieless, privacy-first web analytics. One script tag, 4.1 KB over the wire. " \
                 "No cookies, no device storage, no fingerprinting, and visitor identifiers stop " \
                 "working after 24 hours.".freeze
 
