@@ -81,6 +81,34 @@ RSpec.describe "Signing up", type: :request do
     it "refuses the POST, not just the form" do
       expect { post "/users", params: params }.not_to change(User, :count)
     end
+
+    # WHERE THE REFUSAL LANDS, and it has to render on an instance with no
+    # edition. The screen carries an `edition_partial` slot offering to take an
+    # address for when signups open, which is markup this repository does not
+    # have; the slot is what makes "no edition" the defined case rather than a
+    # MissingTemplate on the sign-in screen in production (§20). Asserting the
+    # status rather than the markup keeps this example true in both
+    # configurations, which is the only way it can be a check on the slot.
+    it "renders the screen it redirects to, edition or no edition" do
+      get "/users/sign_up"
+      follow_redirect!
+
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to include("Sign in")
+    end
+
+    # An instance that holds no addresses has nothing to promise, so it says the
+    # thing that is actually true there: this install belongs to somebody, ask
+    # them. The two messages are switched by the same predicate as the form, so
+    # a screen offering a list cannot be reached by a message that denies there
+    # is one.
+    it "tells a private install's visitor to ask its operator" do
+      allow(Tastatur).to receive(:waitlist_enabled?).and_return(false)
+
+      get "/users/sign_up"
+
+      expect(flash[:alert]).to include("Ask an administrator")
+    end
   end
 end
 

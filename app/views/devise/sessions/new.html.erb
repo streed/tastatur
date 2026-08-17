@@ -22,4 +22,21 @@
                    data: { analytics_event: "Sign In Submitted" } %>
     </div>
   <% end %>
+
+  <%# WHERE A CLOSED SIGNUP LANDS. `Users::RegistrationsController` sends
+      /users/sign_up here when `allow_signup?` is off, so this is the screen
+      somebody who wanted an account is actually looking at. On an instance that
+      can take an address for something that does not exist yet, that is where
+      the ask belongs; on one that cannot, nothing renders and the screen is
+      unchanged.
+
+      A SLOT AND NOT A GUARDED RENDER, per §20: the markup is an edition's, and
+      `render "..." if Tastatur.waitlist_enabled?` raises MissingTemplate on the
+      day a predicate and a partial disagree — on the sign-in screen, in
+      production. `edition_partial` makes the absent case the defined one. -%>
+  <% unless Tastatur.allow_signup? %>
+    <div class="mt-8">
+      <%= edition_partial "waitlist_signups/launch", source: "sign_in", stacked: true %>
+    </div>
+  <% end %>
 <% end %>

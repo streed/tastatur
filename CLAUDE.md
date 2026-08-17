@@ -780,12 +780,13 @@ The rules an agent must not break:
   request, or the endpoint is a bcrypt DoS), shown once, and revoked rather than
   deleted.
 
-### 19. The waitlist lives in an edition, and so does the marketing site
+### 19. The waitlists live in an edition, and so does the marketing site
 
-`waitlist_signups` — the addresses held for the unshipped revenue feature (§18) —
-and the whole marketing site moved to a private edition (§20). The rules that
-governed them did not change and are restated in that repository's own
-`CLAUDE.md`. Two things about the move matter *here*:
+`waitlist_signups` — the addresses held for the unshipped revenue feature (§18),
+and for signups opening on a deployment that is not taking them — and the whole
+marketing site moved to a private edition (§20). The rules that governed them did
+not change and are restated in that repository's own `CLAUDE.md`. Three things
+about the move matter *here*:
 
 - **The privacy policy still lists the waitlist table**, because the policy is
   public and describes what the hosted service holds. Code can move to a private
@@ -797,6 +798,15 @@ governed them did not change and are restated in that repository's own
 - **The community edition holds no addresses for people who are not users at
   all**, which is the stronger position and is what `/privacy` describes on a
   self-hosted install. Do not reintroduce a waitlist here to "keep parity".
+- **`ALLOW_SIGNUP=0` means two different things, and both screens here are
+  written for both.** On somebody's own install it means the instance is theirs
+  and there is nothing to wait for; where a list exists it means "not yet". So
+  `Users::RegistrationsController` picks its refusal message with
+  `Tastatur.waitlist_enabled?`, and the sign-in screen it redirects to carries an
+  `edition_partial` slot — the one place somebody who wanted an account is
+  guaranteed to land. A guarded `render` there would be a MissingTemplate on the
+  sign-in screen of every community install; §20 explains why the slot is not the
+  same thing as a predicate.
 
 ### 20. Editions, and the rule that keeps this repository whole
 
