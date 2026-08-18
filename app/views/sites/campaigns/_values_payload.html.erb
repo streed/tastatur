@@ -1,0 +1,11 @@
+<%# The options behind the three pickers on this page, in one copy by id, for
+    the same reason sites/_known_values_payload gives: the controller reads a
+    payload named by DOM id rather than one rendered per field.
+
+    json_escape for the same reason too — these are strings the customer typed
+    and strings a browser sent us, going inside a <script> element, and a
+    literal "</script>" in one of them would end the element early and spill the
+    rest into the document as markup. -%>
+<%= tag.script json_escape(campaign_values.payload.to_json).html_safe,
+               type: "application/json",
+               id: "campaign-values" %>

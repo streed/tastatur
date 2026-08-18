@@ -12,6 +12,7 @@ class Site < ApplicationRecord
   has_many :funnels, dependent: :destroy
   has_many :shared_links, dependent: :destroy
   has_many :dashboards, dependent: :destroy
+  has_many :campaign_links, dependent: :delete_all
 
   # --- The revenue side ------------------------------------------------------
   # All :destroy rather than :delete_all, because Customer and CustomerSubscription

@@ -227,6 +227,11 @@ export default class extends Controller {
 
   commit(value) {
     this.inputTarget.value = value
+    // Setting `.value` from script fires nothing, so anything listening to the
+    // field — the campaign builder's live URL preview, delegated from the form —
+    // would go stale the moment somebody used the picker instead of typing.
+    // Choosing an option is an input event by any reasonable reading.
+    this.inputTarget.dispatchEvent(new Event("input", { bubbles: true }))
     this.close()
     this.inputTarget.focus()
   }

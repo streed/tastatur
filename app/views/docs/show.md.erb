@@ -211,6 +211,25 @@ funnel spanning more than a day cannot follow anyone across that boundary and
 will undercount. The funnel view says so when the window is longer, rather than
 quietly reporting a low number.
 
+## Campaigns
+
+Build a tagged link, then read what it did. A campaign link is an ordinary URL
+to one of your own pages with `utm_source`, `utm_medium` and `utm_campaign` on
+it; the tracker already reads those five parameters, so nothing needs
+installing. Building the link in Tastatur is what lets the report match it back
+afterwards.
+
+Matching is exact and case-sensitive, so `Newsletter` and `newsletter` are two
+campaigns. Values built here are lower-cased, and the pickers offer what the
+site has already used.
+
+Tagged traffic from links built anywhere else is measured too, and listed
+separately so a spelling that should have matched one of yours is visible.
+
+A value that reads like a token is discarded on arrival, because mail platforms
+put per-recipient identifiers in `utm_content`. The builder refuses those rather
+than saving a link that would report nothing.
+
 ## Filtering and sharing
 
 Click any row on the dashboard to filter everything by it.

@@ -20,6 +20,11 @@ module Ingest
   module PathScrubber
     MAX_LENGTH = 255
 
+    # Values longer than this are truncated rather than dropped — unlike the
+    # shape rules below, length alone says nothing about whether a value is a
+    # campaign name or a token.
+    MAX_PARAM_LENGTH = 255
+
     # Query parameters that survive. Everything else is dropped.
     ALLOWED_PARAMS = %w[utm_source utm_medium utm_campaign utm_term utm_content ref].freeze
 
@@ -112,10 +117,30 @@ module Ingest
 
       value = parsed[key].presence
       return nil if value.nil?
-      # A "utm_campaign" that looks like a token is not a campaign name.
-      return nil if value.match?(EMAIL_SEGMENT) || value.match?(OPAQUE_SEGMENT)
+      return nil unless storable_param_value?(value)
 
-      value.first(255)
+      value.first(MAX_PARAM_LENGTH)
+    end
+
+    # Would this survive the scrub? Public, and called from outside ingest by
+    # CampaignLink, which validates a link the customer is BUILDING against the
+    # rule that will be applied to it months later when somebody clicks it.
+    #
+    # The two are the same test on purpose. A campaign name that this refuses is
+    # stored as NULL, so the link reports nothing forever, which is
+    # indistinguishable on screen from a campaign nobody clicked — the failure
+    # mode the whole builder exists to prevent. Duplicating the regexes in the
+    # model would let the two drift, and the drift would be silent in exactly
+    # the same way.
+    #
+    # A "utm_campaign" that looks like a token is not a campaign name: mailing
+    # platforms put a per-recipient hash in utm_content routinely, and that is a
+    # visitor identifier wearing a marketing label.
+    def storable_param_value?(value)
+      value = value.to_s
+      return false if value.blank?
+
+      !value.match?(EMAIL_SEGMENT) && !value.match?(OPAQUE_SEGMENT)
     end
 
     # Declared route patterns first, shape heuristics for the rest.

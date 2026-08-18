@@ -14,7 +14,25 @@
 <div class="card">
   <div class="card-head">
     <h2 class="text-sm font-semibold"><%= panel[:title] %></h2>
-    <span class="label">Visitors</span>
+    <%# The one panel with somewhere to go. Somebody reading this panel is
+        looking at what their campaigns did, which is the moment they want to
+        build the next link — and it is also the moment a `Newsletter` sitting
+        below a `newsletter` is worth going and looking at, which this panel
+        cannot show because it groups by utm_campaign alone.
+
+        Dimension-tested here rather than carried on the panel hash, the way the
+        country flag above already is: the alternative is a route helper inside
+        Analytics::Dashboard, which is a service and has no business knowing
+        about paths. Gated on `drillable` because a public shared dashboard
+        renders this same partial and must not offer a link into an
+        authenticated screen, and `_top` because the dashboard is a turbo-frame
+        the campaigns page has no matching frame for. -%>
+    <% if dimension == "utm_campaign" && drillable %>
+      <%= link_to "Build a link", site_campaigns_path(site), class: "label hover:text-ink",
+                  data: { turbo_frame: "_top", analytics_event: "Campaigns Opened" } %>
+    <% else %>
+      <span class="label">Visitors</span>
+    <% end %>
   </div>
 
   <% if result.any? %>

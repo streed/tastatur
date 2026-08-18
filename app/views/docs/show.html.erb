@@ -18,6 +18,7 @@
     ["spa",          "Single-page apps"],
     ["goals",        "Goals"],
     ["funnels",      "Funnels"],
+    ["campaigns",    "Campaigns"],
     ["filters",      "Filtering and sharing"],
     ["csp",          "Content Security Policy"],
     ["server",       "Server-side events"],
@@ -280,6 +281,32 @@
         </div>
         <% if @example_site %>
           <%= link_to "Build a funnel for #{@example_site.domain}", site_funnels_path(@example_site), class: "btn btn-sm" %>
+        <% end %>
+      <% end %>
+
+      <%= render layout: "docs/section",
+                 locals: { id: "campaigns", title: "Campaigns",
+                           lede: "Build a tagged link, then read what it did." } do %>
+        <p class="text-[14px] text-ink-2 leading-relaxed">
+          A campaign link is an ordinary URL to one of your own pages with <code>utm_source</code>,
+          <code>utm_medium</code> and <code>utm_campaign</code> on it. Nothing needs installing —
+          the tracker already reads those five parameters. Building the link here means the report
+          can match it back afterwards, which is the part that goes wrong when links are written
+          by hand.
+        </p>
+        <div class="card card-body space-y-2.5 text-[13px] text-ink-2">
+          <p>Matching is exact and case-sensitive, so <code>Newsletter</code> and
+            <code>newsletter</code> are two campaigns. Values you build here are lower-cased and
+            the pickers offer what the site has already used.</p>
+          <p>Tagged traffic from links built anywhere else — an ad platform, a mail tool — is
+            measured too, and listed separately so a spelling that should have matched one of
+            yours is visible.</p>
+          <p>A value that reads like a token is discarded on arrival, because mail platforms put
+            per-recipient identifiers in <code>utm_content</code>. The builder refuses those
+            rather than saving a link that would report nothing.</p>
+        </div>
+        <% if @example_site %>
+          <%= link_to "Build a link for #{@example_site.domain}", site_campaigns_path(@example_site), class: "btn btn-sm" %>
         <% end %>
       <% end %>
 

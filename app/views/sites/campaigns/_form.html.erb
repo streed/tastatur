@@ -1,0 +1,90 @@
+<%# The builder.
+
+    `campaign-builder` assembles the tagged URL from the fields as they are
+    typed and puts it under the form with a copy button, so the thing being
+    copied is visibly the thing being saved. It is a preview only: CampaignLink#url
+    builds the URL the application actually shows everywhere else, and the two
+    are pinned against each other in spec/requests/campaigns_spec.rb. A preview
+    that quietly disagreed with the saved value would be worse than none.
+
+    Three `value-picker` controllers rather than one on the form: each field
+    draws from a different group of the shared payload, and the group is fixed
+    per field. That is why none of them has a `kind` target — the goal form's
+    kind radios exist because ONE field's list has to swap between two
+    vocabularies, which does not arise here. -%>
+<%= form_with model: [@site, @campaign_link],
+              url: @campaign_link.persisted? ? site_campaign_path(@site, @campaign_link) : site_campaigns_path(@site),
+              class: "card card-body space-y-6",
+              data: { analytics_event: ("Campaign Link Created" unless @campaign_link.persisted?),
+                      controller: "campaign-builder",
+                      # Delegated, not one action per field. `input` bubbles, and
+                      # the combobox helper builds its own data hash for the
+                      # fields it owns — a per-field attribute there would be
+                      # silently replaced rather than merged.
+                      action: "input->campaign-builder#render" } do |f| %>
+  <%= f.error_summary %>
+
+  <div class="grid sm:grid-cols-2 gap-4">
+    <%= f.field :name, "What this link is for", placeholder: "August newsletter — main button",
+                autofocus: !@campaign_link.persisted?,
+                hint: "Yours, not the visitor's. Never leaves this screen." %>
+    <%= f.field :destination_url, "Where it goes",
+                placeholder: "https://#{@site.domain}/pricing" %>
+  </div>
+
+  <div class="rule pt-6 space-y-4">
+    <div>
+      <h3 class="text-sm font-semibold">How it is tagged</h3>
+      <p class="text-[12px] text-muted mt-1">
+        These five values are what the report groups by, so they are worth getting the same
+        every time. The pickers offer what this site has already used.
+      </p>
+    </div>
+
+    <div class="grid sm:grid-cols-3 gap-4">
+      <% %w[utm_source utm_medium utm_campaign].each_with_index do |param, index| %>
+        <%# The controller has to wrap BOTH the input and its listbox, which
+            f.field emits together, so it goes on a div around the whole field
+            rather than on the input. `group` is set outright because there is no
+            kind control to derive it from. -%>
+        <div data-controller="value-picker"
+             data-value-picker-source-value="campaign-values"
+             data-value-picker-group-value="<%= param %>">
+          <%= f.field param, %w[Source Medium Campaign][index], as: :combobox,
+                      placeholder: %w[newsletter email august-launch][index],
+                      hint: %w[Where it was posted. How it was delivered. The push it belongs to.][index] %>
+        </div>
+      <% end %>
+    </div>
+
+    <div class="grid sm:grid-cols-2 gap-4">
+      <%= f.field :utm_term, "Term (optional)", placeholder: "privacy-analytics",
+                  hint: "The paid keyword, if this is an ad." %>
+      <%= f.field :utm_content, "Content (optional)", placeholder: "header-button",
+                  hint: "Which link it was, when one campaign has several." %>
+    </div>
+
+    <%= render "sites/campaigns/values_payload", campaign_values: campaign_values %>
+  </div>
+
+  <%# The result, and the last step of the job. Rendered server-side from the
+      saved record when there is one, so a browser with no JavaScript still gets
+      a correct URL to copy rather than an empty box. -%>
+  <div class="rule pt-6" data-controller="clipboard">
+    <div class="flex items-end justify-between gap-4 mb-2">
+      <span class="label">The link</span>
+      <button type="button" class="btn btn-sm" data-action="clipboard#copy"
+              data-analytics-event="Campaign Link Copied">
+        <span data-clipboard-target="label">Copy</span>
+      </button>
+    </div>
+    <p class="text-[13px] break-all num bg-surface-2 border border-rule-2 px-3 py-2"
+       data-clipboard-target="source" data-campaign-builder-target="output"><%= @campaign_link.url %></p>
+  </div>
+
+  <%= f.actions @campaign_link.persisted? ? "Save link" : "Create link",
+                cancel_to: site_campaigns_path(@site),
+                destroy_to: (site_campaign_path(@site, @campaign_link) if @campaign_link.persisted?),
+                destroy_confirm: "Delete this link? The visits it already brought stay counted — " \
+                                 "it moves to the list of campaigns not built here." %>
+<% end %>

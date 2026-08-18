@@ -434,6 +434,42 @@ Before "fixing" any of these, read the linked document.
   collapses a 16+ char alphanumeric run that mixes letters and digits, so an
   undeclared site still loses its tokens; it stays digit-gated so a camelCase page
   is left alone. `spec/lib/ingest/path_pattern_matcher_spec.rb`.
+- **A campaign link is validated against `Ingest::PathScrubber` before it is
+  saved, and that is the whole reason the builder is in the product.** The
+  scrubber discards a `utm_*` value that reads as a token — 25+ characters of
+  `[A-Za-z0-9\-_.]`, or anything containing `@` — because mail platforms put a
+  per-recipient hash in `utm_content` and that is a visitor identifier wearing a
+  marketing label. A link carrying one saves cleanly, is sent to a mailing list,
+  and reports 0 forever, which on screen is indistinguishable from a campaign
+  nobody clicked. So `CampaignLink` calls `PathScrubber.storable_param_value?`,
+  the one the ingest path itself calls, rather than copying the regexes — a
+  second copy would drift, and the drift would be silent in exactly the same
+  way. Note the collateral: `summer-sale-2026-newsletter` is 27 characters and
+  is refused; the error says to break it with a space, which survives because a
+  space is not in that character class.
+- **`Analytics::CampaignReport` groups by all FIVE utm columns, and is not
+  `Analytics::Breakdown` with `utm_campaign` as its dimension.** That panel
+  answers "which campaign"; a campaign LINK is a tuple, and the email, the tweet
+  and the banner of one campaign are one row there with one figure — the number
+  already on the dashboard. The tuple is also the join key back to
+  `campaign_links`, which is why a unique index forbids two links sharing one
+  (they would be one row of visitors and two rows on screen each claiming all of
+  it) and why the index `COALESCE`s the two nullable columns: in a unique index
+  NULL never equals NULL, and no term and no content is by a distance the
+  commonest shape of link. Values are lower-cased on write because the match is
+  exact and case-sensitive — `Newsletter` beside `newsletter` is the split
+  campaign this screen exists to make visible, which is what the "Campaigns not
+  built here" table is for.
+- **The campaign pickers take their options from the report already on the page,
+  not from a second `Breakdown` call.** §9 requires a picker's observed values to
+  carry the k-anonymity threshold, and the tuple threshold is stricter than any
+  single column's, so this satisfies the rule more tightly and costs no extra
+  scan. The site's own saved values are unioned in unsuppressed, because they are
+  the customer's own rows rather than a statement about visitors. A saved link
+  whose row was withheld shows a dash, and the note under the table says the dash
+  means "nobody, or too few to report" without saying which — naming the second
+  would publish "somebody came, fewer than k of them" for a link that can be sent
+  to one person.
 - **The sites index totals are ALL TIME and carry no visitor figure.** Both halves
   are load-bearing. A period switcher there would be lying: `Analytics::Period`
   resolves a preset against ONE site's timezone, so "last 30 days" across sites in

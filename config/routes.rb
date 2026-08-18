@@ -63,6 +63,18 @@ Rails.application.routes.draw do
       resources :goals, except: %i[show]
       resources :funnels
 
+      # The builder and the report on one screen, because they are one job: the
+      # value you type into the builder is the string the report matches on
+      # months later, and a builder that could not show you what the last one
+      # did would be a URL-concatenating widget rather than a measurement.
+      #
+      # `campaigns` rather than `campaign_links`: the screen is about campaigns,
+      # and a link is how you name one. No `new` or `show` — the form is on the
+      # index (there is nothing to scroll past on an empty site) and a single
+      # link has nothing to say that its row does not.
+      resources :campaigns, only: %i[index create edit update destroy],
+                            param: :public_id, controller: "campaigns"
+
       # Where visitors go from a page. A GET with no resource behind it, like
       # `attribution` below: the walked path is the whole state and it lives in
       # the query string (`?path[]=/&path[]=/pricing`), so there is nothing to
