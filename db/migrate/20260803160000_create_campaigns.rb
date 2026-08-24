@@ -66,10 +66,24 @@ class CreateCampaigns < ActiveRecord::Migration[8.1]
     # thing on the row that describes the campaign rather than the channel — the
     # link's own name is "August newsletter — main button", which names one of
     # them and would be a poor heading for the other four.
+    # THE DISTINCT IS IN A SUBQUERY, and it has to be.
+    #
+    # `SELECT DISTINCT site_id, utm_campaign, gen_random_uuid(), ...` looks like
+    # it de-duplicates by tag and does not: DISTINCT applies to the WHOLE select
+    # list, and gen_random_uuid() is volatile, so every row gets a different
+    # value and no two rows are ever equal. The de-duplication silently does
+    # nothing and each link produces its own campaign — which then collides on
+    # the (site_id, name) index the moment two links share a tag, i.e. exactly
+    # the case this table was added for. It is invisible on a database with no
+    # campaign links in it, which is how it shipped.
+    #
+    # public_id is left out entirely rather than generated here: the column
+    # already defaults to gen_random_uuid(), so naming it was what dragged the
+    # volatile call into the select list in the first place.
     execute <<~SQL
-      INSERT INTO campaigns (site_id, name, utm_campaign, public_id, created_at, updated_at)
-      SELECT DISTINCT site_id, utm_campaign, utm_campaign, gen_random_uuid(), NOW(), NOW()
-      FROM campaign_links
+      INSERT INTO campaigns (site_id, name, utm_campaign, created_at, updated_at)
+      SELECT site_id, utm_campaign, utm_campaign, NOW(), NOW()
+      FROM (SELECT DISTINCT site_id, utm_campaign FROM campaign_links) AS tags
     SQL
 
     execute <<~SQL
