@@ -1,0 +1,65 @@
+<%# One link's fields, used three ways: as a row inside the campaign builder, as
+    the "add another" form under a saved campaign, and as the edit form for one
+    link. One partial, because the five values it writes are the five the report
+    matches on and a second copy is a second chance to write them differently.
+
+    Locals:
+      f    the form builder (a fields_for builder inside the campaign form)
+      tag  the campaign's utm_campaign, for the live preview only
+
+    NO utm_campaign FIELD. The campaign owns it (see CampaignLink), and offering
+    it here would be a second way to answer the question that decides whether
+    these links group together at all. -%>
+<div class="space-y-4" data-controller="campaign-builder clipboard"
+     data-action="input->campaign-builder#render">
+  <div class="grid sm:grid-cols-2 gap-4">
+    <%= f.field :name, "What this link is", placeholder: "Discord",
+                hint: "Yours, not the visitor's. Never leaves this screen." %>
+    <%= f.field :destination_url, "Where it goes" %>
+  </div>
+
+  <div class="grid sm:grid-cols-2 gap-4">
+    <% %w[utm_source utm_medium].each_with_index do |param, index| %>
+      <%# The controller has to wrap BOTH the input and its listbox, which
+          f.field emits together, so it goes on a div around the whole field
+          rather than on the input. -%>
+      <div data-controller="value-picker"
+           data-value-picker-source-value="campaign-values"
+           data-value-picker-group-value="<%= param %>">
+        <%= f.field param, %w[Source Medium][index], as: :combobox,
+                    placeholder: %w[discord social][index],
+                    hint: ["Where it was posted.", "How it was delivered."][index] %>
+      </div>
+    <% end %>
+  </div>
+
+  <div class="grid sm:grid-cols-2 gap-4">
+    <%= f.field :utm_term, "Term (optional)", placeholder: "privacy-analytics",
+                hint: "The paid keyword, if this is an ad." %>
+    <%= f.field :utm_content, "Content (optional)", placeholder: "header-button",
+                hint: "Which placement it was, when one channel has several." %>
+  </div>
+
+  <%# FOR THE PREVIEW ONLY, and it is safe to submit precisely because nothing
+      reads it: `utm_campaign` is not in either controller's permitted list, and
+      CampaignLink#adopt_campaign_tag overwrites the column from the campaign on
+      every save regardless. So even if somebody later permits it by accident,
+      the copy-down still wins. campaign_builder_controller finds it by the
+      `[utm_campaign]` suffix, which is why it is named the way it is. -%>
+  <%= f.hidden_field :utm_campaign, value: tag %>
+
+  <div class="rule pt-4">
+    <div class="flex items-end justify-between gap-4 mb-2">
+      <span class="label">The link</span>
+      <button type="button" class="btn btn-sm" data-action="clipboard#copy"
+              data-analytics-event="Campaign Link Copied">
+        <span data-clipboard-target="label">Copy</span>
+      </button>
+    </div>
+    <%# Rendered server-side from the record when there is one, so a browser with
+        no JavaScript still gets a correct URL to copy rather than an empty box. -%>
+    <p class="text-[13px] break-all num bg-surface-2 border border-rule-2 px-3 py-2"
+       data-clipboard-target="source"
+       data-campaign-builder-target="output"><%= f.object.url %></p>
+  </div>
+</div>

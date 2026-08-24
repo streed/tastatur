@@ -2,6 +2,11 @@ require "rails_helper"
 
 # The screen is a builder and a report on one page, and the examples split the
 # same way: what it refuses to build, and what it is honest about measuring.
+#
+# It is TOP LEVEL now — /campaigns, with the site as a parameter — because
+# building a tagged link is a job somebody arrives wanting to do rather than
+# something they go looking for inside one site's dashboard. Several examples
+# below are about that move rather than about campaigns.
 RSpec.describe "Campaigns", type: :request do
   let(:user) { create(:user) }
   let(:account) { create(:account) }
@@ -12,19 +17,79 @@ RSpec.describe "Campaigns", type: :request do
     sign_in user
   end
 
-  def valid_params(**overrides)
-    { campaign_link: { name: "August newsletter", destination_url: "https://northwind.example.com/pricing",
-                       utm_source: "newsletter", utm_medium: "email",
-                       utm_campaign: "august" }.merge(overrides) }
+  def screen(**params) = campaigns_path(site: site.public_token, **params)
+
+  # Overrides land on the CAMPAIGN by default and on its one link under `link:`,
+  # because the two halves now fail for different reasons and the examples need
+  # to aim at one or the other: a bad tag kills every link in the campaign, a
+  # bad destination kills one.
+  def valid_params(link: {}, **overrides)
+    { campaign: { name: "August launch", utm_campaign: "august",
+                  campaign_links_attributes: [
+                    { name: "Newsletter", destination_url: "https://northwind.example.com/pricing",
+                      utm_source: "newsletter", utm_medium: "email" }.merge(link)
+                  ] }.merge(overrides) }
   end
 
   describe "reaching it" do
-    it "is offered from the dashboard header" do
+    # THE POINT OF THE MOVE. It is in the application header, beside Sites, on
+    # every signed-in screen — not the sixth of nine small buttons on one site's
+    # dashboard, which is where it used to be and which meant choosing a site
+    # before you could start.
+    it "is in the application navigation, from anywhere" do
+      sign_in_as("owner")
+
+      get account_path
+
+      expect(response.body).to include(">Campaigns<")
+      expect(response.body).to include(campaigns_path)
+    end
+
+    it "is reachable with no site chosen, and picks one" do
+      sign_in_as("owner")
+      site # the account has one, which is what "picks one" is about
+
+      get campaigns_path
+
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to include(site.domain)
+    end
+
+    # An account with no sites cannot build a link at all — the destination is
+    # validated against the sites this instance measures — so the screen says
+    # which step is missing rather than rendering a builder that would refuse
+    # everything typed into it.
+    it "explains itself to an account with no sites" do
+      create(:membership, account: account, user: user, role: "owner")
+      sign_in user
+
+      get campaigns_path
+
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to include("Add a site first")
+    end
+
+    # The dashboard's Campaigns panel still crosses over, carrying the site, so
+    # somebody reading a campaign row is one click from building the next link.
+    it "is linked from the dashboard's campaign panel with the site selected" do
       sign_in_as("owner")
 
       get site_path(site)
 
-      expect(response.body).to include(site_campaigns_path(site))
+      expect(response.body).to include(ERB::Util.html_escape(campaigns_path(site: site.public_token)))
+    end
+
+    # Refused rather than quietly falling back to a site that IS yours. A
+    # fallback would mean a request addressed to somebody else's site succeeding
+    # against one of your own — harmless on a GET and not harmless on the POST
+    # that shares this resolution.
+    it "refuses a site token belonging to another account" do
+      sign_in_as("owner")
+      site
+      other = create(:site)
+
+      expect { get campaigns_path(site: other.public_token) }.not_to raise_error
+      expect(response).to have_http_status(:not_found)
     end
   end
 
@@ -34,9 +99,34 @@ RSpec.describe "Campaigns", type: :request do
     it "puts the builder above the report, which is what the button promised" do
       create(:campaign_link, site: site, name: "Old link")
 
-      get site_campaigns_path(site)
+      get screen
 
       expect(response.body.index("Where it goes")).to be < response.body.index("Old link")
+    end
+
+    # THE FEATURE, in one example. Several links under one heading, and a
+    # heading figure that is NOT their sum.
+    it "groups a campaign's links under its name and totals it over the tag" do
+      campaign = create(:campaign, site: site, name: "August launch", utm_campaign: "august")
+      create(:campaign_link, campaign: campaign, name: "Discord",
+                             utm_source: "discord", utm_medium: "social")
+      create(:campaign_link, campaign: campaign, name: "Facebook",
+                             utm_source: "facebook", utm_medium: "social")
+
+      # One person follows BOTH links. Two link rows of one visitor each, and
+      # one visitor on the campaign — which is the whole reason the heading gets
+      # its own query rather than adding the rows up.
+      create_event(site, visitor: "a", utm_source: "discord", utm_medium: "social",
+                         utm_campaign: "august", at: 1.day.ago)
+      create_event(site, visitor: "a", utm_source: "facebook", utm_medium: "social",
+                         utm_campaign: "august", at: 1.day.ago)
+
+      get screen
+
+      expect(response.body).to include("August launch")
+      expect(response.body).to include("Discord")
+      expect(response.body).to include("Facebook")
+      expect(response.body).to include("counted over its whole tag, not added up")
     end
 
     it "shows a saved link's visitors, visits and views" do
@@ -45,7 +135,7 @@ RSpec.describe "Campaigns", type: :request do
       create_event(site, visitor: "a", utm_source: "newsletter", utm_medium: "email",
                          utm_campaign: "august", at: 1.day.ago)
 
-      get site_campaigns_path(site)
+      get screen
 
       expect(response.body).to include(link.name)
       # Escaped, because the "&" between two utm parameters is an entity in the
@@ -62,7 +152,7 @@ RSpec.describe "Campaigns", type: :request do
       create_event(site, visitor: "a", utm_source: "Newsletter", utm_medium: "email",
                          utm_campaign: "august", at: 1.day.ago)
 
-      get site_campaigns_path(site)
+      get screen
 
       expect(response.body).to include("Campaigns not built here")
     end
@@ -72,16 +162,17 @@ RSpec.describe "Campaigns", type: :request do
       create(:membership, account: account, user: viewer, role: "viewer")
       sign_in viewer
 
-      get site_campaigns_path(site)
+      get screen
 
       expect(response.body).to include("member action")
     end
 
-    it "refuses a site belonging to another account before authorization is asked" do
-      other = create(:site)
+    it "does not list a campaign belonging to another account" do
+      other = create(:campaign, name: "Somebody else's launch")
 
-      expect { get site_campaigns_path(other) }.not_to raise_error
-      expect(response).to have_http_status(:not_found)
+      get screen
+
+      expect(response.body).not_to include(other.name)
     end
   end
 
@@ -89,17 +180,18 @@ RSpec.describe "Campaigns", type: :request do
     before { sign_in_as("owner") }
 
     it "saves a link and returns to the report" do
-      expect { post site_campaigns_path(site), params: valid_params }
+      expect { post campaigns_path(site: site.public_token), params: valid_params }
         .to change(CampaignLink, :count).by(1)
 
-      expect(response).to redirect_to(site_campaigns_path(site, created: CampaignLink.last.public_id))
+      expect(response).to redirect_to(campaigns_path(site: site.public_token,
+                                                     created: Campaign.last.public_id))
     end
 
     # The failure this whole screen exists to prevent: a link that saves
     # cleanly, is sent to a mailing list, and reports nothing forever because
     # Ingest::PathScrubber discards a token-shaped value on arrival.
     it "refuses a value the scrubber would discard, and says why" do
-      post site_campaigns_path(site), params: valid_params(utm_campaign: "c" * 30)
+      post campaigns_path(site: site.public_token), params: valid_params(utm_campaign: "c" * 30)
 
       expect(response).to have_http_status(:unprocessable_entity)
       expect(response.body).to include("discarded on arrival")
@@ -107,7 +199,8 @@ RSpec.describe "Campaigns", type: :request do
     end
 
     it "refuses a destination this site does not measure" do
-      post site_campaigns_path(site), params: valid_params(destination_url: "https://elsewhere.example.org/")
+      post campaigns_path(site: site.public_token),
+           params: valid_params(link: { destination_url: "https://elsewhere.example.org/" })
 
       expect(response).to have_http_status(:unprocessable_entity)
       expect(response.body).to include("does not measure")
@@ -118,7 +211,7 @@ RSpec.describe "Campaigns", type: :request do
     it "re-renders the whole screen on failure, not a bare form" do
       create(:campaign_link, site: site, name: "Existing link")
 
-      post site_campaigns_path(site), params: valid_params(utm_campaign: "d" * 30)
+      post campaigns_path(site: site.public_token), params: valid_params(utm_campaign: "d" * 30)
 
       expect(response.body).to include("Existing link")
     end
@@ -126,7 +219,7 @@ RSpec.describe "Campaigns", type: :request do
     it "refuses a member of another account" do
       other = create(:site)
 
-      post site_campaigns_path(other), params: valid_params
+      post campaigns_path(site: other.public_token), params: valid_params
 
       expect(response).to have_http_status(:not_found)
     end
@@ -138,7 +231,7 @@ RSpec.describe "Campaigns", type: :request do
     it "renders the same builder, and says what changing a tag does" do
       link = create(:campaign_link, site: site)
 
-      get edit_site_campaign_path(site, link)
+      get edit_campaign_link_path(link.campaign, link)
 
       expect(response).to have_http_status(:ok)
       expect(response.body).to include("re-points this link")
@@ -161,10 +254,10 @@ RSpec.describe "Campaigns", type: :request do
     it "saves a changed tag" do
       link = create(:campaign_link, site: site)
 
-      patch site_campaign_path(site, link),
-            params: { campaign_link: { utm_campaign: "september" } }
+      patch campaign_link_path(link.campaign, link),
+            params: { campaign_link: { utm_source: "discord" } }
 
-      expect(link.reload.utm_campaign).to eq("september")
+      expect(link.reload.utm_source).to eq("discord")
     end
   end
 
@@ -174,7 +267,7 @@ RSpec.describe "Campaigns", type: :request do
     it "removes the link and says the traffic is still counted" do
       link = create(:campaign_link, site: site)
 
-      delete site_campaign_path(site, link)
+      delete campaign_link_path(link.campaign, link)
 
       expect(CampaignLink.exists?(link.id)).to be(false)
       follow_redirect!
@@ -203,15 +296,115 @@ RSpec.describe "Campaigns", type: :request do
       expect(declared).to eq(CampaignLink::PARAMS.map(&:to_s))
     end
 
+    # THE SUFFIX IS THE CONTRACT, not the prefix. The builder finds a field with
+    # `[name$="[utm_source]"]`, which is what lets one implementation serve the
+    # nested rows of the campaign form (campaign[campaign_links_attributes][0]
+    # [utm_source]) and the standalone link form (campaign_link[utm_source])
+    # alike. Asserting the prefix would have pinned the shape the fields
+    # happened to have before they were nested.
     it "reads the fields by the names the form actually renders" do
       sign_in_as("owner")
 
-      get site_campaigns_path(site)
+      get screen
 
-      CampaignLink::PARAMS.each do |param|
-        expect(response.body).to include("campaign_link[#{param}]")
+      (CampaignLink::PARAMS + [:destination_url]).each do |param|
+        expect(response.body).to match(/name="[^"]*\[#{param}\]"/)
       end
-      expect(response.body).to include("campaign_link[destination_url]")
+    end
+  end
+
+  # ADDING A CHANNEL TO A CAMPAIGN THAT ALREADY EXISTS — the common return
+  # visit. The campaign was built for Discord and Facebook in March; the
+  # newsletter goes out in April.
+  describe "POST a link under a campaign" do
+    before { sign_in_as("owner") }
+
+    let(:campaign) { create(:campaign, site: site, name: "August launch", utm_campaign: "august") }
+
+    def link_params(**overrides)
+      { campaign_link: { name: "Discord", destination_url: "https://northwind.example.com/",
+                         utm_source: "discord", utm_medium: "social" }.merge(overrides) }
+    end
+
+    it "adds it, tagged with the campaign's own value rather than one it was given" do
+      expect { post campaign_links_path(campaign), params: link_params }
+        .to change(CampaignLink, :count).by(1)
+
+      expect(CampaignLink.last.utm_campaign).to eq("august")
+      expect(CampaignLink.last.campaign).to eq(campaign)
+    end
+
+    # utm_campaign is not in the permitted list, and CampaignLink copies it down
+    # on every save regardless. Two independent reasons a posted tag cannot take
+    # a link out of the group it is displayed under.
+    it "ignores a utm_campaign posted alongside it" do
+      post campaign_links_path(campaign), params: link_params(utm_campaign: "somewhere-else")
+
+      expect(CampaignLink.last.utm_campaign).to eq("august")
+    end
+
+    it "re-renders the whole screen on failure, with the campaign still on it" do
+      post campaign_links_path(campaign),
+           params: link_params(destination_url: "https://elsewhere.example.org/")
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response.body).to include("does not measure")
+      expect(response.body).to include("August launch")
+    end
+
+    it "refuses a campaign belonging to another account" do
+      other = create(:campaign)
+
+      expect { post campaign_links_path(other), params: link_params }.not_to raise_error
+      expect(response).to have_http_status(:not_found)
+      expect(CampaignLink.where(campaign: other)).to be_empty
+    end
+
+    it "is refused to a viewer" do
+      viewer = create(:user)
+      create(:membership, account: account, user: viewer, role: "viewer")
+      sign_in viewer
+
+      post campaign_links_path(campaign), params: link_params
+
+      expect(CampaignLink.count).to be_zero
+    end
+  end
+
+  describe "the campaign itself" do
+    before { sign_in_as("owner") }
+
+    let(:campaign) { create(:campaign, site: site, name: "August launch", utm_campaign: "august") }
+
+    # §10: nothing routable is addressed by its primary key.
+    it "is not reachable by primary key" do
+      get "/campaigns/#{campaign.id}/edit"
+
+      expect(response).to have_http_status(:not_found)
+    end
+
+    it "says what changing the tag does before it is changed" do
+      get edit_campaign_path(campaign)
+
+      expect(response.body).to include("re-points every link")
+    end
+
+    # The property that makes the campaign the one place the tag is spelled.
+    it "re-points its links when the tag is renamed" do
+      link = create(:campaign_link, campaign: campaign)
+
+      patch campaign_path(campaign), params: { campaign: { utm_campaign: "september" } }
+
+      expect(link.reload.utm_campaign).to eq("september")
+    end
+
+    it "takes its links with it when deleted, and says the traffic is still counted" do
+      create(:campaign_link, campaign: campaign)
+
+      expect { delete campaign_path(campaign) }.to change(CampaignLink, :count).by(-1)
+
+      follow_redirect!
+      expect(response.body).to include("still counted")
     end
   end
 end

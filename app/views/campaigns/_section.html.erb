@@ -1,0 +1,119 @@
+<%# ONE CAMPAIGN: what it did as a whole, and what each of its links did.
+
+    Locals:
+      section  a CampaignScreen::Section — campaign, total, [link, row] pairs
+
+    THE HEADING FIGURE IS NOT THE SUM OF THE ROWS BELOW IT, and that is the
+    whole reason this screen groups anything. `visitors` and `visits` are
+    distinct counts, so adding the Discord row to the Facebook row counts
+    everybody who followed both of them twice. The number here comes from its
+    own GROUP BY over the same events (Analytics::CampaignReport#for_campaign),
+    counted once — the note under the table says so, because a total smaller
+    than the rows it sits above looks like a bug until you know why. -%>
+<% campaign = section.campaign %>
+<div class="card mt-8 <%= "ring-1 ring-signal" if params[:created] == campaign.public_id %>">
+  <div class="card-head flex flex-wrap items-end justify-between gap-4">
+    <div>
+      <h2 class="text-sm font-semibold"><%= campaign.name %></h2>
+      <p class="text-[12px] text-muted mt-1 num"><%= campaign.utm_campaign %></p>
+    </div>
+
+    <div class="flex items-end gap-6">
+      <% if section.total %>
+        <div class="text-right">
+          <p class="label">Visitors</p>
+          <p class="num text-lg font-semibold"><%= metric_number(section.total.visitors) %></p>
+        </div>
+        <div class="text-right">
+          <p class="label">Visits</p>
+          <p class="num text-lg font-semibold"><%= metric_number(section.total.visits) %></p>
+        </div>
+        <div class="text-right">
+          <p class="label">Views</p>
+          <p class="num text-lg font-semibold"><%= metric_number(section.total.pageviews) %></p>
+        </div>
+      <% else %>
+        <%# A dash, and the note under the screen says it means "nobody, or too
+            few to report" without saying which. Naming the second would publish
+            "somebody came, fewer than k of them" for a campaign that can be sent
+            to one person. -%>
+        <p class="num text-lg text-muted">—</p>
+      <% end %>
+
+      <% if policy(campaign).update? %>
+        <%= link_to "Edit", edit_campaign_path(campaign), class: "btn btn-quiet btn-sm" %>
+      <% end %>
+    </div>
+  </div>
+
+  <% if section.any_links? %>
+    <div class="bar-row label border-b border-rule">
+      <span>Link</span>
+      <span class="flex gap-3 sm:gap-6">
+        <span class="w-14 sm:w-24 text-right"><span class="sm:hidden">Visit.</span><span class="hidden sm:inline">Visitors</span></span>
+        <span class="w-12 sm:w-20 text-right">Visits</span>
+        <span class="w-12 sm:w-20 text-right">Views</span>
+        <span class="w-10 sm:w-28"></span>
+      </span>
+    </div>
+
+    <% top = section.links.filter_map { |_, row| row&.visitors }.max.to_i %>
+    <% section.links.each do |link, row| %>
+      <div class="bar-row <%= "bg-surface-2" if params[:created] == link.public_id %>"
+           data-controller="clipboard">
+        <%# Width against the busiest link in THIS campaign rather than against
+            the campaign total: one visitor can arrive on two of them, so the
+            column does not add up to the total and a percentage-of-total bar
+            would be inventing a denominator. -%>
+        <span class="bar-fill" style="width: <%= top.positive? && row ? (row.visitors * 100.0 / top).round(1) : 0 %>%"></span>
+
+        <span class="bar-label min-w-0">
+          <span class="font-medium"><%= link.name %></span>
+          <span class="block text-[12px] text-muted mt-0.5 truncate">
+            <%= link.utm_source %><span class="mx-1.5">·</span><%= link.utm_medium %>
+            <% if link.utm_content.present? %><span class="mx-1.5">·</span><%= link.utm_content %><% end %>
+            <% if link.utm_term.present? %><span class="mx-1.5">·</span><%= link.utm_term %><% end %>
+          </span>
+          <span data-clipboard-target="source" class="block text-[12px] text-ink-2 mt-0.5 truncate"><%= link.url %></span>
+        </span>
+
+        <span class="flex gap-3 sm:gap-6 items-center num shrink-0">
+          <span class="w-14 sm:w-24 text-right"><%= row ? metric_number(row.visitors) : "—" %></span>
+          <span class="w-12 sm:w-20 text-right"><%= row ? metric_number(row.visits) : "—" %></span>
+          <span class="w-12 sm:w-20 text-right"><%= row ? metric_number(row.pageviews) : "—" %></span>
+          <span class="w-10 sm:w-28 text-right flex justify-end gap-2">
+            <button type="button" class="btn btn-quiet btn-sm" data-action="clipboard#copy"
+                    data-analytics-event="Campaign Link Copied">
+              <span data-clipboard-target="label">Copy</span>
+            </button>
+            <%= link_to "Edit", edit_campaign_link_path(campaign, link), class: "btn btn-quiet btn-sm" %>
+          </span>
+        </span>
+      </div>
+    <% end %>
+  <% end %>
+
+  <%# ADDING A CHANNEL IS THE COMMON RETURN VISIT — the campaign was built for
+      Discord and Facebook in March and the newsletter went out in April — so
+      the form lives under the campaign it adds to rather than on a separate
+      page that would have to ask which campaign again. Closed by default: the
+      thing somebody usually came here to read is the numbers above it.
+
+      <details> rather than a Stimulus controller because that is all this is:
+      no state to keep, and it works with no JavaScript at all. -%>
+  <% if policy(CampaignLink.new(site: campaign.site, campaign: campaign)).create? %>
+    <details class="border-t border-rule" <%= "open" if @open_link&.campaign_id == campaign.id %>>
+      <summary class="px-5 py-3 text-sm cursor-pointer hover:bg-surface-2">Add a link to this campaign</summary>
+      <div class="px-5 pb-5">
+        <%= form_with model: @open_link&.campaign_id == campaign.id ? @open_link : CampaignLink.new(campaign: campaign, destination_url: "https://#{campaign.site.domain}/"),
+                      url: campaign_links_path(campaign), class: "space-y-6",
+                      data: { analytics_event: "Campaign Link Added",
+                              analytics_props: '{"context":"section"}' } do |f| %>
+          <%= f.error_summary %>
+          <%= render "campaign_links/fields", f: f, tag: campaign.utm_campaign %>
+          <%= f.submit "Add link", class: "btn btn-primary" %>
+        <% end %>
+      </div>
+    </details>
+  <% end %>
+</div>

@@ -53,15 +53,19 @@ RSpec.describe Analytics::CampaignReport do
 
   it "matches a saved link to its row, including on the tags it left blank" do
     tag(visitor: "a", campaign: "august")
-    link = create(:campaign_link, site: site, utm_source: "newsletter", utm_medium: "email",
-                                  utm_campaign: "august", utm_term: nil, utm_content: nil)
+    # The tag comes from the campaign now — setting it on the link would be
+    # overwritten by CampaignLink#adopt_campaign_tag, so the row would be
+    # matched against whatever the campaign factory happened to generate.
+    link = create(:campaign_link, campaign: create(:campaign, site: site, utm_campaign: "august"),
+                                  utm_source: "newsletter", utm_medium: "email",
+                                  utm_term: nil, utm_content: nil)
 
     expect(report.for_link(link)&.visitors).to eq(1)
   end
 
   it "does not match a link whose spelling differs by case" do
     tag(visitor: "a", campaign: "August")
-    link = create(:campaign_link, site: site, utm_campaign: "august")
+    link = create(:campaign_link, campaign: create(:campaign, site: site, utm_campaign: "august"))
 
     expect(report.for_link(link)).to be_nil
   end
@@ -103,9 +107,53 @@ RSpec.describe Analytics::CampaignReport do
     # suppression means the withheld row cannot be recovered from what is shown.
     it "leaves a saved link unmatched when its row was withheld" do
       tag(visitor: "solo", campaign: "august")
-      link = create(:campaign_link, site: site, utm_campaign: "august")
+      link = create(:campaign_link, campaign: create(:campaign, site: site, utm_campaign: "august"))
 
       expect(report.for_link(link)).to be_nil
+    end
+  end
+
+  # THE FIGURE THAT MAY NOT BE ASSEMBLED FROM THE LINK ROWS. Its own GROUP BY,
+  # over the campaign's tag, counted once.
+  describe "the campaign total" do
+    it "counts a visitor once however many of the campaign's links they followed" do
+      campaign = create(:campaign, site: site, utm_campaign: "august")
+      create(:campaign_link, campaign: campaign, name: "Discord",
+                             utm_source: "discord", utm_medium: "social")
+      create(:campaign_link, campaign: campaign, name: "Facebook",
+                             utm_source: "facebook", utm_medium: "social")
+
+      tag(visitor: "a", campaign: "august", source: "discord", medium: "social")
+      tag(visitor: "a", campaign: "august", source: "facebook", medium: "social")
+
+      # One on each link, and ONE for the campaign — not two. Adding the rows
+      # up is the bug this exists to avoid, and it would read as 2 here.
+      expect(report.for_campaign(campaign).visitors).to eq(1)
+      expect(report.rows.sum(&:visitors)).to eq(2)
+    end
+
+    it "is nil for a campaign nothing has arrived on" do
+      campaign = create(:campaign, site: site, utm_campaign: "unused")
+
+      expect(report.for_campaign(campaign)).to be_nil
+    end
+
+    # A campaign small enough to identify somebody is withheld even though it
+    # aggregates several links: "fewer than k people came from this whole
+    # campaign" is exactly the disclosure the threshold exists to prevent, and
+    # adding links together does not make it safer.
+    it "is withheld when the whole campaign is under the threshold" do
+      # Its own account: the default factory site has suppression on (threshold 25),
+      # and a second site on this one would hit the free plan's one-site limit.
+      suppressed = create(:site)
+      campaign = create(:campaign, site: suppressed, utm_campaign: "august")
+      create_event(suppressed, visitor: "solo", utm_source: "newsletter", utm_medium: "email",
+                               utm_campaign: "august", at: 2.days.ago)
+
+      result = described_class.call(site: suppressed,
+                                    period: Analytics::Period.parse("30d", site: suppressed)).value!
+
+      expect(result.for_campaign(campaign)).to be_nil
     end
   end
 end

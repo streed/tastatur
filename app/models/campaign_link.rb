@@ -36,20 +36,49 @@ class CampaignLink < ApplicationRecord
   MAX_VALUE = Ingest::PathScrubber::MAX_PARAM_LENGTH
 
   belongs_to :site
+  # THE CAMPAIGN OWNS THE TAG. `utm_campaign` stays a column here because it is
+  # half the join key that matches this row to its events, and the unique index
+  # guaranteeing two links cannot share a tuple is an index — it cannot span a
+  # join. So the value is copied down rather than read through the association,
+  # and `adopt_campaign_tag` below keeps the copy honest. It is not a second
+  # opinion, and nothing may set it directly.
+  belongs_to :campaign
 
-  validates :name, presence: true, uniqueness: { scope: :site_id }, length: { maximum: 120 }
+  # Scoped to the campaign, not the site. This name is a channel label now —
+  # "Discord", "Newsletter" — and the same label under two campaigns is exactly
+  # right. A site-wide constraint would refuse the second with a message about a
+  # link built months ago for something else entirely.
+  validates :name, presence: true, uniqueness: { scope: :campaign_id }, length: { maximum: 120 }
   validates :destination_url, presence: true, length: { maximum: 2000 }
   validates(*REQUIRED_PARAMS, presence: true)
   validates(*PARAMS, length: { maximum: MAX_VALUE })
 
+  validate :belongs_to_its_campaigns_site
   validate :destination_is_a_page_on_this_site
   validate :params_survive_the_scrubber
   validate :tuple_is_not_already_taken
 
   scope :ordered, -> { order(utm_campaign: :asc, created_at: :desc) }
 
+  before_validation :adopt_campaign_site
+  before_validation :adopt_campaign_tag
   before_validation :normalize_destination
   before_validation :normalize_params
+
+  # READS THROUGH TO THE CAMPAIGN when the column has not been written yet.
+  #
+  # `adopt_campaign_tag` fills the column in on save, which is too late for the
+  # two places that matter before one: the builder renders `#url` server-side
+  # for an unsaved link, so without this the preview under a new link would show
+  # a URL with no utm_campaign in it — the one value that decides which campaign
+  # it belongs to — and it would silently start being right only after saving.
+  # `#utm_key` has the same problem one step further on.
+  #
+  # The column still exists and is still what the report joins against; this is
+  # the same value arriving early.
+  def utm_campaign
+    super.presence || campaign&.utm_campaign
+  end
 
   # The tagged URL. Built rather than stored — see the migration.
   #
@@ -165,6 +194,32 @@ class CampaignLink < ApplicationRecord
     errors.add(:base,
                "“#{other.name}” already uses these exact values, so the two links could not be " \
                "told apart in the report. Give this one a different utm_content.")
+  end
+
+  # Two columns that must agree is one column that can be wrong, and `site_id`
+  # is load-bearing twice over: it is the tenant boundary CampaignLinkPolicy
+  # scopes on, and it is the first column of the unique tuple index. A link
+  # sitting on one site under a campaign belonging to another would be scoped to
+  # one and grouped with the other.
+  def belongs_to_its_campaigns_site
+    return if campaign.nil? || site_id.nil?
+    return if site_id == campaign.site_id
+
+    errors.add(:base, "belongs to a campaign on a different site")
+  end
+
+  # Built through `campaign.campaign_links`, so the site is not a question the
+  # form has to ask and cannot be answered differently from the campaign's own.
+  def adopt_campaign_site
+    self.site ||= campaign&.site
+  end
+
+  # Unconditional, and that is the point: this column is a copy, so it is
+  # rewritten from the source on every save rather than trusted. Renaming a
+  # campaign's tag therefore re-points its links in one place, and a link can
+  # never carry a spelling of the campaign that the report will not match.
+  def adopt_campaign_tag
+    self.utm_campaign = campaign.utm_campaign if campaign
   end
 
   def normalize_destination

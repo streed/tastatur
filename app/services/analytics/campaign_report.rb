@@ -23,8 +23,14 @@ module Analytics
       def campaign = utm_campaign.presence || "(none)"
     end
 
-    Result = Struct.new(:rows, :suppressed_rows, :suppressed_visitors, :threshold, :truncated,
-                        keyword_init: true) do
+    # The campaign as a whole, at the grain the tag defines. Deliberately a
+    # different Struct from Row: it has three of the same numbers and none of the
+    # five values, and a Row with four nils in it would eventually be passed to
+    # something expecting a tuple.
+    CampaignRow = Struct.new(:utm_campaign, :visitors, :visits, :pageviews, keyword_init: true)
+
+    Result = Struct.new(:rows, :campaign_rows, :suppressed_rows, :suppressed_visitors, :threshold,
+                        :truncated, keyword_init: true) do
       def any? = rows.any?
       def suppressed? = suppressed_rows.positive?
       def truncated? = truncated
@@ -33,6 +39,16 @@ module Analytics
       def by_key = @by_key ||= rows.index_by(&:key)
 
       def for_link(link) = by_key[link.utm_key]
+
+      # THE ONE FIGURE THAT MAY NOT BE ASSEMBLED FROM THE ROWS ABOVE. `visitors`
+      # and `visits` are COUNT(DISTINCT), so adding a campaign's link rows
+      # together counts anybody who followed two of them twice and produces an
+      # audience larger than the one that existed. The number here comes from
+      # its own GROUP BY over the same events, counted once. Same trap as §8's
+      # rule against summing a daily aggregate's distinct counts into a week.
+      def by_campaign = @by_campaign ||= (campaign_rows || []).index_by(&:utm_campaign)
+
+      def for_campaign(campaign) = by_campaign[campaign.utm_campaign]
     end
 
     # High enough that no real site's saved links fall off the end, bounded
@@ -55,6 +71,7 @@ module Analytics
       Success(
         Result.new(
           rows: kept.map { |row| to_row(row) },
+          campaign_rows: campaign_totals,
           suppressed_rows: withheld.size,
           suppressed_visitors: withheld.sum { |row| row["visitors"].to_i },
           threshold: @scope.k_threshold,
@@ -88,6 +105,35 @@ module Analytics
         GROUP BY 1, 2, 3, 4, 5
         ORDER BY visitors DESC, pageviews DESC, utm_campaign ASC
       SQL
+    end
+
+    # One scan, one grouping, no join back to the link rows. Suppressed on the
+    # same threshold as everything else on the screen: a campaign small enough
+    # to identify somebody is withheld even though it is an aggregate of several
+    # links, because "fewer than k people came from this whole campaign" is the
+    # disclosure the threshold exists to prevent and adding links together does
+    # not make it safer.
+    def campaign_totals
+      where, binds = @scope.raw_conditions
+      where += " AND utm_campaign IS NOT NULL"
+
+      rows = @scope.select_all(<<~SQL, binds)
+        SELECT utm_campaign,
+               COUNT(DISTINCT visitor_hash) AS visitors,
+               COUNT(DISTINCT session_hash) AS visits,
+               #{@scope.volume_expression} AS pageviews
+        FROM events
+        WHERE #{where}
+        GROUP BY 1
+        ORDER BY visitors DESC
+      SQL
+
+      kept, = Suppression.partition(rows, threshold: @scope.k_threshold)
+
+      kept.map do |row|
+        CampaignRow.new(utm_campaign: row["utm_campaign"], visitors: row["visitors"].to_i,
+                        visits: row["visits"].to_i, pageviews: row["pageviews"].to_i)
+      end
     end
 
     def to_row(row)

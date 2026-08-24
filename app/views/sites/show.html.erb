@@ -41,13 +41,11 @@
       <%= link_to "Journeys", site_journeys_path(@site), class: "btn btn-sm",
                   data: { analytics_event: "Journeys Opened" } %>
       <%= link_to "Funnels", site_funnels_path(@site), class: "btn btn-sm" %>
-      <%# Between Funnels and Goals rather than out at the end, because the three
-          are the same kind of thing: something you set up in advance and then
-          read the result of. The Campaigns panel below links here too, which is
-          where somebody looking at a campaign row actually is when they want to
-          build the next one. -%>
-      <%= link_to "Campaigns", site_campaigns_path(@site), class: "btn btn-sm",
-                  data: { analytics_event: "Campaigns Opened" } %>
+      <%# Campaigns is in the APPLICATION header now, beside Sites, so it is not
+          repeated here — it is not a per-site screen any more, it is a screen
+          that takes a site. The Campaigns panel below still links across to it
+          with this site selected, which is where somebody looking at a campaign
+          row actually is when they want to build the next one. -%>
       <%= link_to "Goals", site_goals_path(@site), class: "btn btn-sm" %>
       <%# Sharing was reachable only from the bottom of the settings form, in the
           slot the delete-style action goes in, so getting a read-only link out to

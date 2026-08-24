@@ -12,7 +12,12 @@ class Site < ApplicationRecord
   has_many :funnels, dependent: :destroy
   has_many :shared_links, dependent: :destroy
   has_many :dashboards, dependent: :destroy
-  has_many :campaign_links, dependent: :delete_all
+  # Campaigns own their links, so deleting a site goes through the campaign
+  # rather than around it: `delete_all` on the links alone would leave campaign
+  # rows pointing at a site that is gone. `destroy` here rather than
+  # `delete_all` for the same reason — the links come with it.
+  has_many :campaigns, dependent: :destroy
+  has_many :campaign_links, through: :campaigns
 
   # --- The revenue side ------------------------------------------------------
   # All :destroy rather than :delete_all, because Customer and CustomerSubscription

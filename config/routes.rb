@@ -57,23 +57,37 @@ Rails.application.routes.draw do
   end
 
   # --- Application ----------------------------------------------------------
+
+  # TOP LEVEL, NOT NESTED UNDER A SITE, and that is a navigation decision as
+  # much as a routing one. Building a tagged link is a job somebody arrives
+  # wanting to do — they are looking at a post they are about to publish, not at
+  # a dashboard — so it is reachable from the application header beside Sites
+  # rather than after picking a site and finding the sixth button in a row of
+  # nine. The site is a parameter of the screen (`?site=`), chosen by a switcher
+  # on it, which is also why there is no all-sites roll-up: Analytics::Period
+  # resolves a preset against ONE site's timezone, so "last 30 days" across
+  # three sites is three different windows added together. The same reason the
+  # sites index totals are all-time.
+  #
+  # The builder and the report stay on one screen, because they are one job: the
+  # value the builder writes is the string the report matches on months later.
+  #
+  # No `new` or `show` — the form is on the index (there is nothing to scroll
+  # past on an empty site) and a single campaign has nothing to say that its
+  # section does not.
+  resources :campaigns, only: %i[index create edit update destroy], param: :public_id do
+    # Nested, because a link without a campaign has no tag and therefore no way
+    # to be measured. `links` in the path rather than `campaign_links`: the
+    # segment already sits under /campaigns/:id.
+    resources :links, only: %i[create edit update destroy],
+                      param: :public_id, controller: "campaign_links"
+  end
+
   resources :sites, param: :public_token do
     scope module: :sites do
       resource :installation, only: %i[show]
       resources :goals, except: %i[show]
       resources :funnels
-
-      # The builder and the report on one screen, because they are one job: the
-      # value you type into the builder is the string the report matches on
-      # months later, and a builder that could not show you what the last one
-      # did would be a URL-concatenating widget rather than a measurement.
-      #
-      # `campaigns` rather than `campaign_links`: the screen is about campaigns,
-      # and a link is how you name one. No `new` or `show` — the form is on the
-      # index (there is nothing to scroll past on an empty site) and a single
-      # link has nothing to say that its row does not.
-      resources :campaigns, only: %i[index create edit update destroy],
-                            param: :public_id, controller: "campaigns"
 
       # Where visitors go from a page. A GET with no resource behind it, like
       # `attribution` below: the walked path is the whole state and it lives in

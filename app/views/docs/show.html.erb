@@ -286,7 +286,7 @@
 
       <%= render layout: "docs/section",
                  locals: { id: "campaigns", title: "Campaigns",
-                           lede: "Build a tagged link, then read what it did." } do %>
+                           lede: "Name what you are promoting, build a link for each place you post it." } do %>
         <p class="text-[14px] text-ink-2 leading-relaxed">
           A campaign link is an ordinary URL to one of your own pages with <code>utm_source</code>,
           <code>utm_medium</code> and <code>utm_campaign</code> on it. Nothing needs installing —
@@ -295,6 +295,13 @@
           by hand.
         </p>
         <div class="card card-body space-y-2.5 text-[13px] text-ink-2">
+          <p>A campaign is a name and a tag, and you build a link under it for each place you
+            post — Discord, Facebook, the newsletter. They all carry the campaign's tag, which is
+            what puts them under one heading with one figure as well as one row each.</p>
+          <p>That heading figure is counted over the tag rather than added up from the links, so
+            it is usually smaller than they come to: somebody who follows two of your links is one
+            visitor to the campaign and a visitor on each link. Adding the rows together would
+            count them twice.</p>
           <p>Matching is exact and case-sensitive, so <code>Newsletter</code> and
             <code>newsletter</code> are two campaigns. Values you build here are lower-cased and
             the pickers offer what the site has already used.</p>
@@ -306,7 +313,7 @@
             rather than saving a link that would report nothing.</p>
         </div>
         <% if @example_site %>
-          <%= link_to "Build a link for #{@example_site.domain}", site_campaigns_path(@example_site), class: "btn btn-sm" %>
+          <%= link_to "Build a link for #{@example_site.domain}", campaigns_path(site: @example_site.public_token), class: "btn btn-sm" %>
         <% end %>
       <% end %>
 

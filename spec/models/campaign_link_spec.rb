@@ -7,10 +7,18 @@ require "rails_helper"
 RSpec.describe CampaignLink do
   let(:site) { create(:site, domain: "northwind.example.com") }
 
+  # The tag belongs to the campaign now, so a link that needs a particular one
+  # gets a campaign carrying it. Setting `utm_campaign` on the link itself would
+  # be silently overwritten by CampaignLink#adopt_campaign_tag, and an example
+  # that appeared to be about the link would in fact be about the campaign.
+  def link_tagged(tag, **attrs)
+    build(:campaign_link, campaign: create(:campaign, site: site, utm_campaign: tag), **attrs)
+  end
+
   describe "the built URL" do
     it "tags the destination with the values that are filled in and no others" do
-      link = build(:campaign_link, site: site, destination_url: "https://northwind.example.com/pricing",
-                                   utm_source: "newsletter", utm_medium: "email", utm_campaign: "august",
+      link = link_tagged("august", destination_url: "https://northwind.example.com/pricing",
+                                   utm_source: "newsletter", utm_medium: "email",
                                    utm_term: nil, utm_content: nil)
 
       expect(link.url).to eq(
@@ -63,11 +71,11 @@ RSpec.describe CampaignLink do
     # mailing platforms put per-recipient hashes in utm_content. A link carrying
     # one saves cleanly and then reports nothing forever, which on screen is
     # indistinguishable from a campaign nobody clicked.
-    it "refuses a token-shaped campaign name" do
-      link = build(:campaign_link, site: site, utm_campaign: "a" * 30)
+    it "refuses a token-shaped term" do
+      link = build(:campaign_link, site: site, utm_term: "a" * 30)
 
       expect(link).not_to be_valid
-      expect(link.errors[:utm_campaign].join).to include("discarded on arrival")
+      expect(link.errors[:utm_term].join).to include("discarded on arrival")
     end
 
     it "refuses a value containing an email address" do
@@ -77,8 +85,8 @@ RSpec.describe CampaignLink do
       expect(link.errors[:utm_content].join).to include("@")
     end
 
-    it "accepts a long campaign name broken up by a space" do
-      link = build(:campaign_link, site: site, utm_campaign: "august launch newsletter blast")
+    it "accepts a long term broken up by a space" do
+      link = build(:campaign_link, site: site, utm_term: "august launch newsletter blast")
 
       expect(link).to be_valid
     end
@@ -89,7 +97,7 @@ RSpec.describe CampaignLink do
       value = "b" * 30
 
       expect(Ingest::PathScrubber.storable_param_value?(value)).to be(false)
-      expect(build(:campaign_link, site: site, utm_campaign: value)).not_to be_valid
+      expect(build(:campaign_link, site: site, utm_term: value)).not_to be_valid
     end
   end
 
@@ -117,11 +125,13 @@ RSpec.describe CampaignLink do
     # `Newsletter` and `newsletter` are two rows in the report, forever. This is
     # the whole reason the values are stored rather than concatenated.
     it "lower-cases and squishes the tag values, but not the destination" do
-      link = create(:campaign_link, site: site, utm_source: "  NewsLetter ",
-                                    utm_campaign: "August   Launch",
+      link = create(:campaign_link, campaign: create(:campaign, site: site, utm_campaign: "August   Launch"),
+                                    utm_source: "  NewsLetter ",
                                     destination_url: "https://northwind.example.com/Pricing")
 
       expect(link.utm_source).to eq("newsletter")
+      # Copied down from the campaign, which normalised it there. The link is
+      # not a second place the value can be spelled.
       expect(link.utm_campaign).to eq("august launch")
       expect(link.destination_url).to eq("https://northwind.example.com/Pricing")
     end
@@ -132,20 +142,22 @@ RSpec.describe CampaignLink do
     # claiming all of it — so the same visitors are shown twice and the screen
     # implies double the traffic the site had.
     it "is refused with a sentence rather than a RecordNotUnique" do
-      create(:campaign_link, site: site, name: "First", utm_source: "newsletter",
-                             utm_medium: "email", utm_campaign: "august")
+      august = create(:campaign, site: site, utm_campaign: "august")
+      create(:campaign_link, campaign: august, name: "First", utm_source: "newsletter",
+                             utm_medium: "email")
 
-      second = build(:campaign_link, site: site, name: "Second", utm_source: "newsletter",
-                                     utm_medium: "email", utm_campaign: "august")
+      second = build(:campaign_link, campaign: august, name: "Second", utm_source: "newsletter",
+                                     utm_medium: "email")
 
       expect(second).not_to be_valid
       expect(second.errors[:base].join).to include("utm_content")
     end
 
     it "allows the same campaign on two links told apart by utm_content" do
-      create(:campaign_link, site: site, name: "Header", utm_campaign: "august", utm_content: "header")
+      august = create(:campaign, site: site, utm_campaign: "august")
+      create(:campaign_link, campaign: august, name: "Header", utm_content: "header")
 
-      expect(build(:campaign_link, site: site, name: "Footer", utm_campaign: "august",
+      expect(build(:campaign_link, campaign: august, name: "Footer",
                                    utm_content: "footer")).to be_valid
     end
   end
@@ -154,8 +166,8 @@ RSpec.describe CampaignLink do
     # Blank has to become nil, because the events table stores NULL for a tag
     # that was not present and "" is not NULL in any comparison.
     it "reports absent tags as nil so it can match a row with NULL columns" do
-      link = build(:campaign_link, site: site, utm_source: "newsletter", utm_medium: "email",
-                                   utm_campaign: "august", utm_term: "", utm_content: nil)
+      link = link_tagged("august", utm_source: "newsletter", utm_medium: "email",
+                                   utm_term: "", utm_content: nil)
 
       expect(link.utm_key).to eq(["newsletter", "email", "august", nil, nil])
     end

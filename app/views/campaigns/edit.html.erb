@@ -1,0 +1,18 @@
+<% content_for :title, "#{@campaign.name} · Campaigns · Tastatur" %>
+
+<div class="shell max-w-3xl">
+  <div class="pt-5 rule-heavy mb-8">
+    <h1 class="text-2xl font-semibold mt-5">Edit campaign</h1>
+    <%# Said here rather than discovered afterwards. The report matches on the
+        stored values, so changing the tag does not move history onto the new
+        spelling — it re-points every link under this campaign at a row that may
+        have nothing in it yet, and the old row reappears under "Campaigns not
+        built here". -%>
+    <p class="text-sm text-ink-2 mt-2">
+      Changing the tag re-points every link in this campaign. Visits already recorded stay under
+      the tag they arrived with, and any link already sent out still carries the old one.
+    </p>
+  </div>
+
+  <%= render "campaigns/form", campaign: @campaign %>
+</div>

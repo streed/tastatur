@@ -447,6 +447,36 @@ Before "fixing" any of these, read the linked document.
   way. Note the collateral: `summer-sale-2026-newsletter` is 27 characters and
   is refused; the error says to break it with a space, which survives because a
   space is not in that character class.
+- **A campaign OWNS its tag, and its links carry a copy.** A `Campaign` is a name
+  and a `utm_campaign`; every `CampaignLink` under it is one channel — Discord,
+  Facebook, the newsletter — differing in source and medium. The tag is copied
+  down by `CampaignLink#adopt_campaign_tag` on every save, and `Campaign` moves it
+  onto every link in one statement when it is renamed. Both halves are
+  load-bearing. The copy exists because the five values are the join key that
+  matches a link to its events and that key is enforced by a unique index, which
+  cannot span a join. The copy being *maintained* is what stops a rename leaving
+  the heading grouping by one spelling while its own links measure another —
+  which is the split campaign this whole screen exists to make visible, produced
+  by the screen itself. `utm_campaign` is in neither controller's permitted params
+  for the same reason: one place to say what a campaign is called.
+- **A campaign's own figure is NOT the sum of its links' rows, and may never
+  become one.** `visitors` and `visits` are `COUNT(DISTINCT)`, so adding the
+  Discord row to the Facebook row counts everybody who followed both of them
+  twice and claims an audience larger than the one that existed — §8's rule
+  against summing distinct counts, one grain down. `CampaignReport#for_campaign`
+  reads its own `GROUP BY utm_campaign` over the same events. The note under the
+  table says the heading is smaller than the rows on purpose, because a total
+  under the numbers it sits above reads as a bug until you know why. This is also
+  why a pure folder — links keeping their own tags — was rejected: with no shared
+  value to group by, the only total available is the forbidden sum.
+- **The screen is TOP LEVEL (`/campaigns`), with the site as a parameter.**
+  Building a tagged link is a job somebody arrives wanting to do, so it is in the
+  application header beside Sites rather than the sixth of nine buttons inside one
+  site's dashboard. There is deliberately no all-sites roll-up: `Analytics::Period`
+  resolves a preset against ONE site's timezone, the same reason the sites index
+  carries all-time totals. A `?site=` token that is not yours is a 404 rather than
+  a fallback — a fallback would mean a POST addressed to somebody else's site
+  succeeding against the first of yours.
 - **`Analytics::CampaignReport` groups by all FIVE utm columns, and is not
   `Analytics::Breakdown` with `utm_campaign` as its dimension.** That panel
   answers "which campaign"; a campaign LINK is a tuple, and the email, the tweet

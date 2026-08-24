@@ -1,4 +1,4 @@
-<% content_for :title, "Campaigns · #{@site.domain}" %>
+<% content_for :title, "Campaigns · Tastatur" %>
 
 <div class="shell max-w-5xl">
   <div class="flex flex-wrap items-end justify-between gap-4 mb-8 pt-5 rule-heavy">
@@ -8,6 +8,31 @@
     </div>
 
     <div class="flex flex-wrap items-center gap-3">
+      <%# THE SITE IS A PARAMETER OF THIS SCREEN, not a step before it. There is
+          deliberately no "all sites" option: Analytics::Period resolves a preset
+          against ONE site's timezone, so "last 30 days" across sites in Berlin,
+          Kolkata and UTC is three different windows added together — the same
+          reason the sites index carries all-time totals and no period switcher.
+
+          Rendered only when there is a choice to make. A one-site account gets
+          a control with one option, which is furniture. -%>
+      <%# <details> and a list of links rather than a <select>: a select needs
+          JavaScript to navigate on change, and every other control on this
+          screen is a link that works without any. The period rides along in
+          each one, so switching site keeps the window you were reading. -%>
+      <% if sites.size > 1 %>
+        <details class="relative">
+          <summary class="btn btn-sm cursor-pointer"><%= @site.domain %></summary>
+          <div class="absolute right-0 z-10 mt-1 min-w-[14rem] card py-1 shadow-lg">
+            <% sites.each do |site| %>
+              <%= link_to site.domain,
+                          campaigns_path(site: site.public_token, **@period.to_param),
+                          class: "block px-4 py-2 text-sm hover:bg-surface-2 #{'font-semibold' if site == @site}" %>
+            <% end %>
+          </div>
+        </details>
+      <% end %>
+
       <div class="segmented">
         <% %w[7d 30d 90d 12mo].each do |key| %>
           <%# `view` tells this apart from the dashboard's own period control,
@@ -15,7 +40,7 @@
               over the span it ran for, which is rarely the span you were just
               looking at traffic over. -%>
           <%= link_to Analytics::Period::PRESETS[key].sub("Last ", ""),
-                      site_campaigns_path(@site, **Analytics::Period.parse(key, site: @site).to_param),
+                      campaigns_path(site: @site.public_token, **Analytics::Period.parse(key, site: @site).to_param),
                       class: "segment", "aria-current": (@period.key == key).to_s,
                       data: { analytics_event: "Period Changed",
                               analytics_props: { period: key, view: "campaigns" } } %>
@@ -25,92 +50,34 @@
     </div>
   </div>
 
-  <%# The builder first. This screen is reached from a "Campaigns" button and
-      the thing that button promises is a link — putting a table of last month's
+  <%# The builder first. This screen is reached from a "Campaigns" button and the
+      thing that button promises is a link — putting a table of last month's
       numbers above it means scrolling past them to do the one thing you came
       for, the mistake the share screen already had once. -%>
-  <% if policy(CampaignLink.new(site: @site)).create? %>
-    <%= render "form" %>
+  <% if policy(Campaign.new(site: @site)).create? %>
+    <%= render "campaigns/form", campaign: @campaign %>
   <% else %>
     <div class="card card-body text-sm text-ink-2">
       Building a campaign link is a member action. You can read the report below.
     </div>
   <% end %>
 
-  <%# --- What the saved links did ------------------------------------------ %>
-  <% if @measured.any? %>
-    <div class="card mt-10">
-      <div class="card-head flex items-end justify-between gap-4">
-        <h2 class="text-sm font-semibold">Your links</h2>
-        <span class="label"><%= @period.label %></span>
-      </div>
+  <%# --- What the campaigns did --------------------------------------------- %>
+  <% @sections.each do |section| %>
+    <%= render "campaigns/section", section: section %>
+  <% end %>
 
-      <div class="bar-row label border-b border-rule">
-        <span>Link</span>
-        <span class="flex gap-3 sm:gap-6">
-          <span class="w-14 sm:w-24 text-right"><span class="sm:hidden">Visit.</span><span class="hidden sm:inline">Visitors</span></span>
-          <span class="w-12 sm:w-20 text-right">Visits</span>
-          <span class="w-12 sm:w-20 text-right">Views</span>
-          <span class="w-10 sm:w-28"></span>
-        </span>
-      </div>
-
-      <% top = @measured.filter_map { |_, row| row&.visitors }.max.to_i %>
-      <% @measured.each do |link, row| %>
-        <div class="bar-row <%= "bg-surface-2" if params[:created] == link.public_id %>"
-             data-controller="clipboard">
-          <%# Width against the busiest link rather than against a total: one
-              visitor can arrive on two links, so the column does not add up to
-              anything and a percentage-of-total bar would be inventing a
-              denominator. -%>
-          <span class="bar-fill" style="width: <%= top.positive? && row ? (row.visitors * 100.0 / top).round(1) : 0 %>%"></span>
-
-          <span class="bar-label min-w-0">
-            <span class="font-medium"><%= link.name %></span>
-            <span class="block text-[12px] text-muted mt-0.5 truncate">
-              <%= link.utm_campaign %><span class="mx-1.5">·</span><%= link.utm_source %><span class="mx-1.5">·</span><%= link.utm_medium %>
-              <% if link.utm_content.present? %><span class="mx-1.5">·</span><%= link.utm_content %><% end %>
-              <% if link.utm_term.present? %><span class="mx-1.5">·</span><%= link.utm_term %><% end %>
-            </span>
-            <span data-clipboard-target="source" class="block text-[12px] text-ink-2 mt-0.5 truncate"><%= link.url %></span>
-          </span>
-
-          <span class="flex gap-3 sm:gap-6 items-center num shrink-0">
-            <%# A link with no visible row is either a link nobody has clicked or
-                one whose row was withheld by the privacy threshold, and this
-                screen deliberately does not say which. Naming the second would
-                publish "somebody came, fewer than the threshold of them" for a
-                link that can be sent to one person, which is the disclosure the
-                threshold exists to prevent. The note under the table says both
-                possibilities out loud so an empty row does not read as broken.
-
-                (No interpolation in this comment on purpose: an ERB comment ends
-                at the first closing delimiter inside it, so an example tag would
-                print its own remainder into the page.) -%>
-            <span class="w-14 sm:w-24 text-right"><%= row ? metric_number(row.visitors) : "—" %></span>
-            <span class="w-12 sm:w-20 text-right"><%= row ? metric_number(row.visits) : "—" %></span>
-            <span class="w-12 sm:w-20 text-right"><%= row ? metric_number(row.pageviews) : "—" %></span>
-            <span class="w-10 sm:w-28 text-right flex justify-end gap-2">
-              <button type="button" class="btn btn-quiet btn-sm" data-action="clipboard#copy"
-                      data-analytics-event="Campaign Link Copied">
-                <span data-clipboard-target="label">Copy</span>
-              </button>
-              <%= link_to "Edit", edit_site_campaign_path(@site, link), class: "btn btn-quiet btn-sm" %>
-            </span>
-          </span>
-        </div>
-      <% end %>
-    </div>
-
+  <% if @sections.any? %>
     <p class="text-[12px] text-muted mt-4">
-      A dash means nothing has been recorded for that link in this period — either nobody has
-      followed it, or too few people did for its row to clear this site's privacy threshold.
-      Visitors and visits are distinct counts, so neither column adds up: one person who clicks
-      two of your links is one visitor on each.
+      A campaign's own figure is counted over its whole tag, not added up from the links under it:
+      one person who follows two of your links is one visitor to the campaign and a visitor on each
+      link, so the rows deliberately come to more than the heading. A dash means nothing has been
+      recorded — either nobody followed it, or too few people did for the row to clear this site's
+      privacy threshold.
     </p>
   <% end %>
 
-  <%# --- Tagged traffic that no saved link explains ------------------------- %>
+  <%# --- Tagged traffic that no saved campaign explains ---------------------- %>
   <% if @unsaved.any? %>
     <div class="card mt-10">
       <div class="card-head">
@@ -181,13 +148,13 @@
     </p>
   <% end %>
 
-  <% if @measured.empty? && @unsaved.empty? %>
+  <% if @sections.empty? && @unsaved.empty? %>
     <div class="card card-body text-center py-14 mt-10">
       <p class="font-semibold">No campaign traffic yet.</p>
       <p class="text-sm text-ink-2 mt-2 max-w-lg mx-auto">
-        Build a link above, use it in the email or the post, and the visits it brings appear
-        here. Traffic tagged anywhere else shows up too — you do not have to build every link
-        here for it to be measured.
+        Name what you are about to promote above, add a link for each place you will post it, and
+        the visits they bring appear here. Traffic tagged anywhere else shows up too — you do not
+        have to build every link here for it to be measured.
       </p>
     </div>
   <% end %>
