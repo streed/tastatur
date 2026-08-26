@@ -1,54 +1,35 @@
-# Everything the campaigns screen needs, shared by the two controllers that can
-# render it.
+# Everything the site's campaigns screen needs, shared by the two controllers
+# that can render it.
 #
-# WHY A CONCERN. CampaignsController#create and CampaignLinksController#create
-# both re-render the index on a validation failure, with the offending record
-# left open as the form. Each would otherwise carry its own copy of the site
-# resolution, the period, the report and the pairing of saved links against the
-# rows that matched them — four things that must agree exactly, in three places,
-# for the screen to say the same thing whichever way you arrived at it.
+# WHY A CONCERN. Sites::CampaignsController#create and
+# Sites::CampaignLinksController#create both re-render the index on a validation
+# failure, with the offending record left open as the form. Each would otherwise
+# carry its own copy of the period, the report and the pairing of saved links
+# against the rows that matched them — three things that must agree exactly, in
+# two places, for the screen to say the same thing whichever way you arrived at
+# it.
+#
+# THE SITE COMES FROM SiteScoped, which is the whole point of the screen living
+# under /sites/:site_public_token. It used to resolve a `?site=` parameter here
+# against a policy_scope of its own — a second implementation of the tenant
+# boundary every other screen gets from one place, and the kind that drifts.
 module CampaignScreen
   extend ActiveSupport::Concern
 
   included do
+    include SiteScoped
+
     # The pickers read whatever the report and the saved links already hold, so
     # every template that renders a form gets them without a query of its own —
     # and, like OffersKnownValues, only when a template actually asks. A create
     # that redirects pays for nothing.
-    helper_method :campaign_values, :sites, :current_site
+    helper_method :campaign_values
   end
 
   private
 
-  # THE SWITCHER'S OPTIONS AND THE TENANT BOUNDARY IN ONE CALL. A site that
-  # cannot be read is not in this list, so it cannot be switched to either.
-  def sites
-    @sites ||= policy_scope(Site).order(:domain).to_a
-  end
-
-  # A NAMED SITE MUST EXIST OR THIS IS A 404, and it is not enough for the
-  # unnamed case to fall back. Falling back on a token belonging to somebody
-  # else would mean a POST addressed to their site quietly creating a campaign
-  # on the first of yours — the request succeeds, against something the caller
-  # did not name. Raising is also what SiteScoped does for everything under
-  # /sites, and two ways of answering "that site is not yours" is one of them
-  # being wrong.
-  #
-  # No parameter at all is a different question with an obvious answer: this is
-  # a top-level screen reached from the header, so it opens on a site.
-  def current_site
-    @current_site ||=
-      if params[:site].present?
-        sites.find { |site| site.public_token == params[:site] } ||
-          raise(ActiveRecord::RecordNotFound)
-      else
-        sites.first
-      end
-  end
-
   def load_screen(form: nil, open_link: nil)
-    @site = current_site
-    @campaign = form || current_site.campaigns.new
+    @campaign = form || @site.campaigns.new
 
     # A campaign with nowhere to type a link is a name and a Save button. The
     # first row is built here rather than in the <template>, which is a
@@ -86,16 +67,15 @@ module CampaignScreen
   end
 
   def campaigns
-    @campaigns ||= policy_scope(Campaign).where(site: current_site)
-                                         .includes(:campaign_links).ordered.to_a
+    @campaigns ||= @site.campaigns.includes(:campaign_links).ordered.to_a
   end
 
   def report
-    @report ||= Analytics::CampaignReport.call(site: current_site, period: period_for_report).value!
+    @report ||= Analytics::CampaignReport.call(site: @site, period: period_for_report).value!
   end
 
   def period_for_report
-    @period ||= Analytics::Period.parse(params[:period], site: current_site)
+    @period ||= Analytics::Period.parse(params[:period], site: @site)
   end
 
   def campaign_values
@@ -107,6 +87,6 @@ module CampaignScreen
   end
 
   def default_destination
-    "https://#{current_site.domain}/"
+    "https://#{@site.domain}/"
   end
 end

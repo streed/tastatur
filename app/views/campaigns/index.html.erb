@@ -4,93 +4,87 @@
   <div class="flex flex-wrap items-end justify-between gap-4 mb-8 pt-5 rule-heavy">
     <div class="mt-5">
       <h1 class="text-2xl font-semibold">Campaigns</h1>
-      <p class="label mt-2"><%= @site.domain %><span class="mx-2">·</span><%= @period.label %></p>
+      <p class="label mt-2">
+        <%= pluralize(@campaigns.size, "campaign") %>
+        <% if @sections.any? %>
+          <span class="mx-2">·</span><%= pluralize(@sections.size, "site") %>
+        <% end %>
+      </p>
     </div>
 
-    <div class="flex flex-wrap items-center gap-3">
-      <%# THE SITE IS A PARAMETER OF THIS SCREEN, not a step before it. There is
-          deliberately no "all sites" option: Analytics::Period resolves a preset
-          against ONE site's timezone, so "last 30 days" across sites in Berlin,
-          Kolkata and UTC is three different windows added together — the same
-          reason the sites index carries all-time totals and no period switcher.
-
-          Rendered only when there is a choice to make. A one-site account gets
-          a control with one option, which is furniture. -%>
-      <%# <details> and a list of links rather than a <select>: a select needs
-          JavaScript to navigate on change, and every other control on this
-          screen is a link that works without any. The period rides along in
-          each one, so switching site keeps the window you were reading. -%>
-      <% if sites.size > 1 %>
-        <details class="relative">
-          <summary class="btn btn-sm cursor-pointer"><%= @site.domain %></summary>
-          <div class="absolute right-0 z-10 mt-1 min-w-[14rem] card py-1 shadow-lg">
-            <% sites.each do |site| %>
-              <%= link_to site.domain,
-                          campaigns_path(site: site.public_token, **@period.to_param),
-                          class: "block px-4 py-2 text-sm hover:bg-surface-2 #{'font-semibold' if site == @site}" %>
-            <% end %>
-          </div>
-        </details>
-      <% end %>
-
+    <%# A PRESET, RESOLVED PER SITE. There is no "all time" option and no custom
+        range: all-time would mean scanning the raw hypertable with no bound (the
+        aggregates carry no UTM columns, so the trick Analytics::SiteTotals uses
+        on the sites index is not available here), and a custom range is two
+        absolute dates resolved in a site's own zone, which several sites cannot
+        agree on. See CampaignsController. -%>
+    <% if @sections.any? %>
       <div class="segmented">
-        <% %w[7d 30d 90d 12mo].each do |key| %>
-          <%# `view` tells this apart from the dashboard's own period control,
-              the same way the journeys and funnel screens do: a campaign is read
-              over the span it ran for, which is rarely the span you were just
-              looking at traffic over. -%>
+        <% CampaignsController::PERIODS.each do |key| %>
           <%= link_to Analytics::Period::PRESETS[key].sub("Last ", ""),
-                      campaigns_path(site: @site.public_token, **Analytics::Period.parse(key, site: @site).to_param),
-                      class: "segment", "aria-current": (@period.key == key).to_s,
+                      campaigns_path(period: key),
+                      class: "segment", "aria-current": (@period_key == key).to_s,
                       data: { analytics_event: "Period Changed",
-                              analytics_props: { period: key, view: "campaigns" } } %>
+                              analytics_props: { period: key, view: "all_campaigns" } } %>
         <% end %>
       </div>
-      <%= link_to "Dashboard", site_path(@site), class: "btn btn-sm" %>
-    </div>
+    <% end %>
   </div>
 
-  <%# The builder first. This screen is reached from a "Campaigns" button and the
-      thing that button promises is a link — putting a table of last month's
-      numbers above it means scrolling past them to do the one thing you came
-      for, the mistake the share screen already had once. -%>
-  <% if policy(Campaign.new(site: @site)).create? %>
-    <%= render "campaigns/form", campaign: @campaign %>
-  <% else %>
-    <div class="card card-body text-sm text-ink-2">
-      Building a campaign link is a member action. You can read the report below.
+  <% if @sites.empty? %>
+    <%# A campaign link points at a page on a site this instance measures — that
+        is validated, not advisory (CampaignLink#destination_is_a_page_on_this_site)
+        — so there is nothing this screen could usefully offer somebody with no
+        sites. It says which step is missing rather than listing nothing. -%>
+    <div class="card card-body text-center py-14">
+      <p class="font-semibold">Add a site first.</p>
+      <p class="text-sm text-ink-2 mt-2 max-w-md mx-auto">
+        A campaign link has to point at a page on a site you measure, so there is nothing to build
+        until there is one.
+      </p>
+      <div class="mt-6">
+        <%= link_to "Sites", sites_path, class: "btn btn-primary btn-sm" %>
+      </div>
+    </div>
+  <% elsif @sections.empty? %>
+    <div class="card card-body text-center py-14">
+      <p class="font-semibold">No campaigns yet.</p>
+      <p class="text-sm text-ink-2 mt-2 max-w-lg mx-auto">
+        A campaign is a name for something you are about to promote, and a link for each place you
+        will post it. Build one on the site it points at, and what the links bring in appears here.
+      </p>
+      <div class="mt-6 flex flex-wrap justify-center gap-2">
+        <% @sites.each do |site| %>
+          <%= link_to site.domain, site_campaigns_path(site), class: "btn btn-sm" %>
+        <% end %>
+      </div>
     </div>
   <% end %>
 
-  <%# --- What the campaigns did --------------------------------------------- %>
-  <% @sections.each do |section| %>
-    <%= render "campaigns/section", section: section %>
-  <% end %>
-
-  <% if @sections.any? %>
-    <p class="text-[12px] text-muted mt-4">
-      A campaign's own figure is counted over its whole tag, not added up from the links under it:
-      one person who follows two of your links is one visitor to the campaign and a visitor on each
-      link, so the rows deliberately come to more than the heading. A dash means nothing has been
-      recorded — either nobody followed it, or too few people did for the row to clear this site's
-      privacy threshold.
-    </p>
-  <% end %>
-
-  <%# --- Tagged traffic that no saved campaign explains ---------------------- %>
-  <% if @unsaved.any? %>
-    <div class="card mt-10">
-      <div class="card-head">
-        <h2 class="text-sm font-semibold">Campaigns not built here</h2>
-        <%# The point of this table. A link built in an ad platform is perfectly
-            fine and belongs on the report; a row that is one capital letter away
-            from one of yours is the failure this whole screen exists to catch,
-            and it is invisible on the dashboard's Campaigns panel because that
-            panel groups by utm_campaign alone. -%>
-        <p class="text-[12px] text-muted mt-1">
-          Tagged traffic with no link saved above — built in an ad platform or a mail tool, or
-          typed by hand. Check for a spelling that should have matched one of yours.
-        </p>
+  <%# ONE CARD PER SITE, and the grouping is not decoration. A period preset
+      resolves against ONE site's timezone (Analytics::Period), so the window
+      these figures cover is a property of the site — which means it can be
+      stated once, on the group, rather than being quietly different from row to
+      row inside one flat table. It is also why there is no total anywhere on
+      this page: adding a Berlin site's "last 30 days" to a Kolkata site's is
+      two different windows, and `visitors` and `visits` are COUNT(DISTINCT)
+      besides (§8). -%>
+  <% @sections.each_with_index do |section, index| %>
+    <% site = section.site %>
+    <div class="card <%= "mt-6" unless index.zero? %>">
+      <div class="card-head flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 class="text-sm font-semibold"><%= site.domain %></h2>
+          <p class="text-[12px] text-muted mt-1">
+            <%= section.period.label %><span class="mx-1.5">·</span><%= site.timezone %>
+          </p>
+        </div>
+        <%# Into the site's own campaigns screen, which is where a campaign is
+            built, edited, and read link by link. This page is the directory; that
+            page is the work. -%>
+        <%= link_to "Build a link", site_campaigns_path(site), class: "label hover:text-ink",
+                    data: { analytics_event: "Campaigns Opened",
+                            analytics_props: '{"source":"all_campaigns"}' } %>
       </div>
 
       <div class="bar-row label border-b border-rule">
@@ -102,60 +96,49 @@
         </span>
       </div>
 
-      <% top = @unsaved.first&.visitors.to_i %>
-      <% @unsaved.each do |row| %>
-        <div class="bar-row">
-          <span class="bar-fill" style="width: <%= top.positive? ? (row.visitors * 100.0 / top).round(1) : 0 %>%"></span>
+      <%# Scaled against the busiest campaign IN THIS SITE, for the same reason
+          the per-site screen scales a link against its own campaign: there is no
+          denominator that spans two sites' windows, so a bar drawn against one
+          would be inventing one. -%>
+      <% top = section.rows.filter_map { |row| row.total&.visitors }.max.to_i %>
+      <% section.rows.each do |row| %>
+        <% total = row.total %>
+        <%# Straight into the dashboard filtered to this campaign, which is where
+            every other question about it is answered — which pages, which
+            countries, which goals. Carries this site's own resolved window, so
+            the dashboard opens on the period the row was measured over. -%>
+        <%= link_to site_path(site, utm_campaign: row.campaign.utm_campaign, **section.period.to_param),
+                    class: "bar-row" do %>
+          <span class="bar-fill" style="width: <%= top.positive? && total ? (total.visitors * 100.0 / top).round(1) : 0 %>%"></span>
           <span class="bar-label min-w-0">
-            <%# Straight into the dashboard filtered to this campaign, which is
-                where every other question about it is answered — which pages,
-                which countries, which goals. This screen measures links; the
-                dashboard measures everything else, and there is no reason to
-                grow a second copy of it here. -%>
-            <%= link_to site_path(@site, utm_campaign: row.utm_campaign, utm_source: row.utm_source,
-                                         utm_medium: row.utm_medium, **@period.to_param),
-                        class: "font-medium hover:underline" do %>
-              <%= row.campaign %>
-            <% end %>
+            <span class="font-medium"><%= row.campaign.name %></span>
             <span class="block text-[12px] text-muted mt-0.5 truncate">
-              <%= row.utm_source.presence || "(no source)" %><span class="mx-1.5">·</span><%= row.utm_medium.presence || "(no medium)" %>
-              <% if row.utm_content.present? %><span class="mx-1.5">·</span><%= row.utm_content %><% end %>
-              <% if row.utm_term.present? %><span class="mx-1.5">·</span><%= row.utm_term %><% end %>
+              <span class="num"><%= row.campaign.utm_campaign %></span>
+              <span class="mx-1.5">·</span><%= pluralize(row.campaign.campaign_links.size, "link") %>
             </span>
           </span>
           <span class="flex gap-3 sm:gap-6 items-center num shrink-0">
-            <span class="w-14 sm:w-24 text-right"><%= metric_number(row.visitors) %></span>
-            <span class="w-12 sm:w-20 text-right"><%= metric_number(row.visits) %></span>
-            <span class="w-12 sm:w-20 text-right"><%= metric_number(row.pageviews) %></span>
+            <span class="w-14 sm:w-24 text-right"><%= total ? metric_number(total.visitors) : "—" %></span>
+            <span class="w-12 sm:w-20 text-right"><%= total ? metric_number(total.visits) : "—" %></span>
+            <span class="w-12 sm:w-20 text-right"><%= total ? metric_number(total.pageviews) : "—" %></span>
           </span>
-        </div>
+        <% end %>
       <% end %>
     </div>
   <% end %>
 
-  <% if @report.suppressed? %>
+  <% if @sections.any? %>
     <p class="text-[12px] text-muted mt-4">
-      <%= pluralize(@report.suppressed_rows, "campaign") %> withheld: fewer than
-      <%= @report.threshold %> visitors each, which is this site's privacy threshold.
-      They are still counted in the dashboard totals.
+      Each site is measured over its own window, in its own timezone, and nothing here is added
+      across sites — the same figures appear on each site's own campaigns screen. A dash means
+      nothing has been recorded: either nobody followed the campaign, or too few people did for
+      the row to clear that site's privacy threshold.
     </p>
-  <% end %>
-
-  <% if @report.truncated? %>
-    <p class="text-[12px] text-muted mt-2">
-      Showing the <%= Analytics::CampaignReport::LIMIT %> busiest tag combinations. Anything
-      below that is not on this page.
-    </p>
-  <% end %>
-
-  <% if @sections.empty? && @unsaved.empty? %>
-    <div class="card card-body text-center py-14 mt-10">
-      <p class="font-semibold">No campaign traffic yet.</p>
-      <p class="text-sm text-ink-2 mt-2 max-w-lg mx-auto">
-        Name what you are about to promote above, add a link for each place you will post it, and
-        the visits they bring appear here. Traffic tagged anywhere else shows up too — you do not
-        have to build every link here for it to be measured.
-      </p>
-    </div>
+    <%# NO WITHHELD COUNT HERE, unlike a breakdown panel, and that is the point of
+        the sentence above. Every campaign the account has built is named on this
+        page whether or not it has a figure, so "2 withheld" beside three dashes
+        would say "somebody came, fewer than k of them" about two campaigns and
+        leave the reader to work out which. The dash conflating "nobody" with
+        "too few" IS the protection. -%>
   <% end %>
 </div>

@@ -116,6 +116,42 @@ RSpec.describe "Destructive buttons on edit forms", type: :request do
     expect(form).to include("1 share link")
   end
 
+  it "puts no form inside another form on the campaign editor" do
+    campaign = create(:campaign, site: site)
+
+    get edit_site_campaign_path(site, campaign)
+
+    expect(nested_form_depth_exceeded?(response.body)).to be(false),
+                                                          "a <form> is nested inside another <form>"
+    assert_wired_to_delete(response.body, "Delete", site_campaign_path(site, campaign))
+  end
+
+  it "puts no form inside another form on the campaign link editor" do
+    link = create(:campaign_link, site: site)
+
+    get edit_site_campaign_link_path(site, link.campaign, link)
+
+    expect(nested_form_depth_exceeded?(response.body)).to be(false),
+                                                          "a <form> is nested inside another <form>"
+    assert_wired_to_delete(response.body, "Delete", site_campaign_link_path(site, link.campaign, link))
+  end
+
+  # THE CAMPAIGNS SCREEN CARRIES MORE FORMS THAN ANY OTHER PAGE HERE: the
+  # builder, and one "add a link" form per campaign already saved. They are
+  # siblings and must stay siblings — a section rendered one level too deep
+  # would put every one of them inside the builder, and the browser would
+  # silently repair it by discarding the start tags.
+  it "puts no form inside another form on the campaigns screen" do
+    campaign = create(:campaign, site: site)
+    create(:campaign_link, campaign: campaign)
+
+    get site_campaigns_path(site)
+
+    expect(response.body).to include("Add a link to this campaign")
+    expect(nested_form_depth_exceeded?(response.body)).to be(false),
+                                                          "a <form> is nested inside another <form>"
+  end
+
   it "offers nothing to delete on a new record" do
     get new_site_dashboard_path(site)
 

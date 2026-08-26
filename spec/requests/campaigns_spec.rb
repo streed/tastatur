@@ -3,11 +3,12 @@ require "rails_helper"
 # The screen is a builder and a report on one page, and the examples split the
 # same way: what it refuses to build, and what it is honest about measuring.
 #
-# It is TOP LEVEL now — /campaigns, with the site as a parameter — because
-# building a tagged link is a job somebody arrives wanting to do rather than
-# something they go looking for inside one site's dashboard. Several examples
-# below are about that move rather than about campaigns.
-RSpec.describe "Campaigns", type: :request do
+# It lives UNDER THE SITE — /sites/:token/campaigns — beside goals and funnels,
+# because a campaign is a property of a site: its tag is unique per site and its
+# links are validated against that site's own hostnames. The list across every
+# site is a separate screen with no builder on it; see
+# spec/requests/all_campaigns_spec.rb.
+RSpec.describe "A site's campaigns", type: :request do
   let(:user) { create(:user) }
   let(:account) { create(:account) }
   let(:site) { create(:site, :no_suppression, account: account, domain: "northwind.example.com") }
@@ -17,7 +18,7 @@ RSpec.describe "Campaigns", type: :request do
     sign_in user
   end
 
-  def screen(**params) = campaigns_path(site: site.public_token, **params)
+  def screen(**params) = site_campaigns_path(site, **params)
 
   # Overrides land on the CAMPAIGN by default and on its one link under `link:`,
   # because the two halves now fail for different reasons and the examples need
@@ -32,63 +33,36 @@ RSpec.describe "Campaigns", type: :request do
   end
 
   describe "reaching it" do
-    # THE POINT OF THE MOVE. It is in the application header, beside Sites, on
-    # every signed-in screen — not the sixth of nine small buttons on one site's
-    # dashboard, which is where it used to be and which meant choosing a site
-    # before you could start.
-    it "is in the application navigation, from anywhere" do
-      sign_in_as("owner")
-
-      get account_path
-
-      expect(response.body).to include(">Campaigns<")
-      expect(response.body).to include(campaigns_path)
-    end
-
-    it "is reachable with no site chosen, and picks one" do
-      sign_in_as("owner")
-      site # the account has one, which is what "picks one" is about
-
-      get campaigns_path
-
-      expect(response).to have_http_status(:ok)
-      expect(response.body).to include(site.domain)
-    end
-
-    # An account with no sites cannot build a link at all — the destination is
-    # validated against the sites this instance measures — so the screen says
-    # which step is missing rather than rendering a builder that would refuse
-    # everything typed into it.
-    it "explains itself to an account with no sites" do
-      create(:membership, account: account, user: user, role: "owner")
-      sign_in user
-
-      get campaigns_path
-
-      expect(response).to have_http_status(:ok)
-      expect(response.body).to include("Add a site first")
-    end
-
-    # The dashboard's Campaigns panel still crosses over, carrying the site, so
-    # somebody reading a campaign row is one click from building the next link.
-    it "is linked from the dashboard's campaign panel with the site selected" do
+    # THE POINT OF THE MOVE BACK UNDER THE SITE. It is one of this site's
+    # screens, in the row beside Goals and Funnels, so reading what a campaign
+    # did and then looking at anything else about the site is one click rather
+    # than picking the site again.
+    it "is on the site's own header, beside its other reports" do
       sign_in_as("owner")
 
       get site_path(site)
 
-      expect(response.body).to include(ERB::Util.html_escape(campaigns_path(site: site.public_token)))
+      expect(response.body).to include(ERB::Util.html_escape(site_campaigns_path(site)))
     end
 
-    # Refused rather than quietly falling back to a site that IS yours. A
-    # fallback would mean a request addressed to somebody else's site succeeding
-    # against one of your own — harmless on a GET and not harmless on the POST
-    # that shares this resolution.
+    # The dashboard's Campaigns panel crosses over too, so somebody reading a
+    # campaign row is one click from building the next link.
+    it "is linked from the dashboard's campaign panel" do
+      sign_in_as("owner")
+
+      get site_path(site)
+
+      expect(response.body).to include("Build a link")
+    end
+
+    # The tenant boundary is SiteScoped's now, not a second copy of it living in
+    # CampaignScreen — which is the whole reason the screen moved into the
+    # /sites tree rather than keeping a `?site=` parameter.
     it "refuses a site token belonging to another account" do
       sign_in_as("owner")
-      site
       other = create(:site)
 
-      expect { get campaigns_path(site: other.public_token) }.not_to raise_error
+      expect { get site_campaigns_path(other) }.not_to raise_error
       expect(response).to have_http_status(:not_found)
     end
   end
@@ -180,18 +154,17 @@ RSpec.describe "Campaigns", type: :request do
     before { sign_in_as("owner") }
 
     it "saves a link and returns to the report" do
-      expect { post campaigns_path(site: site.public_token), params: valid_params }
+      expect { post site_campaigns_path(site), params: valid_params }
         .to change(CampaignLink, :count).by(1)
 
-      expect(response).to redirect_to(campaigns_path(site: site.public_token,
-                                                     created: Campaign.last.public_id))
+      expect(response).to redirect_to(site_campaigns_path(site, created: Campaign.last.public_id))
     end
 
     # The failure this whole screen exists to prevent: a link that saves
     # cleanly, is sent to a mailing list, and reports nothing forever because
     # Ingest::PathScrubber discards a token-shaped value on arrival.
     it "refuses a value the scrubber would discard, and says why" do
-      post campaigns_path(site: site.public_token), params: valid_params(utm_campaign: "c" * 30)
+      post site_campaigns_path(site), params: valid_params(utm_campaign: "c" * 30)
 
       expect(response).to have_http_status(:unprocessable_entity)
       expect(response.body).to include("discarded on arrival")
@@ -199,7 +172,7 @@ RSpec.describe "Campaigns", type: :request do
     end
 
     it "refuses a destination this site does not measure" do
-      post campaigns_path(site: site.public_token),
+      post site_campaigns_path(site),
            params: valid_params(link: { destination_url: "https://elsewhere.example.org/" })
 
       expect(response).to have_http_status(:unprocessable_entity)
@@ -211,7 +184,7 @@ RSpec.describe "Campaigns", type: :request do
     it "re-renders the whole screen on failure, not a bare form" do
       create(:campaign_link, site: site, name: "Existing link")
 
-      post campaigns_path(site: site.public_token), params: valid_params(utm_campaign: "d" * 30)
+      post site_campaigns_path(site), params: valid_params(utm_campaign: "d" * 30)
 
       expect(response.body).to include("Existing link")
     end
@@ -219,7 +192,7 @@ RSpec.describe "Campaigns", type: :request do
     it "refuses a member of another account" do
       other = create(:site)
 
-      post campaigns_path(site: other.public_token), params: valid_params
+      post site_campaigns_path(other), params: valid_params
 
       expect(response).to have_http_status(:not_found)
     end
@@ -231,7 +204,7 @@ RSpec.describe "Campaigns", type: :request do
     it "renders the same builder, and says what changing a tag does" do
       link = create(:campaign_link, site: site)
 
-      get edit_campaign_link_path(link.campaign, link)
+      get edit_site_campaign_link_path(site, link.campaign, link)
 
       expect(response).to have_http_status(:ok)
       expect(response.body).to include("re-points this link")
@@ -242,7 +215,7 @@ RSpec.describe "Campaigns", type: :request do
     it "is not reachable by primary key" do
       link = create(:campaign_link, site: site)
 
-      get "/sites/#{site.public_token}/campaigns/#{link.id}/edit"
+      get "/sites/#{site.public_token}/campaigns/#{link.campaign.public_id}/links/#{link.id}/edit"
 
       expect(response).to have_http_status(:not_found)
     end
@@ -254,7 +227,7 @@ RSpec.describe "Campaigns", type: :request do
     it "saves a changed tag" do
       link = create(:campaign_link, site: site)
 
-      patch campaign_link_path(link.campaign, link),
+      patch site_campaign_link_path(site, link.campaign, link),
             params: { campaign_link: { utm_source: "discord" } }
 
       expect(link.reload.utm_source).to eq("discord")
@@ -267,7 +240,7 @@ RSpec.describe "Campaigns", type: :request do
     it "removes the link and says the traffic is still counted" do
       link = create(:campaign_link, site: site)
 
-      delete campaign_link_path(link.campaign, link)
+      delete site_campaign_link_path(site, link.campaign, link)
 
       expect(CampaignLink.exists?(link.id)).to be(false)
       follow_redirect!
@@ -327,7 +300,7 @@ RSpec.describe "Campaigns", type: :request do
     end
 
     it "adds it, tagged with the campaign's own value rather than one it was given" do
-      expect { post campaign_links_path(campaign), params: link_params }
+      expect { post site_campaign_links_path(site, campaign), params: link_params }
         .to change(CampaignLink, :count).by(1)
 
       expect(CampaignLink.last.utm_campaign).to eq("august")
@@ -338,13 +311,13 @@ RSpec.describe "Campaigns", type: :request do
     # on every save regardless. Two independent reasons a posted tag cannot take
     # a link out of the group it is displayed under.
     it "ignores a utm_campaign posted alongside it" do
-      post campaign_links_path(campaign), params: link_params(utm_campaign: "somewhere-else")
+      post site_campaign_links_path(site, campaign), params: link_params(utm_campaign: "somewhere-else")
 
       expect(CampaignLink.last.utm_campaign).to eq("august")
     end
 
     it "re-renders the whole screen on failure, with the campaign still on it" do
-      post campaign_links_path(campaign),
+      post site_campaign_links_path(site, campaign),
            params: link_params(destination_url: "https://elsewhere.example.org/")
 
       expect(response).to have_http_status(:unprocessable_entity)
@@ -355,7 +328,7 @@ RSpec.describe "Campaigns", type: :request do
     it "refuses a campaign belonging to another account" do
       other = create(:campaign)
 
-      expect { post campaign_links_path(other), params: link_params }.not_to raise_error
+      expect { post site_campaign_links_path(other.site, other), params: link_params }.not_to raise_error
       expect(response).to have_http_status(:not_found)
       expect(CampaignLink.where(campaign: other)).to be_empty
     end
@@ -365,7 +338,7 @@ RSpec.describe "Campaigns", type: :request do
       create(:membership, account: account, user: viewer, role: "viewer")
       sign_in viewer
 
-      post campaign_links_path(campaign), params: link_params
+      post site_campaign_links_path(site, campaign), params: link_params
 
       expect(CampaignLink.count).to be_zero
     end
@@ -378,13 +351,13 @@ RSpec.describe "Campaigns", type: :request do
 
     # §10: nothing routable is addressed by its primary key.
     it "is not reachable by primary key" do
-      get "/campaigns/#{campaign.id}/edit"
+      get "/sites/#{site.public_token}/campaigns/#{campaign.id}/edit"
 
       expect(response).to have_http_status(:not_found)
     end
 
     it "says what changing the tag does before it is changed" do
-      get edit_campaign_path(campaign)
+      get edit_site_campaign_path(site, campaign)
 
       expect(response.body).to include("re-points every link")
     end
@@ -393,7 +366,7 @@ RSpec.describe "Campaigns", type: :request do
     it "re-points its links when the tag is renamed" do
       link = create(:campaign_link, campaign: campaign)
 
-      patch campaign_path(campaign), params: { campaign: { utm_campaign: "september" } }
+      patch site_campaign_path(site, campaign), params: { campaign: { utm_campaign: "september" } }
 
       expect(link.reload.utm_campaign).to eq("september")
     end
@@ -401,7 +374,7 @@ RSpec.describe "Campaigns", type: :request do
     it "takes its links with it when deleted, and says the traffic is still counted" do
       create(:campaign_link, campaign: campaign)
 
-      expect { delete campaign_path(campaign) }.to change(CampaignLink, :count).by(-1)
+      expect { delete site_campaign_path(site, campaign) }.to change(CampaignLink, :count).by(-1)
 
       follow_redirect!
       expect(response.body).to include("still counted")

@@ -15,7 +15,7 @@
     nesting the controller inside itself is about the funnel form, where a step
     holds alternatives — nothing here does that.) -%>
 <%= form_with model: campaign,
-              url: campaign.persisted? ? campaign_path(campaign) : campaigns_path(site: campaign.site.public_token),
+              url: campaign.persisted? ? site_campaign_path(campaign.site, campaign) : site_campaigns_path(campaign.site),
               class: "space-y-6",
               data: { analytics_event: ("Campaign Created" unless campaign.persisted?) } do |f| %>
   <%= f.error_summary %>
@@ -38,8 +38,8 @@
         the campaign exists, so this form stops at the heading. Two places to
         edit one list is how the two get out of step. -%>
     <%= f.actions "Save campaign",
-                  cancel_to: campaigns_path(site: campaign.site.public_token),
-                  destroy_to: campaign_path(campaign),
+                  cancel_to: site_campaigns_path(campaign.site),
+                  destroy_to: site_campaign_path(campaign.site, campaign),
                   destroy_confirm: "Delete this campaign and its links? The visits they already " \
                                    "brought stay counted — they move to the list of campaigns not built here." %>
   <% else %>
@@ -56,7 +56,7 @@
 
       <div class="card-body space-y-6 divide-y divide-rule" data-nested-form-target="rows">
         <%= f.fields_for :campaign_links do |link| %>
-          <%= render "campaign_links/fields", f: link, tag: campaign.utm_campaign %>
+          <%= render "sites/campaign_links/fields", f: link, tag: campaign.utm_campaign %>
         <% end %>
       </div>
 
@@ -67,14 +67,14 @@
         <%= f.fields_for :campaign_links,
                          CampaignLink.new(destination_url: "https://#{campaign.site.domain}/"),
                          child_index: "NEW_RECORD" do |link| %>
-          <%= render "campaign_links/fields", f: link, tag: campaign.utm_campaign %>
+          <%= render "sites/campaign_links/fields", f: link, tag: campaign.utm_campaign %>
         <% end %>
       </template>
 
       <%# Once for the whole form, outside the <template> above: every row's
           pickers read this one payload by id. -%>
       <div class="px-5 pb-4">
-        <%= render "campaigns/values_payload", campaign_values: campaign_values %>
+        <%= render "sites/campaigns/values_payload", campaign_values: campaign_values %>
       </div>
 
       <div class="px-5 py-4 border-t border-rule flex items-center justify-between gap-4">
@@ -91,6 +91,6 @@
       </div>
     </div>
 
-    <%= f.actions "Create campaign", cancel_to: campaigns_path(site: campaign.site.public_token) %>
+    <%= f.actions "Create campaign", cancel_to: site_campaigns_path(campaign.site) %>
   <% end %>
 <% end %>

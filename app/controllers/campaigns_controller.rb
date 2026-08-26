@@ -1,89 +1,92 @@
-# Build a tagged link, and see what the ones you already built did.
+# Every campaign on every site you can read, with what it has done lately.
 #
-# A CAMPAIGN IS A NAME AND A TAG; the links under it are how it was distributed
-# — the Discord post, the Facebook ad, the newsletter. That grouping is the
-# point of the screen: the numbers people actually want are "what did the launch
-# do" and "which channel carried it", and before this existed the product could
-# answer only the second, one flat row per link.
+# A LIST, NOT A BUILDER. This screen used to be the builder as well, with the
+# site as a `?site=` parameter and a switcher on it; the builder moved under the
+# site it builds for (Sites::CampaignsController) and what stayed behind is the
+# thing the application header is actually useful for — the answer to "what is
+# running, and is any of it working", across an account whose campaigns are
+# otherwise one site's dashboard at a time.
 #
-# TOP LEVEL rather than under /sites/:token, for the reason routes.rb gives: this
-# is a job somebody arrives wanting to do. The site is a parameter, switched on
-# the screen, and never a roll-up across sites — a preset period resolves against
-# one site's timezone, so adding three sites' "last 30 days" together is three
-# different windows in a trench coat.
+# WHAT IT MAY NOT DO. Nothing here is rolled up across sites, and there is no
+# grand total on the page. Analytics::Period resolves a preset against ONE
+# site's timezone, so "last 30 days" across sites in Berlin, Kolkata and UTC is
+# three different windows, and adding them would be the sites index's period
+# switcher — the one this codebase refuses to build — wearing a different hat.
+# A preset is resolved once per site and each row is measured in its own site's
+# window, which is the identical figure that site's own screen shows. That is
+# also why the rows are grouped BY SITE rather than mixed into one table: the
+# window is a property of the group, so it is stated on the group.
 class CampaignsController < ApplicationController
-  include CampaignScreen
-
-  before_action :set_campaign, only: %i[edit update destroy]
+  # A period is a preset here and never a custom range. A custom range is two
+  # absolute dates, which is a coherent thing to ask ONE site for and an
+  # ambiguous thing to ask several — `Period#custom_range` resolves those dates
+  # in the site's own zone, so the boundaries would silently differ per row with
+  # nothing on screen admitting it. The presets say "last 30 days" and mean it
+  # per site, which is a claim the page can make honestly.
+  #
+  # There is no "all time" either, which the sites index does offer: that one
+  # reads events_by_hour, and the aggregates carry no UTM columns (§8), so an
+  # unbounded campaign total would be a scan of every chunk on the instance.
+  PERIODS = %w[7d 30d 90d 12mo].freeze
 
   def index
-    # `sites` is the policy_scope call verify_policy_scoped checks for, and it
-    # is also the switcher's options — one query doing both, so a site that
-    # cannot be read cannot be switched to either.
-    return render :no_sites, status: :ok if sites.empty?
+    # `policy_scope` twice, on two models, because the page needs both and each
+    # answers a different question: which sites this viewer may see at all, and
+    # which campaigns. The two agree — both resolve through the account — and
+    # the sites list is what turns an empty account into an explanation rather
+    # than a blank page.
+    @sites = policy_scope(Site).ordered.to_a
+    @campaigns = policy_scope(Campaign).includes(:site, :campaign_links).to_a
 
-    load_screen
-  end
+    @period_key = requested_period_key
+    @periods = @sites.index_with { |site| Analytics::Period.parse(@period_key, site: site) }
+    @performance = Analytics::CampaignPerformance.call(periods: periods_worth_querying).value!
 
-  def create
-    @campaign = current_site.campaigns.new(campaign_params)
-    authorize @campaign
-
-    if @campaign.save
-      redirect_to campaigns_path(site: current_site.public_token, created: @campaign.public_id),
-                  notice: "Campaign created."
-    else
-      # The invalid campaign goes back into the screen as the open form, so the
-      # links somebody typed alongside it are still there. Rebuilding a blank
-      # one would throw away four filled-in rows to report one bad tag.
-      load_screen(form: @campaign)
-      render :index, status: :unprocessable_entity
-    end
-  end
-
-  def edit
-    authorize @campaign
-  end
-
-  def update
-    authorize @campaign
-
-    # Renaming the tag re-points every link under it: CampaignLink copies the
-    # value on every save, so the links follow in one place rather than each
-    # holding an opinion. What it does NOT do is move history — the events keep
-    # the values they arrived with, which is what the form says out loud.
-    if @campaign.update(campaign_params)
-      redirect_to campaigns_path(site: @campaign.site.public_token),
-                  notice: "Campaign updated."
-    else
-      render :edit, status: :unprocessable_entity
-    end
-  end
-
-  # The campaign and its links stop being listed; nothing they measured is
-  # affected. The events keep their UTM values, so the traffic simply moves into
-  # "Campaigns not built here" — which the confirmation says, because "delete"
-  # next to a table of numbers reads like deleting the numbers.
-  def destroy
-    authorize @campaign
-    site = @campaign.site
-    @campaign.destroy!
-
-    redirect_to campaigns_path(site: site.public_token),
-                notice: "Campaign deleted. Its traffic is still counted."
+    @sections = sections
   end
 
   private
 
-  def set_campaign
-    @campaign = policy_scope(Campaign).find_by_public_id!(params[:public_id])
+  def requested_period_key
+    PERIODS.include?(params[:period]) ? params[:period] : Analytics::Period::DEFAULT
   end
 
-  def campaign_params
-    params.expect(campaign: [
-      :name, :utm_campaign,
-      { campaign_links_attributes: [%i[id name destination_url utm_source utm_medium
-                                       utm_term utm_content _destroy]] }
-    ])
+  # Only sites that actually have a campaign. Every site in the hash is another
+  # window OR'd into the WHERE clause and another slice of the events
+  # hypertable, and a site with nothing built for it has no row to hang the
+  # answer off anyway.
+  def periods_worth_querying
+    with_campaigns = @campaigns.map(&:site_id).to_set
+
+    @periods.select { |site, _| with_campaigns.include?(site.id) }
+  end
+
+  # One group per site that has campaigns, each already carrying its own window
+  # and its own rows, so the view never pairs a campaign with a figure itself
+  # and cannot pair it two ways in two places.
+  Section = Struct.new(:site, :period, :rows, keyword_init: true)
+
+  # A campaign and its figure. `total` is nil both when nothing arrived and when
+  # what arrived fell under the site's k-anonymity threshold — see
+  # Analytics::CampaignPerformance for why the two are deliberately
+  # indistinguishable here.
+  Row = Struct.new(:campaign, :total, keyword_init: true)
+
+  def sections
+    @campaigns.group_by(&:site).sort_by { |site, _| site.domain }.map do |site, campaigns|
+      Section.new(site: site, period: @periods.fetch(site), rows: rows_for(campaigns))
+    end
+  end
+
+  # BUSIEST FIRST, WITHIN A SITE AND NEVER ACROSS ONE. Ordering by visitors is
+  # not the same sin as adding them up — a comparison inside one site's window
+  # is exactly the comparison that site's own screen makes — but it stops at the
+  # group boundary, which is the other reason the sections are per site.
+  # Campaigns with no figure sort last and then by recency: a campaign built
+  # this morning has no traffic yet and belongs above one from March that never
+  # got any.
+  def rows_for(campaigns)
+    campaigns.map { |campaign| Row.new(campaign: campaign, total: @performance.for_campaign(campaign)) }
+             .sort_by { |row| [row.total ? 0 : 1, -row.total&.visitors.to_i, -row.campaign.created_at.to_i] }
   end
 end

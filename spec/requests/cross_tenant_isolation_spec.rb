@@ -110,19 +110,21 @@ RSpec.describe "Cross-tenant isolation", type: :request do
     end
   end
 
-  # THE ONE THAT IS NOT NESTED. Campaigns are top level with the site as a
-  # parameter (§12), so the tenant check lives in CampaignScreen#current_site
-  # rather than in SiteScoped — a second implementation of the same rule, which
-  # is exactly the kind that drifts.
-  describe "campaigns, where the site is a query parameter" do
-    it "404s a site token that is not ours rather than falling back to ours" do
-      expect_not_found(:get, "/campaigns?site=#{their_site.public_token}")
+  # Campaigns went through a spell at the top level with the site as a `?site=`
+  # parameter, which meant CampaignScreen resolved the tenant itself — a second
+  # implementation of the rule SiteScoped already had, and exactly the kind that
+  # drifts. They are nested now and these examples are here to keep them that
+  # way: if any of them ever passes for the wrong reason, the screen has grown a
+  # second way of deciding whose site it is looking at.
+  describe "campaigns, nested under the site like everything else" do
+    it "404s another account's campaigns screen" do
+      expect_not_found(:get, "/sites/#{their_site.public_token}/campaigns")
     end
 
     it "will not create a campaign against another site" do
       expect {
-        post "/campaigns", params: { site: their_site.public_token,
-                                     campaign: { name: "Theirs", utm_campaign: "theirs" } }
+        post "/sites/#{their_site.public_token}/campaigns",
+             params: { campaign: { name: "Theirs", utm_campaign: "theirs" } }
       }.not_to change(Campaign, :count)
 
       expect(response).to have_http_status(:not_found)
@@ -130,10 +132,24 @@ RSpec.describe "Cross-tenant isolation", type: :request do
 
     it "will not edit another account's campaign" do
       campaign = create(:campaign, site: their_site)
+      path = "/sites/#{their_site.public_token}/campaigns/#{campaign.public_id}"
 
-      expect_not_found(:get, "/campaigns/#{campaign.public_id}/edit")
-      expect_not_found(:delete, "/campaigns/#{campaign.public_id}")
+      expect_not_found(:get, "#{path}/edit")
+      expect_not_found(:delete, path)
       expect(Campaign.exists?(campaign.id)).to be(true)
+    end
+
+    # THE ONE THAT IS NOT NESTED — the list across every site, which takes no
+    # site parameter at all and therefore has nothing to be pointed at. It has
+    # to be scoped by what it SELECTS instead, which is CampaignPolicy::Scope.
+    it "does not list another account's campaigns on the all-sites screen" do
+      create(:campaign, site: their_site, name: "Their launch")
+
+      get "/campaigns"
+
+      expect(response).to have_http_status(:ok)
+      expect(response.body).not_to include("Their launch")
+      expect(response.body).not_to include(their_site.domain)
     end
   end
 

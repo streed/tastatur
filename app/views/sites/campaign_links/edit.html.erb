@@ -12,13 +12,13 @@
     </p>
   </div>
 
-  <%= form_with model: @link, url: campaign_link_path(@campaign, @link), class: "card card-body space-y-6" do |f| %>
+  <%= form_with model: @link, url: site_campaign_link_path(@site, @campaign, @link), class: "card card-body space-y-6" do |f| %>
     <%= f.error_summary %>
-    <%= render "campaign_links/fields", f: f, tag: @campaign.utm_campaign %>
-    <%= render "campaigns/values_payload", campaign_values: campaign_values %>
+    <%= render "sites/campaign_links/fields", f: f, tag: @campaign.utm_campaign %>
+    <%= render "sites/campaigns/values_payload", campaign_values: campaign_values %>
     <%= f.actions "Save link",
-                  cancel_to: campaigns_path(site: @campaign.site.public_token),
-                  destroy_to: campaign_link_path(@campaign, @link),
+                  cancel_to: site_campaigns_path(@site),
+                  destroy_to: site_campaign_link_path(@site, @campaign, @link),
                   destroy_confirm: "Delete this link? The visits it already brought stay counted — " \
                                    "it moves to the list of campaigns not built here." %>
   <% end %>

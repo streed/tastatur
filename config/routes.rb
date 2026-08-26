@@ -58,36 +58,50 @@ Rails.application.routes.draw do
 
   # --- Application ----------------------------------------------------------
 
-  # TOP LEVEL, NOT NESTED UNDER A SITE, and that is a navigation decision as
-  # much as a routing one. Building a tagged link is a job somebody arrives
-  # wanting to do — they are looking at a post they are about to publish, not at
-  # a dashboard — so it is reachable from the application header beside Sites
-  # rather than after picking a site and finding the sixth button in a row of
-  # nine. The site is a parameter of the screen (`?site=`), chosen by a switcher
-  # on it, which is also why there is no all-sites roll-up: Analytics::Period
-  # resolves a preset against ONE site's timezone, so "last 30 days" across
-  # three sites is three different windows added together. The same reason the
-  # sites index totals are all-time.
+  # TWO SCREENS, AND ONLY THIS ONE IS TOP LEVEL. It is a list and nothing else:
+  # every campaign on every site you can read, each with what it has done
+  # lately. No builder and no `?site=` — the row is the way in, and it goes to
+  # the site's own campaigns screen, nested under /sites below.
   #
-  # The builder and the report stay on one screen, because they are one job: the
-  # value the builder writes is the string the report matches on months later.
-  #
-  # No `new` or `show` — the form is on the index (there is nothing to scroll
-  # past on an empty site) and a single campaign has nothing to say that its
-  # section does not.
-  resources :campaigns, only: %i[index create edit update destroy], param: :public_id do
-    # Nested, because a link without a campaign has no tag and therefore no way
-    # to be measured. `links` in the path rather than `campaign_links`: the
-    # segment already sits under /campaigns/:id.
-    resources :links, only: %i[create edit update destroy],
-                      param: :public_id, controller: "campaign_links"
-  end
+  # WHAT IT MAY AND MAY NOT DO WITH A PERIOD. The rule is that nothing may be
+  # rolled UP across sites: Analytics::Period resolves a preset against ONE
+  # site's timezone, so adding three sites' "last 30 days" together is three
+  # different windows in a trench coat. Nothing is added here. A preset is
+  # resolved once per site and every row is measured in its own site's window —
+  # the same figure that site's own screen shows — so the page carries no
+  # cross-site total at all, which is what keeps it honest.
+  resources :campaigns, only: %i[index]
 
   resources :sites, param: :public_token do
     scope module: :sites do
       resource :installation, only: %i[show]
       resources :goals, except: %i[show]
       resources :funnels
+
+      # NESTED UNDER THE SITE, beside the goals and funnels it belongs with. It
+      # was top level for a while, with the site as a `?site=` parameter and a
+      # switcher on the screen: that put the builder one click from anywhere and
+      # everything else about the campaign two, because reading what it did
+      # meant finding the site again. A campaign IS a property of a site — its
+      # tag is unique per site, and its links are validated against that site's
+      # own hostnames — so the site belongs in the path, and the screen inherits
+      # SiteScoped's tenant check instead of carrying a second implementation of
+      # the same rule.
+      #
+      # The builder and the report stay on one screen, because they are one job:
+      # the value the builder writes is the string the report matches on months
+      # later.
+      #
+      # No `new` or `show` — the form is on the index (there is nothing to
+      # scroll past on an empty site) and a single campaign has nothing to say
+      # that its section does not.
+      resources :campaigns, only: %i[index create edit update destroy], param: :public_id do
+        # Nested again, because a link without a campaign has no tag and
+        # therefore no way to be measured. `links` in the path rather than
+        # `campaign_links`: the segment already sits under /campaigns/:id.
+        resources :links, only: %i[create edit update destroy],
+                          param: :public_id, controller: "campaign_links"
+      end
 
       # Where visitors go from a page. A GET with no resource behind it, like
       # `attribution` below: the walked path is the whole state and it lives in

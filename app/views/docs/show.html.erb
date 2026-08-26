@@ -313,7 +313,7 @@
             rather than saving a link that would report nothing.</p>
         </div>
         <% if @example_site %>
-          <%= link_to "Build a link for #{@example_site.domain}", campaigns_path(site: @example_site.public_token), class: "btn btn-sm" %>
+          <%= link_to "Build a link for #{@example_site.domain}", site_campaigns_path(@example_site), class: "btn btn-sm" %>
         <% end %>
       <% end %>
 

@@ -28,7 +28,7 @@
         authenticated screen, and `_top` because the dashboard is a turbo-frame
         the campaigns page has no matching frame for. -%>
     <% if dimension == "utm_campaign" && drillable %>
-      <%= link_to "Build a link", campaigns_path(site: site.public_token), class: "label hover:text-ink",
+      <%= link_to "Build a link", site_campaigns_path(site), class: "label hover:text-ink",
                   data: { turbo_frame: "_top", analytics_event: "Campaigns Opened" } %>
     <% else %>
       <span class="label">Visitors</span>

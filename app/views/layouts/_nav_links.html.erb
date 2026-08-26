@@ -3,16 +3,16 @@
     where `hidden sm:flex` used to leave no navigation at all. One partial so
     the two can never drift. %>
 <%= link_to "Sites", sites_path, class: "btn btn-quiet btn-sm" %>
-<%# TOP LEVEL, beside Sites. Building a tagged link is a job somebody arrives
-    wanting to do — they are looking at the post they are about to publish, not
-    at a dashboard — and it used to be the sixth of nine small buttons on one
-    site's header, reachable only after choosing that site. The screen takes the
-    site as a parameter and switches it itself.
+<%# BESIDE SITES, and it is a list rather than a screen you do work on: every
+    campaign on every site you can read, with what each has done lately. The
+    builder lives under the site it builds for, because a campaign's tag is
+    unique per site and its links are validated against that site's hostnames —
+    so a row here is the way in to the site's own campaigns screen.
 
-    No policy guard: the screen is readable by anyone who can read a site's
-    stats, it scopes to what they can see, and an account with no sites gets a
-    page that says to add one. A guard here would be a second opinion about that
-    and would hide the explanation along with the link. -%>
+    No policy guard: it is readable by anyone who can read a site's stats, it
+    scopes to what they can see, and an account with no sites gets a page that
+    says to add one. A guard here would be a second opinion about that and would
+    hide the explanation along with the link. -%>
 <%= link_to "Campaigns", campaigns_path, class: "btn btn-quiet btn-sm" %>
 <%= link_to "Account", account_path, class: "btn btn-quiet btn-sm" %>
 <%# Hidden unless billing is switched on AND configured: an operator

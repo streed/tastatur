@@ -41,7 +41,7 @@
       <% end %>
 
       <% if policy(campaign).update? %>
-        <%= link_to "Edit", edit_campaign_path(campaign), class: "btn btn-quiet btn-sm" %>
+        <%= link_to "Edit", edit_site_campaign_path(campaign.site, campaign), class: "btn btn-quiet btn-sm" %>
       <% end %>
     </div>
   </div>
@@ -86,7 +86,7 @@
                     data-analytics-event="Campaign Link Copied">
               <span data-clipboard-target="label">Copy</span>
             </button>
-            <%= link_to "Edit", edit_campaign_link_path(campaign, link), class: "btn btn-quiet btn-sm" %>
+            <%= link_to "Edit", edit_site_campaign_link_path(campaign.site, campaign, link), class: "btn btn-quiet btn-sm" %>
           </span>
         </span>
       </div>
@@ -106,11 +106,11 @@
       <summary class="px-5 py-3 text-sm cursor-pointer hover:bg-surface-2">Add a link to this campaign</summary>
       <div class="px-5 pb-5">
         <%= form_with model: @open_link&.campaign_id == campaign.id ? @open_link : CampaignLink.new(campaign: campaign, destination_url: "https://#{campaign.site.domain}/"),
-                      url: campaign_links_path(campaign), class: "space-y-6",
+                      url: site_campaign_links_path(campaign.site, campaign), class: "space-y-6",
                       data: { analytics_event: "Campaign Link Added",
                               analytics_props: '{"context":"section"}' } do |f| %>
           <%= f.error_summary %>
-          <%= render "campaign_links/fields", f: f, tag: campaign.utm_campaign %>
+          <%= render "sites/campaign_links/fields", f: f, tag: campaign.utm_campaign %>
           <%= f.submit "Add link", class: "btn btn-primary" %>
         <% end %>
       </div>
