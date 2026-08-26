@@ -19,8 +19,14 @@ RSpec.describe "Picking a goal or funnel step value", type: :request do
   end
 
   # The one <script type="application/json"> the pickers read, as parsed JSON.
+  #
+  # Selected by id rather than by an exact attribute string. Which attributes
+  # that tag carries and in what order is Rails' business — it grew a `nonce`
+  # when the Content-Security-Policy arrived — and a regex that pins the whole
+  # opening tag turns any such addition into six failures that say
+  # "undefined method '[]' for nil" and point at nothing.
   def payload
-    tag = response.body[%r{<script type="application/json" id="known-values">(.*?)</script>}m, 1]
+    tag = response.body[%r{<script[^>]*\bid="known-values"[^>]*>(.*?)</script>}m, 1]
     tag ? JSON.parse(tag) : nil
   end
 

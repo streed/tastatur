@@ -1,4 +1,6 @@
 class AccountsController < ApplicationController
+  include OffersAssignableRoles
+
   before_action :set_account
 
   def show

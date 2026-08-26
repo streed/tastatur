@@ -110,6 +110,11 @@ module TwoFactor
 
       user.remember_me = true if remember_me
       sign_in(:user, user)
+      # See Users::SessionsController#stamp_session_activity. The
+      # `devise.skip_trackable` flag that request set also suppressed
+      # :timeoutable's `last_request_at`, so the idle clock has to be started
+      # here or it starts a request late.
+      warden.session(:user)["last_request_at"] = Time.now.utc.to_i
 
       trust_this_device(user) if @challenge.trust_device
 

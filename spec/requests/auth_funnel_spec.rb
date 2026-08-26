@@ -30,7 +30,7 @@ RSpec.describe "Auth funnel instrumentation", type: :request do
   # because that is what a browser does, and because the very first request a
   # process serves does not authenticate — leave it out and an example run on its
   # own fails while the same example passes in a full run.
-  def sign_in_through_the_form(user, password: "password")
+  def sign_in_through_the_form(user, password: "flint-marrow-cadence")
     get "/users/sign_in"
     post "/users/sign_in", params: { user: { email: user.email, password: password } }
     follow_redirects

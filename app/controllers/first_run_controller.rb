@@ -28,6 +28,14 @@ class FirstRunController < ApplicationController
     in Success(user)
       sign_in(user)
       redirect_to sites_path, notice: "Welcome to Tastatur. Install the snippet to start collecting."
+    in Failure(:already_set_up)
+      # Somebody else finished setup between this form being opened and being
+      # submitted. `ensure_available` cannot catch that — it runs a request
+      # earlier — so the service re-checks under a lock and this is what it says
+      # when it loses. Deliberately not an error: the instance is set up, which
+      # is the outcome the person wanted, and the sign-in form is where they go.
+      redirect_to new_user_session_path,
+                  notice: "This instance has already been set up. Sign in to continue."
     in Failure(user:, site:)
       @user = user
       @site = site

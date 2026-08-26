@@ -118,6 +118,10 @@ module SeoHelper
     data = Seo::BuildStructuredData.call(page: page, url_options: url_options).value!
     json = ERB::Util.json_escape(JSON.generate(data.to_json_ld))
 
-    tag.script(json.html_safe, type: "application/ld+json")
+    # Nonced like every other inline script element. A JSON-LD block is not
+    # executed, but script-src is applied to <script> ELEMENTS rather than to
+    # what they happen to contain, and browsers differ on whether a non-JS type
+    # is exempt. A nonce costs nothing and removes the question.
+    tag.script(json.html_safe, type: "application/ld+json", nonce: content_security_policy_nonce)
   end
 end

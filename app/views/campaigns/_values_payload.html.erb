@@ -8,4 +8,5 @@
     rest into the document as markup. -%>
 <%= tag.script json_escape(campaign_values.payload.to_json).html_safe,
                type: "application/json",
-               id: "campaign-values" %>
+               id: "campaign-values",
+               nonce: content_security_policy_nonce %>

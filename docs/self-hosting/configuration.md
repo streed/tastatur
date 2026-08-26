@@ -230,6 +230,92 @@ config.action_dispatch.trusted_proxies =
 
 Do **not** add a wide public range. Anything you trust can set its own address.
 
+## Security hardening
+
+All optional. Each has a default that is right for most installs; these are the
+levers for a deployment that wants a different answer.
+
+| Variable | Default | What it does |
+|---|---|---|
+| `ADDITIONAL_HOSTS` | — | Extra hostnames this instance answers to, comma separated |
+| `CSP_ENFORCE` | `0` | Enforce the Content-Security-Policy rather than only reporting |
+| `SESSION_TIMEOUT_HOURS` | `48` | Idle timeout before somebody has to sign in again |
+| `COMMON_PASSWORD_LIST` | bundled | Path to a larger list of passwords to refuse |
+| `API_CORS_ORIGINS` | — | Browser origins allowed to call `/api/v1/*` |
+
+### Which hosts the app answers to
+
+`APP_HOST` is the allowlist. Anything else gets a 403, apart from
+`*.railway.internal` and `/up`, which is excluded so a platform health check
+still works on a first deploy.
+
+This matters because `/docs` and the compliance pages build their canonical and
+Open Graph URLs from the host that was actually asked for — deliberately, so
+your install publishes **your** domain rather than ours. With no allowlist, "the
+host that was asked for" is whatever a stranger types.
+
+If `APP_HOST` is unset the allowlist is empty and host checking is off. That is
+on purpose: an instance nobody can reach cannot be finished setting up, and a
+first deploy is the worst moment to be locked out. The app already logs an error
+at boot for a missing `APP_HOST`.
+
+Serving the same install under more than one name? List the rest in
+`ADDITIONAL_HOSTS`.
+
+### Content-Security-Policy
+
+A policy is always sent. `CSP_ENFORCE` decides whether the browser acts on it or
+only reports what it would have blocked.
+
+**Leave it off for the first run.** Watch your logs for a few days, then turn it
+on. A CSP that blocks something real is indistinguishable, from a visitor's
+side, from the application being broken — and the evidence lands in a console
+you never see.
+
+If you have customised templates, the directive most likely to bite is
+`script-src`, which admits no inline script without a nonce.
+
+### Passwords
+
+Twelve characters minimum, plus a refusal list. The bundled
+`config/common_passwords.txt` holds only the few hundred entries at the top of
+every published breach corpus — the ones a credential-stuffing run tries first,
+which no rate limit can defend against because the attacker already has the
+password.
+
+For real coverage, point `COMMON_PASSWORD_LIST` at a bigger file — SecLists'
+`10-million-password-list-top-100000` is the usual choice. Format is one
+password per line; `#` comments and blank lines are ignored. A path that cannot
+be read logs a warning and disables the check rather than preventing anybody
+from registering.
+
+Nothing is sent anywhere. The obvious alternative is an online breach API, and
+it is a request made at the moment somebody types a password telling a third
+party that an account here uses a password in a particular bucket. A file read
+also keeps working when somebody else's API is down, which matters most during
+the incident that makes everyone change their password at once.
+
+Existing passwords are not invalidated — the rules apply when a password is
+set, so a shorter one keeps working until it is changed.
+
+### Sessions
+
+`SESSION_TIMEOUT_HOURS` is an idle timeout: each request extends it. Remember-me
+is capped at two weeks and, by design, outlives the idle timeout — Devise
+re-authenticates from the cookie without showing a form. Signing out anywhere
+ends every remembered session.
+
+### CORS
+
+`/api/event` and `/api/pixel` allow any origin, deliberately: the site token is
+public by construction, so an allowlist protects nothing and breaks staging
+domains, proxies, AMP caches and iframes. `CORS_ORIGINS` narrows those two if
+you want it.
+
+`/api/v1/*` is different. It is authenticated by an API key and its caller is
+your own server, so it has no CORS grant unless you set `API_CORS_ORIGINS`. A
+literal `*` there is refused rather than honoured.
+
 ## Per-site and per-account settings
 
 Some things are deliberately not environment variables, because they are

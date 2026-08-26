@@ -58,9 +58,19 @@ class SharedDashboardsController < ApplicationController
       session[unlock_key] = true
       redirect_to shared_dashboard_path(@shared_link.slug)
     else
-      # A deliberate, constant-ish delay: this is an unauthenticated password
-      # endpoint, and Rack::Attack throttles it too.
-      sleep 0.5
+      # NO SLEEP HERE, AND THE ONE THAT USED TO BE HERE WAS COUNTERPRODUCTIVE.
+      #
+      # It was a `sleep 0.5` meant as a constant-ish delay. But
+      # `authenticate_password` is bcrypt, which already spends far longer than
+      # that and already spends it evenly — so the sleep bought no timing
+      # property that was not already there, and it bought it by parking a Puma
+      # thread. On an unauthenticated endpoint anyone can reach, half a second
+      # of held thread per wrong guess is a lever pointed at the server rather
+      # than at the attacker.
+      #
+      # Rack::Attack is the control, and its key is now (slug, client) rather
+      # than the slug alone — see the note there for why the slug alone let one
+      # attacker lock the real audience out of somebody's dashboard.
       redirect_to shared_dashboard_path(@shared_link.slug), alert: "Incorrect password."
     end
   end

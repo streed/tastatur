@@ -41,13 +41,41 @@ class Rack::Attack
 
   THROTTLE_SECRET = Rails.application.secret_key_base
 
-  def self.client_key(request)
-    OpenSSL::HMAC.digest("SHA256", THROTTLE_SECRET, request.ip.to_s)
+  # A truncated keyed digest. Twelve bytes is far more than enough to keep two
+  # clients apart for the length of a throttle window, and holding less of the
+  # digest means holding less of anything.
+  def self.hashed(value)
+    OpenSSL::HMAC.digest("SHA256", THROTTLE_SECRET, value.to_s)
                  .byteslice(0, 12)
                  .unpack1("H*")
   end
 
+  def self.client_key(request)
+    hashed(request.ip)
+  end
+
   INGEST_PATHS = %w[/api/event /api/pixel].freeze
+
+  # The authenticated server-to-server API. A prefix rather than a list, because
+  # this one IS versioned and a v2 must not silently arrive unthrottled.
+  API_PATH_PREFIX = %r{\A/api/v\d+/}
+
+  # The non-secret, indexed half of a presented API key: `tk_<prefix>_<secret>`.
+  #
+  # Deliberately does NOT authenticate — that is the controller's job and it
+  # costs a bcrypt comparison. Middleware only needs something stable to count
+  # against, and the prefix is stable, public within the token, and useless on
+  # its own. The secret is never touched.
+  def self.api_key_prefix(request)
+    header = request.get_header("HTTP_AUTHORIZATION").to_s
+    token = header.start_with?("Bearer ") ? header.delete_prefix("Bearer ").strip : nil
+    token = request.get_header("HTTP_X_API_KEY").to_s if token.blank?
+
+    parts = token.to_s.split("_", 3)
+    return nil unless parts.length == 3 && parts.first == "tk" && parts[1].present?
+
+    hashed(parts[1])
+  end
 
   # The site token from a query parameter or a JSON body.
   #
@@ -164,15 +192,62 @@ class Rack::Attack
   UNTHROTTLED_PATHS = (INGEST_PATHS + %w[/billing/stripe/webhook /stripe/connect/webhook]).freeze
 
   throttle("req/client", limit: 300, period: 5.minutes) do |req|
-    client_key(req) unless UNTHROTTLED_PATHS.include?(req.path)
+    client_key(req) unless UNTHROTTLED_PATHS.include?(req.path) || API_PATH_PREFIX.match?(req.path)
+  end
+
+  # --- The authenticated API ------------------------------------------------
+  #
+  # EXEMPT FROM THE RULE ABOVE AND GIVEN ITS OWN, because the browser limit was
+  # aimed at the wrong thing entirely. `req/client` keys on the caller's
+  # address, and every identify call from one customer arrives from that
+  # customer's SERVER — one address carrying every signup they have. 300 per
+  # five minutes is a generous allowance for a person clicking around and a
+  # painfully tight one for an application, so a customer with real signup
+  # volume would start collecting 429s on the endpoint the whole revenue
+  # feature rests on.
+  #
+  # §18 already explains why that is worse than it sounds: identify is
+  # first-touch and write-once, so a call that never lands does not retry itself
+  # into place later. It produces a customer attributed to nothing, and a
+  # channel report that is confidently wrong months afterwards with no way to
+  # tell it from a bad quarter.
+  #
+  # KEYED ON THE API KEY'S PREFIX, not the address. The prefix is the
+  # non-secret, indexed half of the token (see ApiKey), so it identifies the
+  # caller exactly without the secret going anywhere near Redis, and it is the
+  # right bucket besides: two customers behind one NAT get their own budgets,
+  # and one customer moving hosts keeps theirs. A request with no usable key
+  # falls back to the client, so an unauthenticated flood is still bounded.
+  throttle("api/key", limit: 3_000, period: 1.minute) do |req|
+    next unless API_PATH_PREFIX.match?(req.path)
+
+    prefix = api_key_prefix(req)
+    prefix ? "key:#{prefix}" : "anon:#{client_key(req)}"
   end
 
   throttle("logins/client", limit: 5, period: 20.seconds) do |req|
     client_key(req) if req.path == "/users/sign_in" && req.post?
   end
 
+  # Keyed on the address, so five guesses against one account cannot be spread
+  # across five networks — and HASHED, like every other key in this file.
+  #
+  # It used to write the address verbatim. That is the one thing the header of
+  # this file says not to do, one line down from the rule: Rack::Attack counters
+  # live in Redis, the rest of the codebase goes to real trouble never to put an
+  # identifier there, and an email address is a stronger identifier than the IP
+  # this file already refuses to store. Hashing changes nothing about how the
+  # throttle behaves — the same address produces the same key — and stops the
+  # plaintext being written.
   throttle("logins/email", limit: 5, period: 20.seconds) do |req|
-    req.params.dig("user", "email")&.downcase&.strip if req.path == "/users/sign_in" && req.post?
+    next unless req.path == "/users/sign_in" && req.post?
+
+    email = begin
+      req.params.dig("user", "email")
+    rescue StandardError
+      nil
+    end
+    hashed(email.to_s.downcase.strip) if email.present?
   end
 
   # --- The second factor ---------------------------------------------------
@@ -241,9 +316,32 @@ class Rack::Attack
   end
 
   # Password-protected shared dashboards are an unauthenticated password form,
-  # so they need their own brute-force limit — keyed on the slug as well, so
-  # attacking one link does not lock out another.
-  throttle("share_unlock/slug", limit: 10, period: 5.minutes) do |req|
+  # so they need their own brute-force limit.
+  #
+  # KEYED ON THE SLUG **AND** THE CLIENT, and the client half was missing. On
+  # the slug alone, ten wrong guesses from anybody exhausted the budget for
+  # everybody — so a stranger who had been sent one link could spend ten
+  # requests and lock its actual audience out for five minutes, repeatedly, for
+  # nothing. That is a denial-of-service handed out by the control meant to
+  # prevent one, and it is worse here than on a sign-in form because the people
+  # locked out have no account, no support route and no way to tell a wrong
+  # password from an attack.
+  #
+  # Keeping the slug in the key is still right: it stops one client working
+  # through several links on one budget. Ten guesses per client per link, over a
+  # bcrypt comparison, is not a keyspace anybody walks.
+  throttle("share_unlock/slug_client", limit: 10, period: 5.minutes) do |req|
+    next unless req.post?
+
+    slug = req.path[%r{\A/share/([^/]+)/unlock\z}, 1]
+    "#{slug}:#{client_key(req)}" if slug
+  end
+
+  # The per-link ceiling the rule above used to be, kept as a circuit breaker
+  # rather than as the brute-force control. Generous enough that a shared link
+  # in genuine use is never near it, tight enough that a distributed attempt on
+  # ONE link — which the per-client rule cannot see — still runs out.
+  throttle("share_unlock/slug", limit: 120, period: 5.minutes) do |req|
     req.path[%r{\A/share/([^/]+)/unlock\z}, 1] if req.post?
   end
 

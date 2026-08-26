@@ -93,7 +93,7 @@ RSpec.describe Account do
       # collides on the unique email index and blocks rather than failing usefully.
       twelve = Array.new(12) do
         User.create!(email: "member-#{SecureRandom.hex(6)}@example.test",
-                     password: "password", confirmed_at: Time.current)
+                     password: "flint-marrow-cadence", confirmed_at: Time.current)
       end
 
       expect { twelve.each { |user| Membership.create!(account: account, user: user) } }

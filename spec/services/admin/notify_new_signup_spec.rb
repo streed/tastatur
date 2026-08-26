@@ -60,7 +60,7 @@ RSpec.describe Admin::NotifyNewSignup, type: :request do
     it "is enqueued when somebody registers" do
       expect do
         post user_registration_path, params: {
-          user: { email: "signup@example.com", password: "password123", name: "New Person" }
+          user: { email: "signup@example.com", password: "thicket lantern gravel", name: "New Person" }
         }
       end.to have_enqueued_job(NotifyAdminsOfSignupJob)
     end

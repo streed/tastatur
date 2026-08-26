@@ -1,7 +1,7 @@
 require "rails_helper"
 
 RSpec.describe "Account", type: :request do
-  let(:user) { create(:user, name: "Original Name", password: "password") }
+  let(:user) { create(:user, name: "Original Name", password: "flint-marrow-cadence") }
   let(:account) { create(:account, name: "Acme") }
 
   before do
@@ -39,7 +39,7 @@ RSpec.describe "Account", type: :request do
         email: user.email,
         password: "a-much-longer-password",
         password_confirmation: "a-much-longer-password",
-        current_password: "password"
+        current_password: "flint-marrow-cadence"
       } }
 
       expect(response).to redirect_to(account_path)
@@ -57,7 +57,7 @@ RSpec.describe "Account", type: :request do
 
       expect(response).to have_http_status(:unprocessable_content)
       expect(user.reload.valid_password?("a-much-longer-password")).to be(false)
-      expect(user.valid_password?("password")).to be(true)
+      expect(user.valid_password?("flint-marrow-cadence")).to be(true)
     end
 
     it "refuses an email change without the current password" do
@@ -70,7 +70,7 @@ RSpec.describe "Account", type: :request do
     it "requires re-confirmation for a new email rather than switching immediately" do
       original = user.email
 
-      put "/users", params: { user: { email: "new@example.test", current_password: "password" } }
+      put "/users", params: { user: { email: "new@example.test", current_password: "flint-marrow-cadence" } }
 
       user.reload
       expect(user.email).to eq(original), "the signed-in address must not change until confirmed"
@@ -82,11 +82,11 @@ RSpec.describe "Account", type: :request do
         email: user.email,
         password: "a-much-longer-password",
         password_confirmation: "something-else",
-        current_password: "password"
+        current_password: "flint-marrow-cadence"
       } }
 
       expect(response).to have_http_status(:unprocessable_content)
-      expect(user.reload.valid_password?("password")).to be(true)
+      expect(user.reload.valid_password?("flint-marrow-cadence")).to be(true)
     end
   end
 end

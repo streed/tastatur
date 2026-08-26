@@ -1,7 +1,10 @@
 FactoryBot.define do
   factory :user do
     sequence(:email) { |n| "user#{n}@example.test" }
-    password { "password" }
+    # NOT "password", which the deny list refuses by design — see
+    # Passwords::DenyList. A factory default that had to be exempted from the
+    # password policy would mean the policy was never exercised by the suite.
+    password { "flint-marrow-cadence" }
     sequence(:name) { |n| "Test User #{n}" }
 
     # Devise's :confirmable module blocks sign-in until the address is

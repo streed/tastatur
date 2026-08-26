@@ -133,12 +133,50 @@ Rails.application.configure do
   # Only use :id for inspections in production.
   config.active_record.attributes_for_inspect = [ :id ]
 
-  # Enable DNS rebinding protection and other `Host` header attacks.
-  # config.hosts = [
-  #   "example.com",     # Allow requests from example.com
-  #   /.*\.example\.com/ # Allow requests from subdomains like `www.example.com`
-  # ]
+  # --- Host authorization ---------------------------------------------------
   #
-  # Skip DNS rebinding protection for the default health check endpoint.
-  # config.host_authorization = { exclude: ->(request) { request.path == "/up" } }
+  # This block used to be the generated comment, so the application answered to
+  # any Host header at all. That matters here because SeoHelper#canonical_url and
+  # the social-image URL are built from `request.base_url` — deliberately, so a
+  # self-hosted install publishes its OWN domain rather than advertising ours
+  # (the same reasoning CrawlersController gives about `Sitemap:`). With no
+  # allowlist, "the host that was actually asked for" is whatever a stranger
+  # types, so /docs and the four compliance pages could be made to name someone
+  # else's domain as their canonical. That is a search- and cache-poisoning
+  # primitive, and it also makes DNS rebinding against the origin URL cheap.
+  #
+  # Keeping `request.base_url` and constraining the Host is the right way round.
+  # Hard-coding APP_HOST into the canonical would work for us and quietly break
+  # the operator running behind two names, and it would leave every future
+  # `request.host` reader exposed all over again.
+  #
+  # ONLY WHEN APP_HOST IS SET, and that condition is load-bearing rather than
+  # defensive. An instance with no APP_HOST is already misconfigured and already
+  # says so at boot (config/initializers/required_env.rb) — but it is reachable,
+  # which is what lets somebody finish setting it up. Turning host authorization
+  # on with nothing to authorize against would answer 403 to every request
+  # including the operator's, and the only way back would be a shell on the box.
+  # A first deploy is the worst possible moment to be locked out.
+  #
+  # ADDITIONAL_HOSTS covers the deployment served under more than one name — an
+  # apex and a www, a legacy domain still being redirected, a staging alias.
+  # `.railway.internal` is always trusted because it is not routable from the
+  # internet and is how a platform's own private networking addresses the
+  # service.
+  # The port is stripped: host authorization compares the Host header's HOST,
+  # and an entry of "example.com:3000" would never match a request for
+  # "example.com". APP_HOST carries a port on a local production-mode boot and
+  # that is the one place this would otherwise lock the door on itself.
+  app_host = ENV["APP_HOST"].to_s.split("/").first.to_s.split(":").first.presence
+  extra_hosts = ENV.fetch("ADDITIONAL_HOSTS", "").split(",").map(&:strip).reject(&:blank?)
+
+  config.hosts = app_host ? [app_host, ".railway.internal", *extra_hosts] : []
+
+  # The health check is excluded for the same reason it is excluded from the SSL
+  # redirect a few lines up: a platform probes the container directly, with
+  # whatever Host its own plumbing uses, and a 403 there means the deploy never
+  # goes healthy. That is the chicken-and-egg
+  # ApplicationController#redirect_to_first_run_setup already documents, in a
+  # form that would be even harder to diagnose.
+  config.host_authorization = { exclude: ->(request) { request.path == "/up" } }
 end

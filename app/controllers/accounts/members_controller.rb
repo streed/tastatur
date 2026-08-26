@@ -1,5 +1,7 @@
 module Accounts
   class MembersController < ApplicationController
+    include OffersAssignableRoles
+
     before_action :set_account
 
     def index
@@ -9,7 +11,11 @@ module Accounts
     def create
       authorize Membership.new(account: @account), :create?
 
-      @invitation = MemberInvitation.new(invitation_params)
+      # `assignable_roles` comes from the policy rather than from the form, so
+      # an invitation naming a role above the inviter's own is refused here even
+      # though the <select> never offered it. The form filters; the policy
+      # decides. See MembershipPolicy#assignable_roles.
+      @invitation = MemberInvitation.new(invitation_params.merge(assignable_roles: assignable_roles))
       return render_account_with_errors unless @invitation.valid?
 
       case Accounts::InviteMember.call(
@@ -32,6 +38,12 @@ module Accounts
     def update
       membership = policy_scope(Membership).find_by_public_id!(params[:id])
       authorize membership
+
+      # THE SECOND HALF OF THE GUARD. `authorize` has established that this row
+      # may be touched at all; this establishes what it may be set to. Without
+      # it an admin PATCHes themselves to owner and inherits billing — see
+      # MembershipPolicy#update? for the whole of that.
+      return refuse_role(membership) unless policy(membership).may_assign?(params[:role])
 
       if membership.update(role: params[:role])
         redirect_to account_path, notice: "Role updated."
@@ -63,6 +75,17 @@ module Accounts
 
     def invitation_params
       params.expect(invitation: %i[email role])
+    end
+
+    # Deliberately says what the limit is rather than "you do not have access to
+    # that". An admin who tried to appoint an owner has made a reasonable
+    # request that this account's rules refuse, and telling them which rule it
+    # was is what stops them retrying it.
+    def refuse_role(membership)
+      redirect_to account_path,
+                  alert: "You can only give somebody a role at or below your own, " \
+                         "and only an owner can appoint another owner."
+      membership
     end
 
     # Re-renders the account page with the invite form's errors intact, rather

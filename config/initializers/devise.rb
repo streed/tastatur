@@ -210,6 +210,23 @@ Devise.setup do |config|
   # Invalidates all the remember me tokens when the user signs out.
   config.expire_all_remember_me_on_sign_out = true
 
+  # --- How long a session lasts ---------------------------------------------
+  #
+  # An IDLE timeout: two days without a request and the next one lands on the
+  # sign-in form. Long enough that nobody is signing in twice a day, short
+  # enough that a session left on a machine somebody else can reach does not
+  # stay useful indefinitely. Overridable, because a self-hosted instance on a
+  # laptop and a hosted one used by a team have honestly different answers.
+  #
+  # REMEMBER-ME IS CUT AT THE SAME TIME AND THE PAIRING IS THE POINT. Devise
+  # re-authenticates a timed-out session from the remember-me cookie without
+  # showing anybody a form, so a two-day timeout under a default remember_for
+  # would be a two-day timeout that never fires. Two weeks is the outer bound on
+  # "stay signed in", and `expire_all_remember_me_on_sign_out` above means
+  # signing out anywhere ends it.
+  config.timeout_in = ENV.fetch("SESSION_TIMEOUT_HOURS", "48").to_i.hours
+  config.remember_for = 2.weeks
+
   # If true, extends the user's remember period when remembered via cookie.
   # config.extend_remember_period = false
 
@@ -225,7 +242,18 @@ Devise.setup do |config|
   # The maximum stays high on purpose: bcrypt truncates at 72 bytes, so anything
   # past that adds nothing, but rejecting a long passphrase teaches people that
   # long passwords are unwelcome, which is the opposite of useful.
-  config.password_length = 8..128
+  # TWELVE, NOT EIGHT. Eight characters of anything a person can remember is
+  # inside reach of an offline attack on a stolen digest, and bcrypt at cost 12
+  # buys time rather than immunity. Twelve is the length at which a passphrase
+  # becomes the obvious thing to type, which is the behaviour this is really
+  # trying to produce — see User#password_is_not_easily_guessed and
+  # Passwords::DenyList for the half that length alone cannot do.
+  #
+  # Existing passwords are NOT invalidated: :validatable runs only when a
+  # password is being set, so somebody with a shorter one keeps signing in until
+  # they change it. Forcing a reset on everybody would be a security email that
+  # looks exactly like a phishing email.
+  config.password_length = 12..128
 
   # Email regex used to validate email formats. It simply asserts that
   # one (and only one) @ exists in the given string. This is mainly

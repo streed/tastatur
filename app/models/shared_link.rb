@@ -15,6 +15,7 @@ class SharedLink < ApplicationRecord
   validates :name, presence: true, uniqueness: { scope: :site_id }, length: { maximum: 120 }
   validates :slug, presence: true, uniqueness: true, length: { is: SLUG_LENGTH }
   validate :dashboard_belongs_to_same_site, if: -> { dashboard_id.present? }
+  validate :named_dashboard_was_found
 
   before_validation :assign_slug, on: :create
 
@@ -32,12 +33,32 @@ class SharedLink < ApplicationRecord
   # as every routed identifier (see PubliclyIdentified). Same-site enforcement
   # lives in the validation rather than the setter, so assignment order cannot
   # matter.
+  #
+  # THE ATTEMPTED VALUE IS KEPT, and that is what closes a fail-open. The setter
+  # resolves a public_id to a Dashboard or to nil, and nil is not an error
+  # condition here — a NULL dashboard_id is the ordinary way of saying "the
+  # default dashboard", which is the whole site. So an id that resolved to
+  # nothing (a typo, a stale id, a dashboard deleted since the form was opened,
+  # an id copied from another account) used to save cleanly as a link to
+  # EVERYTHING, when what was asked for was a link to one curated dashboard.
+  #
+  # Nothing on the screen said so. The failure direction is the wrong way round
+  # for the highest-risk surface in the application: this link goes to people
+  # with no account at all, and the mistake widens what they see rather than
+  # narrowing it. Compare the deliberate decision one line up — when a dashboard
+  # is deleted its links are destroyed rather than re-pointed at the default,
+  # explicitly so an already-distributed URL cannot grow.
+  #
+  # So the raw value is remembered and `named_dashboard_was_found` refuses the
+  # save. "Nothing was named" and "something was named and is not there" become
+  # different answers, which is the distinction that was missing.
   def dashboard_public_id
-    dashboard&.public_id
+    @dashboard_public_id.presence || dashboard&.public_id
   end
 
   def dashboard_public_id=(value)
-    self.dashboard = value.present? ? Dashboard.find_by(public_id: value) : nil
+    @dashboard_public_id = value.is_a?(String) ? value.strip.presence : nil
+    self.dashboard = @dashboard_public_id ? Dashboard.find_by(public_id: @dashboard_public_id) : nil
   end
 
   def record_view!
@@ -62,5 +83,15 @@ class SharedLink < ApplicationRecord
     return if dashboard.site_id == site_id
 
     errors.add(:base, "The dashboard must be one of this site's own dashboards.")
+  end
+
+  # A dashboard was named and could not be found. See dashboard_public_id= for
+  # why this is an error rather than a silent fall back to the default.
+  def named_dashboard_was_found
+    return if @dashboard_public_id.blank?
+    return if dashboard.present?
+
+    errors.add(:base, "That dashboard no longer exists. Pick one from the list, or share the " \
+                      "whole site's default dashboard instead.")
   end
 end

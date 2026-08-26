@@ -209,6 +209,33 @@ module Tastatur
     ENV.fetch("INGEST_URL") { "#{base_url}/api/event" }
   end
 
+  # Extra origins the Content-Security-Policy must admit as script sources.
+  #
+  # Exactly one thing needs this: the self-measurement snippet in the
+  # application layout loads `tracker_url`, which is our own /t.js on a default
+  # install and can be a CDN when the operator sets TRACKER_URL. `:self` covers
+  # the first and not the second, so a deployment that moved its tracker to a
+  # CDN would have its own measurement quietly blocked by its own policy — the
+  # kind of breakage that shows up as "the numbers stopped" weeks later.
+  #
+  # Returns an origin (scheme + host + port), never a path: a CSP source with a
+  # path restricts to that exact file, and the tracker's filename is not
+  # something this method should have an opinion about.
+  #
+  # Lives here rather than in the CSP initializer because that file must not
+  # grow a second copy of how the tracker URL is derived. Initializers load
+  # alphabetically, so `content_security_policy.rb` runs BEFORE this file — it
+  # therefore reads this through a lambda, which Rails resolves per request.
+  def self.csp_script_origins
+    origin = URI.parse(tracker_url)
+    return [] if origin.host.blank?
+
+    candidate = "#{origin.scheme}://#{origin.host}#{":#{origin.port}" unless origin.default_port == origin.port}"
+    candidate == base_url ? [] : [candidate]
+  rescue URI::InvalidURIError
+    []
+  end
+
   # The site key this instance reports ITS OWN usage to, if any.
   #
   # Unset by default, and that default is the point. A self-hosted install must

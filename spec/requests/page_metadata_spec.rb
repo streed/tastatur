@@ -129,7 +129,10 @@ RSpec.describe "Page metadata", type: :request do
     # call sites rather than of the renderer — see SeoHelper#structured_data_tag.
     it "escapes angle brackets so the block cannot be closed early" do
       get "/docs"
-      raw = response.body[%r{<script type="application/ld\+json">(.*?)</script>}m, 1]
+      # Matched on the type attribute alone, wherever it sits in the tag: the
+      # block also carries a CSP nonce now, and pinning the exact opening tag
+      # would fail on the next attribute too.
+      raw = response.body[%r{<script[^>]*type="application/ld\+json"[^>]*>(.*?)</script>}m, 1]
 
       expect(raw).not_to include("<")
       expect(raw).not_to include(">")

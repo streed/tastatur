@@ -18,4 +18,5 @@
     off, and this is not a decision that should be reachable from an initializer. -%>
 <%= tag.script json_escape(known_values.payload.to_json).html_safe,
                type: "application/json",
-               id: OffersKnownValues::KNOWN_VALUES_DOM_ID %>
+               id: OffersKnownValues::KNOWN_VALUES_DOM_ID,
+               nonce: content_security_policy_nonce %>

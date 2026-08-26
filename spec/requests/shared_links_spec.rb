@@ -152,5 +152,41 @@ RSpec.describe "Share links", type: :request do
 
       expect(site.shared_links.find_by!(name: "By id").dashboard).to be_nil
     end
+
+    # THE FAIL-OPEN THIS SECTION EXISTS TO PIN. A NULL dashboard_id means "the
+    # default dashboard", which is the whole site — so an id that resolved to
+    # nothing used to save as a link to EVERYTHING, silently, when what was
+    # asked for was a link to one curated dashboard. On the one surface reached
+    # by people with no account, the mistake widened what they could see.
+    describe "when the named dashboard cannot be found" do
+      it "refuses the link rather than falling back to the default dashboard" do
+        post site_shared_links_path(site),
+             params: { shared_link: { name: "Typo", dashboard_public_id: "not-a-real-public-id" } }
+
+        expect(site.shared_links.count).to be_zero
+        expect(flash[:alert]).to include("no longer exists")
+      end
+
+      it "refuses one whose dashboard was deleted between opening the form and saving" do
+        deleted = create(:dashboard, site: site, name: "Gone")
+        public_id = deleted.public_id
+        deleted.destroy!
+
+        post site_shared_links_path(site),
+             params: { shared_link: { name: "Stale", dashboard_public_id: public_id } }
+
+        expect(site.shared_links.count).to be_zero
+      end
+
+      # The distinction that was missing: nothing named is still the ordinary
+      # way to share the default dashboard, and must keep working.
+      it "still allows a link that names no dashboard at all" do
+        post site_shared_links_path(site),
+             params: { shared_link: { name: "Everything", dashboard_public_id: "" } }
+
+        link = site.shared_links.find_by!(name: "Everything")
+        expect(link.dashboard).to be_nil
+      end
+    end
   end
 end

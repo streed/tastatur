@@ -2,10 +2,21 @@ class User < ApplicationRecord
   include PubliclyIdentified
   public_identifier
 
-  # Include default devise modules. Others available are:
-  # :confirmable, :lockable, :timeoutable, :trackable and :omniauthable
+  # :timeoutable IS IN THIS LIST NOW, and its absence was the finding.
+  #
+  # Without it a session lasted until the cookie was deleted — no idle bound, no
+  # absolute lifetime, forever. That was survivable when this application held
+  # visitor counts. It holds a customer list and revenue figures now (§18), and
+  # "signed in on a laptop in a co-working space in March" should not still be
+  # true in June.
+  #
+  # ONE THING TO KNOW BEFORE READING THE TIMEOUT AS ABSOLUTE: it is an IDLE
+  # timeout, and a remember-me cookie outlives it by design — Devise
+  # re-authenticates from the cookie and the person never sees a form. That is
+  # Devise's behaviour rather than ours, and it is why `remember_for` was cut at
+  # the same time. The pair is the control; the timeout alone is half of it.
   devise :database_authenticatable, :registerable,
-         :confirmable, :lockable, :trackable,
+         :confirmable, :lockable, :trackable, :timeoutable,
          :recoverable, :rememberable, :validatable
 
   # The outstanding two-factor code, bcrypted. `validations: false` because the
@@ -23,6 +34,15 @@ class User < ApplicationRecord
   # it lets you into, and leaving orphans behind would keep a valid-looking
   # digest in the table forever.
   has_many :trusted_devices, dependent: :destroy
+
+  # Devise's :validatable already enforces presence, confirmation and
+  # `config.password_length`. This is the part length cannot express.
+  #
+  # `if: :password_required?` is Devise's own predicate, so this runs exactly
+  # when :validatable's length check runs — on sign-up, on a password change and
+  # on a reset, and never on the countless saves that touch some other column
+  # and carry no password at all.
+  validate :password_is_not_easily_guessed, if: :password_required?
 
   scope :administrators, -> { where(admin: true) }
   scope :by_recency, -> { order(created_at: :desc) }
@@ -87,5 +107,31 @@ class User < ApplicationRecord
   # NOT the same thing as being an admin of an account.
   def role_in(account)
     membership_for(account)&.role
+  end
+
+  private
+
+  # Refused for a stated reason, never "is invalid".
+  #
+  # Somebody who has just had a password rejected is about to pick another one,
+  # and the only thing that makes the second choice better than the first is
+  # knowing what was wrong with the first. "Password is invalid" produces
+  # `password1` from `password`. Each branch below therefore says which rule it
+  # is and what to do instead.
+  #
+  # Order matters a little: the personal check is last because it is the most
+  # specific and the least likely, and a password that is BOTH `password123` and
+  # contains the address should be told the ordinary thing.
+  def password_is_not_easily_guessed
+    return if password.blank?
+
+    if Passwords::DenyList.refuses?(password)
+      errors.add(:password, "is one of the most commonly used passwords, so it is one of the " \
+                            "first an attacker tries. Pick something less predictable — a few " \
+                            "unrelated words works well.")
+    elsif Passwords::DenyList.echoes?(password, self)
+      errors.add(:password, "contains your email address or name, which is the first thing " \
+                            "somebody who knows either would guess.")
+    end
   end
 end

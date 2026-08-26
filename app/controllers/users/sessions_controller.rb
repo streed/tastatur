@@ -67,18 +67,54 @@ module Users
       false
     end
 
-    # The ordinary path, plus the trackable update Devise would have done itself.
+    # The ordinary path: the trackable update Devise would have done itself, and
+    # a session that starts clean.
     #
-    # `sign_in` is called even though Warden already holds the user, exactly as
-    # Devise's own create does: when the user is already signed in it does nothing
-    # except `expire_data_after_sign_in!`, which drops stale `devise.*` keys — the
-    # redirect target a failed authentication left behind, among others.
+    # Everything read out of the session is read BEFORE the reset and put back
+    # after, which is why this reads as a sequence rather than as three lines.
+    # The order below is the whole of it.
     def complete_sign_in
+      # Read BEFORE trackable increments the counter it reads. Same ordering
+      # note as TwoFactor::ChallengesController, and the same reason.
+      first_sign_in = resource.sign_in_count.to_i.zero?
+      # CONSUMED BEFORE THE RESET, because it lives in the session. This is the
+      # page somebody was trying to reach when they were bounced to the sign-in
+      # form, and losing it would land every interrupted visit on the site list
+      # instead — a regression nobody would attribute to a security change.
+      return_to = stored_location_for(resource_name)
+
       resource.update_tracked_fields!(request)
 
+      # SESSION FIXATION, and the reason this line was missing is that the
+      # two-step path already had it. TwoFactor::ChallengesController resets
+      # before signing in, with a comment saying why: the identifier somebody
+      # held while they were nobody must not be the one they hold once they are
+      # somebody. Every user WITHOUT a second factor came through here, where
+      # nothing reset anything. Two sign-in paths that disagree about a
+      # hardening step is how one of them stays wrong.
+      reset_session
+
+      # AFTER the reset, not before. `reset_session` clears the flash too, so a
+      # message set first is a message thrown away.
       set_flash_message!(:notice, :signed_in)
-      sign_in(resource_name, resource)
-      respond_with resource, location: after_sign_in_path_for(resource)
+
+      # `force: true` IS LOAD-BEARING AND ITS ABSENCE IS SILENT. Warden holds
+      # the authenticated user in memory on the proxy, not in the session, so it
+      # survives `reset_session` — and Devise's `sign_in` short-circuits to "no
+      # work needed" when warden already has this user, writing NOTHING back to
+      # the freshly emptied session. The result is a request that answers 302 to
+      # the dashboard and a browser holding no session at all: correct password,
+      # cheerful redirect, straight back to the sign-in form, with nothing
+      # logged. Forcing it re-stores the user into the new session.
+      sign_in(resource_name, resource, force: true)
+      stamp_session_activity
+
+      # Re-recorded, because the Warden hook wrote it into the session the reset
+      # just discarded — exactly as the challenge controller re-records it after
+      # its own reset. See SelfMeasurement.
+      SelfMeasurement.record(session, "Signed In", first_sign_in: first_sign_in)
+
+      respond_with resource, location: return_to || after_sign_in_path_for(resource)
     end
 
     # Undo the sign-in, then leave behind only the marker.
@@ -120,6 +156,24 @@ module Users
       in Failure(reason)
         Rails.logger.warn("[tastatur] could not issue a two-factor code: #{reason.inspect}")
       end
+    end
+
+    # THE THIRD SIDE EFFECT `devise.skip_trackable` SUPPRESSES, and it is not
+    # trackable's.
+    #
+    # Devise's :timeoutable hook stores `last_request_at` in the warden session
+    # — and stores it inside `unless env['devise.skip_trackable']`, sharing the
+    # flag this controller sets for an entirely different reason. So the request
+    # that signs somebody in leaves no `last_request_at` at all, `timedout?(nil)`
+    # is false, and the idle clock does not start until the SECOND authenticated
+    # request. A session abandoned immediately after sign-in would never expire.
+    #
+    # Stamped explicitly here for exactly the reason trackable is re-run
+    # explicitly: the flag buys us control over when these happen, and control
+    # means doing them, not skipping them. Same in
+    # TwoFactor::ChallengesController, which signs people in by the other route.
+    def stamp_session_activity
+      warden.session(:user)["last_request_at"] = Time.now.utc.to_i
     end
 
     def remember_me_requested?

@@ -2,7 +2,7 @@
 #
 # THESE MUST NEVER RUN IN PRODUCTION.
 #
-# They create admin@example.com / password with admin = true, and this is an
+# They create admin@example.com / tastatur-dev-login with admin = true, and this is an
 # open-source project, so those credentials are public knowledge. `bin/rails
 # db:prepare` seeds a database it has just created, and `bin/docker-entrypoint`
 # runs `db:prepare` on boot — so every fresh production deployment used to come up
@@ -46,14 +46,24 @@ def upsert_user!(email:, password:, name:, admin: false)
 end
 
 puts "Seeding users..."
-upsert_user!(email: "admin@example.com", password: "password", name: "Admin User", admin: true)
-upsert_user!(email: "user@example.com",  password: "password", name: "Regular User")
+# NOT "password" any more, and not because somebody was being fussy: it is on
+# config/common_passwords.txt, so `User` now refuses it (see
+# Passwords::DenyList) and `save!` here would raise on a fresh database. Seeds
+# that had to opt out of the application's own password policy would be seeds
+# that prove it does not apply to anybody.
+#
+# One value, shared by every seeded account, still printed in the output below
+# and still documented in CLAUDE.md. These users exist only in development.
+SEED_PASSWORD = ENV.fetch("SEED_PASSWORD", "tastatur-dev-login")
+
+upsert_user!(email: "admin@example.com", password: SEED_PASSWORD, name: "Admin User", admin: true)
+upsert_user!(email: "user@example.com",  password: SEED_PASSWORD, name: "Regular User")
 
 if Rails.env.development?
   5.times do
     upsert_user!(
       email: Faker::Internet.unique.email,
-      password: "password",
+      password: SEED_PASSWORD,
       name: Faker::Name.name
     )
   end

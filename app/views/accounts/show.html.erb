@@ -65,8 +65,12 @@
           <div class="grid sm:grid-cols-3 gap-4">
             <%= f.field :email, "Invite by email", as: :email_field,
                         placeholder: "colleague@example.com", wrapper: "sm:col-span-2" %>
+            <%# Only the roles this inviter can actually grant — an admin is not
+                offered Owner. The list comes from MembershipPolicy, which the
+                controller re-checks the posted value against, so the form and
+                the refusal cannot come to disagree. -%>
             <%= f.field :role, "Role", as: :select,
-                        choices: Membership::ROLES.map { |r| [r.capitalize, r] } %>
+                        choices: assignable_roles.map { |r| [r.capitalize, r] } %>
           </div>
 
           <div class="flex items-center gap-3">
