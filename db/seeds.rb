@@ -33,6 +33,12 @@ end
 
 require "faker"
 
+# `in Success(...) / in Failure(...)` below needs the constants in scope.
+# ApplicationController includes this for every controller; a seeds script is
+# not one, and without it the pattern match fails with "uninitialized constant
+# Success" at the point the first account is provisioned.
+include Dry::Monads[:result]
+
 def upsert_user!(email:, password:, name:, admin: false)
   user = User.find_or_initialize_by(email: email)
   user.password = password
@@ -59,8 +65,20 @@ SEED_PASSWORD = ENV.fetch("SEED_PASSWORD", "tastatur-dev-login")
 upsert_user!(email: "admin@example.com", password: SEED_PASSWORD, name: "Admin User", admin: true)
 upsert_user!(email: "user@example.com",  password: SEED_PASSWORD, name: "Regular User")
 
+# TOPS UP TO FIVE rather than adding five, which is what the promise at the top
+# of this file requires. `Faker::Internet.unique.email` returns an address that
+# has not been seen before, so `upsert_user!` never matched an existing row and
+# every `db:seed` grew the table by five — a file headed "Idempotent seeds. Safe
+# to run multiple times" that was not, in the one block where nobody would look.
+#
+# Counted by subtracting the two named accounts rather than by tagging the
+# generated ones: a tag would be a column, and this is scenery.
+FAKER_USER_TARGET = 5
+
 if Rails.env.development?
-  5.times do
+  existing = User.where.not(email: %w[admin@example.com user@example.com]).count
+
+  [FAKER_USER_TARGET - existing, 0].max.times do
     upsert_user!(
       email: Faker::Internet.unique.email,
       password: SEED_PASSWORD,
@@ -69,4 +87,49 @@ if Rails.env.development?
   end
 end
 
-puts "Done. Total users: #{User.count}"
+# --- Accounts and a site ------------------------------------------------------
+#
+# WITHOUT THIS THE SEEDED USERS CANNOT USE HALF THE APPLICATION, which was not
+# obvious until a database was rebuilt from scratch and the documented admin
+# login answered 404 on /account.
+#
+# `upsert_user!` above writes a User row and stops there. An account is created
+# by Onboarding::ProvisionAccount, which runs in Users::RegistrationsController
+# — a path seeds never take. So a seeded user has no membership,
+# `current_account` is nil, and AccountsController raises RecordNotFound.
+# Everything hanging off an account (settings, members, billing, sites, the
+# dashboard) is unreachable, and the failure reads like a bug in the app rather
+# than an omission in the fixtures.
+#
+# THE SERVICE IS CALLED RATHER THAN COPIED. Seeds that build an account and a
+# membership by hand are a second definition of what provisioning means, and it
+# is the copy that drifts — a role, a plan default or a future side effect added
+# in one place and not the other. `:already_provisioned` is the ordinary answer
+# on a re-run and is not an error, which is what keeps these seeds idempotent.
+puts "Provisioning accounts..."
+User.find_each do |user|
+  case Onboarding::ProvisionAccount.call(user: user)
+  in Success(account) then puts "  #{user.email} owns #{account.name}"
+  in Failure(:already_provisioned) then nil
+  in Failure(reason) then warn "  could not provision for #{user.email}: #{reason.inspect}"
+  end
+end
+
+# One site on the admin's account, so the dashboard, the installation snippet and
+# every screen nested under /sites/:token are reachable immediately. Found by
+# domain rather than created blindly, for the same reason as the users above.
+admin = User.find_by(email: "admin@example.com")
+if admin && (account = admin.default_account)
+  site = account.sites.find_or_initialize_by(domain: "example.com")
+
+  if site.new_record?
+    site.timezone = "Etc/UTC"
+    site.k_anonymity_threshold = 0
+    site.save!
+    puts "Seeded site example.com (#{site.public_token})"
+  else
+    puts "Site example.com already present (#{site.public_token})"
+  end
+end
+
+puts "Done. #{User.count} users, #{Account.count} accounts, #{Site.count} sites."
