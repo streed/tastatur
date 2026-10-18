@@ -458,7 +458,7 @@ GEM
       fugit (~> 1.8, >= 1.11.1)
       globalid (>= 1.0.1)
       sidekiq (>= 6.5.0)
-    simplecov (1.0.3)
+    simplecov (1.1.1)
     sshkit (1.25.1)
       base64
       logger
