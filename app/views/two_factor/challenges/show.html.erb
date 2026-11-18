@@ -15,8 +15,15 @@
     </div>
   <% end %>
 
+  <%# `turbo: false` to finish the sign-in as a real navigation, like the password
+      form that led here. A password manager decides whether to keep what it was
+      offered by watching the sign-in land somewhere; leaving the last hop as a
+      Turbo fetch means the flow that ends in a dashboard looks, from outside,
+      like it never went anywhere. Nothing is lost by it — "Two Factor Submitted"
+      is annotated on the BUTTON and counted on the click, not from
+      `turbo:submit-end`. See devise/shared/_auth_card. -%>
   <%= form_with model: @challenge, scope: :two_factor_challenge, url: two_factor_challenge_path,
-                class: "card card-body space-y-5" do |f| %>
+                class: "card card-body space-y-5", data: { turbo: false } do |f| %>
     <%= f.error_summary %>
 
     <%# inputmode/autocomplete are what make this bearable on a phone: the numeric

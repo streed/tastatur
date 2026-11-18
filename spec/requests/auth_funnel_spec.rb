@@ -5,12 +5,22 @@ require "rails_helper"
 # account created, signed in.
 #
 # The first two steps are pageviews and need nothing here. The rest are events,
-# and the last of them cannot be observed by the page at all — a sign-in that
-# worked and one that did not are the same submitted form, and the page that
-# renders afterwards is a redirect target that knows nothing about how anyone
-# arrived at it. So the server records it and the next page carries it, which is
-# a wire with two ends and no type checking between them; these examples are what
-# holds the two ends together.
+# and the ones that report an OUTCOME cannot be observed by the page at all — a
+# sign-in that worked and one that did not are the same submitted form, and the
+# page that renders afterwards is a redirect target that knows nothing about how
+# anyone arrived at it. So the server records those and the next page carries
+# them, which is a wire with two ends and no type checking between them; these
+# examples are what holds the two ends together.
+#
+# THAT SET GREW FROM ONE TO FOUR, and not because anyone wanted it to. "Account
+# Created", "Password Reset Completed" and "Login Details Updated" used to be
+# annotated on their forms and reported from `turbo:submit-end`, which fires only
+# when the server accepted the submission. Those three forms now opt out of Turbo
+# so password managers can see them (spec/requests/password_manager_spec.rb), and
+# `turbo:submit-end` does not fire on a form that has opted out — so each moved
+# to the controller that already knew the answer. The attempt-shaped events
+# beside them are annotated on BUTTONS and counted on the click, which is why
+# they are unaffected and still asserted in the markup below.
 RSpec.describe "Auth funnel instrumentation", type: :request do
   def annotations
     response.body.scan(/data-analytics-[a-z-]+="([^"]*)"/).flatten
@@ -45,10 +55,39 @@ RSpec.describe "Auth funnel instrumentation", type: :request do
   end
 
   describe "the screens" do
-    it "counts an attempted sign-up and an accepted one separately" do
+    # STILL TWO EVENTS, and the gap between them is still the number worth
+    # having: every attempt against the sign-ups the server accepted is how many
+    # people the form turned away, which no pageview can tell you because a
+    # rejected sign-up is a 422 re-render at the same URL. They are simply
+    # counted from two different places now — the attempt on the button, the
+    # acceptance by Users::RegistrationsController.
+    it "counts an attempted sign-up from the screen" do
       get "/users/sign_up"
 
-      expect(annotations).to include("Sign Up Submitted", "Account Created")
+      expect(annotations).to include("Sign Up Submitted")
+      expect(annotations).not_to include("Account Created"),
+                                 "an accepted sign-up is the server's to report; annotating it on " \
+                                 "the form would count the attempt twice and the acceptance never"
+    end
+
+    it "counts an accepted sign-up on the page that follows it" do
+      post "/users", params: { user: { name: "Ada", email: "ada@example.test",
+                                       password: "a-long-enough-password",
+                                       password_confirmation: "a-long-enough-password" } }
+      follow_redirects
+
+      expect(load_event).to eq("Account Created")
+    end
+
+    it "counts no sign-up the server refused" do
+      create(:user, email: "taken@example.test")
+
+      post "/users", params: { user: { name: "Ada", email: "taken@example.test",
+                                       password: "a-long-enough-password",
+                                       password_confirmation: "a-long-enough-password" } }
+
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(load_event).to be_nil
     end
 
     it "counts the sign-in attempt on the button, since the server judges the rest" do
@@ -68,13 +107,28 @@ RSpec.describe "Auth funnel instrumentation", type: :request do
       end
     end
 
+    # The far end of the reset, against "Password Reset Requested" above: how many
+    # people the emailed link actually got back in. It fires only when the token
+    # was still valid AND the new password was accepted, which is why opening the
+    # screen is not enough to count one — see Users::PasswordsController.
     it "counts the far end of a password reset, where the link actually worked" do
       user = create(:user)
       token = user.send_reset_password_instructions
 
-      get "/users/password/edit?reset_password_token=#{token}"
+      put "/users/password", params: { user: { reset_password_token: token,
+                                               password: "a-long-enough-password",
+                                               password_confirmation: "a-long-enough-password" } }
+      follow_redirects
 
-      expect(annotations).to include("Password Reset Completed")
+      expect(load_event).to eq("Password Reset Completed")
+    end
+
+    it "counts nothing for a reset link that had already expired" do
+      put "/users/password", params: { user: { reset_password_token: "stale",
+                                               password: "a-long-enough-password",
+                                               password_confirmation: "a-long-enough-password" } }
+
+      expect(load_event).to be_nil
     end
 
     it "counts a completed first-run setup" do

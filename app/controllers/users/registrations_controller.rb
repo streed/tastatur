@@ -11,6 +11,14 @@ module Users
       super do |user|
         next unless user.persisted?
 
+        # RECORDED HERE RATHER THAN ON THE FORM, for the reason the signup view
+        # gives: the form opts out of Turbo so a password manager can offer to
+        # save the password, and `turbo:submit-end` — which is what reported
+        # this — never fires again. The server is the better place for it
+        # anyway; it is the only party that knows the sign-up was accepted.
+        # Same mechanism as "Signed In". See SelfMeasurement.
+        SelfMeasurement.record(session, "Account Created")
+
         Onboarding::ProvisionAccount.call(user: user)
         # Enqueued rather than sent inline, and after the account exists so the
         # notification can name it. A mail server having a bad minute must not be
@@ -45,7 +53,15 @@ module Users
     # returns there rather than to Devise's default (the signed-in root, which
     # would bounce the user to their site list and look like the form was
     # ignored).
+    #
+    # ALSO WHERE THE UPDATE IS COUNTED, and this hook specifically because Devise
+    # calls it on the success branch and nowhere else — `update` yields the
+    # resource whether or not it saved, so a block there would count a rejected
+    # current password as a change of something. The event used to come from
+    # `turbo:submit-end` on the form itself, which no longer fires now that the
+    # form opts out of Turbo for password managers. See SelfMeasurement.
     def after_update_path_for(_resource)
+      SelfMeasurement.record(session, "Login Details Updated")
       account_path
     end
 

@@ -8,6 +8,32 @@
     challenge carries its own actions ("send a new code", "not you?") and would
     have nothing to say in that row anyway. %>
 <% show_links = local_assigns.fetch(:links, true) %>
+
+<%# EVERY AUTH SCREEN IS A REAL PAGE LOAD, and that is here for password
+    managers rather than for anything a person sees.
+
+    A manager finds the fields to offer by scanning the document when one loads.
+    Turbo Drive does not load documents — it fetches the response and swaps the
+    <body> — so arriving at the sign-in form from anywhere inside the
+    application produced no new document and no scan, and the form was never
+    offered a saved password. Measured over CDP: clicking "Forgot your password?"
+    and then "Sign in" fired two `Page.navigatedWithinDocument` events and zero
+    `Page.frameNavigated`.
+
+    `turbo-visit-control: reload` makes Turbo hand the visit back to the browser
+    instead of rendering it, so these screens always arrive as documents. The
+    cost is one full load on a page somebody sees once a month; the alternative
+    is a login form that types itself only if you got to it by pasting the URL.
+
+    The other half of the same problem is on the forms themselves — a Turbo
+    SUBMISSION is a fetch too, and a manager that never sees a navigation after a
+    password goes out never offers to save it. See the `turbo: false` on each
+    credential form, and spec/requests/password_manager_spec.rb, which pins both
+    halves. -%>
+<% content_for :head do %>
+  <meta name="turbo-visit-control" content="reload">
+<% end %>
+
 <div class="shell max-w-md py-16">
   <div class="pt-5 rule-heavy">
     <h1 class="text-2xl font-semibold mt-5"><%= title %></h1>

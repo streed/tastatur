@@ -3,16 +3,24 @@
 <%= render layout: "devise/shared/auth_card",
            locals: { title: "Create an account",
                      subtitle: "You will be measuring your first site a minute from now." } do %>
-  <%# Two annotations, because the gap between them is the number worth having.
-      The button counts every attempt; the form counts only the sign-ups the
-      server accepted, since the analytics controller reports a submission solely
-      when it succeeded. The difference is how many people the form turned away,
-      and it is the one thing a pageview of this screen cannot tell you: a failed
-      sign-up comes back as a 422 re-render at the same URL, so it never
-      produces a second pageview. %>
+  <%# Two annotations still, because the gap between them is the number worth
+      having: the button counts every attempt, and "Account Created" counts only
+      the sign-ups the server accepted. The difference is how many people the
+      form turned away, which a pageview of this screen cannot tell you — a
+      failed sign-up comes back as a 422 re-render at the same URL and never
+      produces a second pageview.
+
+      THE SECOND ONE IS NO LONGER ON THIS FORM. It used to be, and it was
+      reported from `turbo:submit-end`, which does not fire once a form opts out
+      of Turbo — and this one has to, so a password manager can offer to save the
+      password somebody just chose (see the note in devise/shared/_auth_card).
+      Leaving it here would have deleted the metric silently, which is the exact
+      failure mode this codebase keeps writing specs about. It is recorded by
+      Users::RegistrationsController instead, where the answer to "did it
+      succeed" is not a guess. -%>
   <%= form_for(resource, as: resource_name, url: registration_path(resource_name),
                html: { class: "card card-body space-y-5",
-                       data: { analytics_event: "Account Created" } }) do |f| %>
+                       data: { turbo: false } }) do |f| %>
     <%= f.error_summary %>
 
     <%= f.field :name, "Your name", autofocus: true, autocomplete: "name" %>

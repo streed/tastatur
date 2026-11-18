@@ -2,8 +2,25 @@
 
 <%= render layout: "devise/shared/auth_card",
            locals: { title: "Sign in", subtitle: "Welcome back." } do %>
+  <%# `turbo: false` SO A PASSWORD MANAGER CAN OFFER TO SAVE THE PASSWORD, which
+      is the same reason every Stripe button carries it (§12) and the same
+      mechanism: Turbo submits with `fetch` and applies the redirect with
+      pushState, so the browser never performs a navigation. A manager decides to
+      prompt by watching for a form with a password field being submitted and a
+      document load following it. Measured on the wire before this was added, the
+      POST went out as `resourceType=Fetch` and `Page.frameNavigated` never fired
+      at all — sign-in worked perfectly and nothing was ever offered to be saved.
+      With it, the same POST is a `Document` and the navigation fires.
+
+      Safe for the analytics here, and that is not luck: "Sign In Submitted" is
+      annotated on the BUTTON, so it is counted on the click (see the note below
+      and app/javascript/controllers/analytics_controller.js). The events
+      annotated on a FORM are counted from `turbo:submit-end` and would have been
+      silently deleted by this attribute — which is why the other three
+      credential forms moved theirs to the server rather than just switching
+      Turbo off. See SelfMeasurement. -%>
   <%= form_for(resource, as: resource_name, url: session_path(resource_name),
-               html: { class: "card card-body space-y-5" }) do |f| %>
+               html: { class: "card card-body space-y-5", data: { turbo: false } }) do |f| %>
     <%= f.field :email, "Email", as: :email_field, autofocus: true, autocomplete: "username" %>
     <%= f.field :password, "Password", as: :password_field, autocomplete: "current-password" %>
 

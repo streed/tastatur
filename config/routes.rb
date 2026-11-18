@@ -27,9 +27,14 @@ Rails.application.routes.draw do
   # signup, and so signup can be closed on a self-hosted instance. Custom
   # sessions controller so a password can be accepted without the sign-in being
   # finished — see Users::SessionsController and the two-factor routes below.
+  # Custom passwords controller for one hook only: the credential forms opt out
+  # of Turbo so password managers can see them, which took `turbo:submit-end`
+  # away from the analytics controller, so the server counts the completed reset
+  # instead. See Users::PasswordsController.
   devise_for :users, controllers: {
     registrations: "users/registrations",
-    sessions: "users/sessions"
+    sessions: "users/sessions",
+    passwords: "users/passwords"
   }
 
   # --- Two-factor authentication --------------------------------------------
