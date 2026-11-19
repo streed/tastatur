@@ -56,10 +56,9 @@ RSpec.describe "Queue names" do
 
   describe "the cron schedule" do
     # `Tastatur.cron_schedule`, not config/schedule.yml directly, because that is
-    # what the Sidekiq server loads — and it merges an edition's schedule file
-    # into this one. Reading the application's file alone would leave an
-    # edition's cron entries unchecked, which is exactly the shape of the outage
-    # in this file's header: a job scheduled somewhere nothing verifies.
+    # what the Sidekiq server loads, so the two cannot drift: a job scheduled
+    # somewhere nothing verifies is exactly the shape of the outage in this
+    # file's header.
     let(:schedule) { Tastatur.cron_schedule }
 
     it "enqueues to queues a worker serves" do

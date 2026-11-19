@@ -79,3 +79,15 @@ retry_connect_events:
     that surfaces nowhere. Every seven minutes: often enough that a transient
     Stripe blip self-heals before anyone looks, odd enough not to land on the
     same tick as every other cron entry.
+
+purge_unconfirmed_waitlist_signups:
+  cron: "37 3 * * *"
+  class: "PurgeUnconfirmedWaitlistSignupsJob"
+  queue: within_1_hour
+  description: >
+    Deletes waitlist addresses that were entered and never confirmed, a week
+    after they were entered. The confirmation email tells the recipient this
+    happens, which makes it a promise rather than housekeeping: an unconfirmed
+    address is one an unauthenticated stranger claimed wants our mail, possibly
+    about somebody else's mailbox. 03:37, in the gap between retention
+    enforcement at 03:23 and attribution rollup at 03:51.

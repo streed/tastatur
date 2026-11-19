@@ -150,8 +150,8 @@ say it is configurable per account, and say what enforces it.
   | `app/views/sites/installations/show.html.erb` | rounded KB, gzipped |
 
   Round the KB figure **up**, not to the number we would prefer. Measure with
-  `gzip -c lib/tracker/t.js | wc -c` — an edition serving marketing copy may
-  quote it too, and that repository is not searched from here.
+  `gzip -c lib/tracker/t.js | wc -c` — the marketing pages may
+  quote it too.
 - **Implying cross-day unique visitors.** The identifier rotates daily. A 30-day
   "unique visitors" figure is the sum of 30 daily figures. Label it accurately
   and explain it once, prominently.

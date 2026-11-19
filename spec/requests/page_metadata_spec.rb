@@ -16,10 +16,8 @@ RSpec.describe "Page metadata", type: :request do
   end
 
   # /docs, because it is the only page every deployment publishes: `/` is a
-  # landing page on a deployment carrying a marketing edition and the sign-in
-  # form on one that is not, so an example asserting on it would be asserting
-  # something different depending on what is checked out. The edition's own
-  # pages are covered in the repository that ships them.
+  # landing page on the hosted service and the sign-in form on a self-hosted
+  # install. The marketing pages are covered in marketing_page_metadata_spec.rb.
   describe "a public page" do
     subject(:head) { head_of("/docs") }
 
@@ -175,7 +173,7 @@ RSpec.describe "Page metadata", type: :request do
 
   # A page nobody has thought about gets the old behaviour — a title and nothing
   # else — rather than a description guessed from somewhere. Worth pinning on
-  # this page in particular: without a marketing edition it is where `/` sends
+  # this page in particular: on a self-hosted install it is where `/` sends
   # everybody, and a sign-in form is the last thing that should be describing
   # itself to a link scraper.
   it "leaves a page that never declared itself public alone" do

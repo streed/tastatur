@@ -27,24 +27,6 @@ module Seo
   class BuildSitemap < ApplicationService
     include Rails.application.routes.url_helpers
 
-    # Editions add their own pages here, and the security argument above applies
-    # to them UNCHANGED: a registration is a literal list, hand-written in the
-    # edition's own repository, and spec/requests/sitemap_spec.rb fetches every
-    # URL this returns with no session and asserts a 200. What an edition must
-    # never do is register something derived from the routing table, for exactly
-    # the reason this file does not derive its own.
-    #
-    # Keyed rather than appended so that registering twice — which
-    # `config.to_prepare` will do on every reload in development — replaces the
-    # entry instead of listing every page twice.
-    def self.register(key, &block)
-      registrations[key.to_sym] = block
-    end
-
-    def self.registrations
-      @registrations ||= {}
-    end
-
     # `url_options` comes from the controller, so every <loc> is absolute on the
     # host the crawler actually asked — exactly like llms.txt. A self-hosted
     # install then publishes its own domain instead of advertising ours.
@@ -53,30 +35,46 @@ module Seo
     end
 
     def call
-      Success(pages + policies + editions)
+      Success(pages + marketing + policies)
     end
 
     private
 
-    # The pages every deployment has, which in this repository is /docs and
-    # nothing else: it explains how to use the software, and says the same thing
-    # on the hosted service as on somebody's own hardware. That is the test for
-    # belonging here rather than in an edition.
+    # The pages every deployment has: /docs explains how to use the software, and
+    # says the same thing on the hosted service as on somebody's own hardware.
     #
-    # `/` IS DELIBERATELY ABSENT. Without an edition the root path is the
-    # sign-in form (PagesController#home), and every line in this file is a page
-    # of public *content* — something written to be read by anyone, that says the
-    # same thing to everyone. A sign-in form is neither, it declares no metadata
-    # for a crawler to read, and the entry would be a redirect, which every
-    # search console reports back as an error rather than following. A deployment
-    # that serves a landing page at `/` registers it below, by hand, exactly like
-    # every other page it adds.
+    # `/` IS DELIBERATELY ABSENT HERE. On a deployment with no marketing site the
+    # root path is the sign-in form (PagesController#home), and every line in
+    # this file is a page of public *content* — something written to be read by
+    # anyone, that says the same thing to everyone. A sign-in form is neither, it
+    # declares no metadata for a crawler to read, and the entry would be a
+    # redirect, which every search console reports back as an error rather than
+    # following. A deployment that serves a landing page at `/` lists it in
+    # `marketing` below.
     def pages
       [ SitemapEntry.new(loc: docs_url(**@url_options)) ]
     end
 
-    def editions
-      self.class.registrations.values.flat_map { |block| block.call(@url_options) }
+    # The marketing site's pages, on a deployment that serves one. Written out by
+    # hand like everything else here, and for the same reason: the security
+    # argument at the top of this file applies unchanged.
+    #
+    # `/` is listed here and not in `pages` because only a deployment with a
+    # marketing site has a landing page there; elsewhere it is the sign-in form,
+    # a redirect, which every search console reports as an error.
+    def marketing
+      return [] unless Tastatur.marketing_site?
+
+      urls = [
+        root_url(**@url_options),
+        faq_url(**@url_options),
+        about_url(**@url_options),
+        revenue_url(**@url_options)
+      ]
+
+      urls << pricing_url(**@url_options) if Tastatur.billing_enabled?
+
+      urls.map { |loc| SitemapEntry.new(loc: loc) }
     end
 
     def policies

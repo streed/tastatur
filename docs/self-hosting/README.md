@@ -2,19 +2,19 @@
 
 Tastatur is AGPL-3.0 and designed to be run by the person who owns the data.
 
-This repository is the **community edition**, and every part of the product is in
-it: the tracker, the ingest pipeline, the dashboard, goals, funnels, journeys,
-shared dashboards, teams, two-factor, the compliance pages, and the billing and
-revenue-attribution code. Billing is what `SELF_HOSTED=1` switches off, and it
-also stays off until Stripe is configured. Revenue attribution is not gated on
-either — it asks only whether Stripe Connect is configured, because it shows
-*your* customers' revenue, and refusing it here would remove the point of it. What
-the hosted
-deployment adds is one *edition* (a Rails engine in `editions/`, kept in its own
-repository) holding the pages that advertise that particular deployment: its
-landing page, pricing, about and FAQ. Nothing you would want on your own hardware
-is behind it, which is the test used to decide what stayed. See
-[CLAUDE.md](../../CLAUDE.md) §20 if you want the whole rule.
+Every part of the product is in this repository: the tracker, the ingest pipeline,
+the dashboard, goals, funnels, journeys, shared dashboards, teams, two-factor, the
+compliance pages, and the billing and revenue-attribution code. Billing is what
+`SELF_HOSTED=1` switches off, and it also stays off until Stripe is configured.
+Revenue attribution is not gated on either — it asks only whether Stripe Connect is
+configured, because it shows *your* customers' revenue, and refusing it here would
+remove the point of it.
+
+**Set `SELF_HOSTED=1`.** The repository also contains the marketing site and waitlist
+for the hosted service (its landing page, pricing, about and FAQ). `SELF_HOSTED=1`
+turns them off — those routes answer 404, `/` is the sign-in form, and nothing holds
+an address for anyone who is not a user. Nothing you would want on your own hardware
+is behind the switch. See [CLAUDE.md](../../CLAUDE.md) §20 if you want the whole rule.
 
 ## Deploying to Railway
 

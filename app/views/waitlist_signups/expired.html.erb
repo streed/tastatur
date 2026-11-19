@@ -1,0 +1,29 @@
+<% content_for :title, "That link has expired · Tastatur" %>
+
+<%# ONE PAGE FOR EVERY DEAD TOKEN, and it never says which kind of dead.
+    A link that was never valid, one superseded by a later confirmation email,
+    and one belonging to an address already removed are three different facts —
+    and telling them apart would answer "was this address ever on the list" for
+    whoever is holding the link. From outside, all three mean the same thing:
+    this link does nothing, and joining again is the way forward. -%>
+<div class="shell max-w-2xl">
+  <div class="rule-heavy pt-8 pb-10">
+    <p class="label mb-5">Revenue attribution</p>
+    <h1 class="text-[clamp(1.75rem,3.5vw,2.5rem)] font-semibold leading-[1.1] tracking-[-0.03em]">
+      That link no longer works.
+    </h1>
+    <p class="text-lg text-ink-2 mt-6 leading-relaxed">
+      Asking again replaces the previous link, so an older email stops working — and an
+      address that is never confirmed is deleted within a week. Either way, joining again
+      below sends a fresh link.
+    </p>
+  </div>
+
+  <div class="card card-body mt-8">
+    <%= render "waitlist_signups/form", source: "expired_link" %>
+  </div>
+
+  <div class="mt-8">
+    <%= link_to "What the feature does", revenue_path, class: "btn btn-quiet" %>
+  </div>
+</div>

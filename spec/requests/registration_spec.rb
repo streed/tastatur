@@ -82,14 +82,8 @@ RSpec.describe "Signing up", type: :request do
       expect { post "/users", params: params }.not_to change(User, :count)
     end
 
-    # WHERE THE REFUSAL LANDS, and it has to render on an instance with no
-    # edition. The screen carries an `edition_partial` slot offering to take an
-    # address for when signups open, which is markup this repository does not
-    # have; the slot is what makes "no edition" the defined case rather than a
-    # MissingTemplate on the sign-in screen in production (§20). Asserting the
-    # status rather than the markup keeps this example true in both
-    # configurations, which is the only way it can be a check on the slot.
-    it "renders the screen it redirects to, edition or no edition" do
+    # WHERE THE REFUSAL LANDS: the sign-in screen has to render.
+    it "renders the screen it redirects to" do
       get "/users/sign_up"
       follow_redirect!
 
@@ -103,7 +97,8 @@ RSpec.describe "Signing up", type: :request do
     # a screen offering a list cannot be reached by a message that denies there
     # is one.
     it "tells a private install's visitor to ask its operator" do
-      allow(Tastatur).to receive(:waitlist_enabled?).and_return(false)
+      allow(Tastatur).to receive(:self_hosted?).and_return(true)
+      allow(Tastatur).to receive(:needs_first_run_setup?).and_return(false)
 
       get "/users/sign_up"
 

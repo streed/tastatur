@@ -5,9 +5,9 @@ class PagesController < ApplicationController
   # reason whenever Pundit verification is skipped.
   skip_after_action :verify_authorized
 
-  # `/` on a deployment with no marketing site: the sign-in form.
+  # `/` on a self-hosted instance: the sign-in form.
   #
-  # THE COMMUNITY EDITION HAS NO LANDING PAGE, and that is a decision rather than
+  # A SELF-HOSTED INSTANCE HAS NO LANDING PAGE, and that is a decision rather than
   # an omission. A page arguing for Tastatur has nothing to say to somebody who
   # has already installed it on their own hardware — they made that decision
   # before they got here — and everything such a page would tell them is already
@@ -16,10 +16,9 @@ class PagesController < ApplicationController
   # What is left of a front door on an instance you must sign in to use is the
   # sign-in form, so that is what `/` is.
   #
-  # The hosted service's landing page lives in an edition (config/application.rb)
-  # and takes over `/` by prepending its own route, so this action never runs
-  # there. Nothing here knows that, which is the point: this describes what a
-  # deployment does when nothing else claims the path.
+  # The hosted service's landing page (Marketing::PagesController#home) is routed
+  # ahead of this one behind `Tastatur.marketing_site?`, so this action only runs
+  # on a self-hosted instance. See config/routes.rb and CLAUDE.md §20.
   #
   # A REDIRECT, RATHER THAN RENDERING DEVISE'S FORM AT `/`. Routing the root path
   # into the sessions controller — `devise_scope :user { root to:

@@ -41,7 +41,8 @@ RSpec.describe "First-run setup", type: :request do
 
   # Nothing about an unconfigured instance makes its privacy policy private.
   describe "public informational pages" do
-    # /about and /faq are the same rule, asserted in the edition that owns them.
+    # /about and /faq are marketing pages and 404 on a self-hosted install, which is
+    # the only kind that has a setup wizard.
     %w[/privacy /privacy-policy /terms /dpa /docs].each do |path|
       it "serves #{path} before setup" do
         get path
@@ -52,7 +53,7 @@ RSpec.describe "First-run setup", type: :request do
 
   describe "pages that should send you to setup" do
     # /users/sign_in among them: an install with no users yet has nobody to sign
-    # in as, and without a marketing edition it is where `/` forwards to.
+    # in as, and on a self-hosted install it is where `/` forwards to.
     %w[/ /sites /account /users/sign_in].each do |path|
       it "redirects #{path}" do
         get path
@@ -127,8 +128,7 @@ RSpec.describe "First-run setup", type: :request do
     before { allow(Tastatur).to receive(:self_hosted?).and_return(false) }
 
     # Asserted on the sign-in form rather than on `/`, which is a landing page on
-    # a deployment carrying a marketing edition and a redirect to this form on
-    # one that is not. This page is the same on both and is subject to the same
+    # the hosted service and a redirect to this form on a self-hosted install. This page is the same on both and is subject to the same
     # redirect, so it is what proves the wizard has stood down.
     it "does not force setup, because the hosted service uses normal signup" do
       expect(Tastatur.needs_first_run_setup?).to be(false)

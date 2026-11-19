@@ -1,19 +1,5 @@
 # syntax=docker/dockerfile:1
-#
-# SecretsUsedInArgOrEnv is skipped for one argument, EDITION_TOKEN, and the
-# skip is file-wide because BuildKit has no way to scope it to a line.
-#
-# The rule is right in general and its recommended fix — `RUN --mount=type=secret`
-# — is not available to us: Railway supplies build credentials as build arguments
-# and offers no way to pass a BuildKit secret. The mitigation is structural
-# instead, and it is the one the editions block below explains at length: the ARG
-# is declared inside the throw-away `build` stage, and the final stage copies only
-# /rails and the bundle out of it, so neither the value nor the metadata recording
-# it reaches the image that ships.
-#
-# WHAT THIS COSTS: a genuine misuse elsewhere in this file — `ENV STRIPE_SECRET_KEY=…`
-# — would no longer be caught here. Everything else `check=error=true` covers stays on.
-# check=skip=SecretsUsedInArgOrEnv;error=true
+# check=error=true
 
 # This Dockerfile is designed for production, not development. Use with Kamal or build'n'run by hand:
 # docker build -t tastatur .
@@ -61,67 +47,9 @@ RUN bundle install && \
 # Copy application code
 COPY . .
 
-# --- Editions ---------------------------------------------------------------
-#
-# An edition is a Rails engine in editions/<name>, kept in its own repository and
-# loaded by config/application.rb when present (CLAUDE.md §20). This image builds
-# the community edition unless told otherwise, which is what a self-hosted build
-# wants and is the default below: with EDITION_REPO unset, every line here is a
-# no-op and the resulting image is exactly what it was before this block existed.
-#
-# THE TOKEN LIVES IN THIS STAGE AND NOWHERE ELSE. Build args are recorded in the
-# layer history of the stage that declares them, so EDITION_TOKEN would be
-# readable from `docker history` on any image that shipped this layer. The final
-# stage below is `FROM base` and copies only /rails and the bundle out of here,
-# so nothing from this stage's history reaches the image that gets deployed. Do
-# not move these ARGs to the top of the file to "tidy them up" — a global ARG is
-# in scope for every stage, and that is precisely the mistake.
-#
-# Use a fine-grained personal access token scoped to the one repository with
-# read-only Contents permission. It is the weakest credential that works.
-#
-# A directory already present is left alone, so a local build with the edition
-# checked out (`docker build .` from a working tree) needs no token at all.
-#
-# FETCH, NOT CLONE, AND EDITION_REF IS USUALLY A COMMIT SHA. `git clone --branch`
-# accepts only a branch or a tag; handed a SHA it fails with "Remote branch <sha>
-# not found in upstream origin". That matters because the private repository's
-# deploy workflow sets EDITION_REF to the commit it is deploying, which is the
-# only thing that makes a push over there reach production: the clone layer's
-# cache key is this stage's parent plus these four ARGs, so a ref left at the
-# string "main" is byte-identical between builds, the layer is reused, and the
-# PREVIOUS edition is baked into the new image. Green deploy, nothing changed.
-# `git fetch` takes a SHA, a branch or a tag alike, so both work here.
-#
-# `git -C` rather than `cd`: a cd would persist into the guard below, whose paths
-# are relative to WORKDIR.
-ARG EDITION_REPO=""
-ARG EDITION_REF="main"
-ARG EDITION_NAME="private"
-ARG EDITION_TOKEN=""
-RUN if [ -n "$EDITION_REPO" ] && [ ! -d "editions/${EDITION_NAME}" ]; then \
-      echo "Fetching edition ${EDITION_NAME} from ${EDITION_REPO}@${EDITION_REF}" && \
-      git init -q "editions/${EDITION_NAME}" && \
-      git -C "editions/${EDITION_NAME}" remote add origin \
-        "https://x-access-token:${EDITION_TOKEN}@github.com/${EDITION_REPO}.git" && \
-      git -C "editions/${EDITION_NAME}" fetch --depth 1 origin "$EDITION_REF" && \
-      git -C "editions/${EDITION_NAME}" checkout -q --detach FETCH_HEAD && \
-      rm -rf "editions/${EDITION_NAME}/.git"; \
-    fi && \
-    # Fail loudly rather than shipping a half-built image. An edition that failed
-    # to arrive would otherwise produce a perfectly healthy container serving the
-    # community edition's landing page on the hosted domain — no error, no alert,
-    # and the marketing site simply gone.
-    if [ -n "$EDITION_REPO" ] && [ ! -f "editions/${EDITION_NAME}/lib/edition.rb" ]; then \
-      echo "EDITION_REPO is set but editions/${EDITION_NAME}/lib/edition.rb is missing." >&2; \
-      exit 1; \
-    fi
-
 # Precompile bootsnap code for faster boot times.
 # -j 1 disable parallel compilation to avoid a QEMU bug: https://github.com/rails/bootsnap/issues/495
-# Editions carry app/ and lib/ of their own, and are compiled here for the same
-# reason — the glob is harmless when the directory does not exist.
-RUN bundle exec bootsnap precompile -j 1 app/ lib/ editions/
+RUN bundle exec bootsnap precompile -j 1 app/ lib/
 
 # Precompiling assets for production without requiring secret RAILS_MASTER_KEY.
 # This also runs tailwindcss:build, which propshaft then digests along with the

@@ -1,0 +1,39 @@
+<%# An illustrative dashboard, at about a third scale. Same tokens, same
+    validated palette, same mark specs as the real thing — so this is a preview,
+    not a mock-up that flatters. -%>
+<div class="card">
+  <div class="flex items-center justify-between px-3 py-2 border-b border-rule">
+    <span class="text-[11px] font-semibold">example.com</span>
+    <span class="flex items-center gap-1.5 label text-[9px]">
+      <span class="w-1 h-1 bg-signal inline-block" aria-hidden="true"></span>
+      14 current
+    </span>
+  </div>
+
+  <div class="grid grid-cols-3 border-b border-rule divide-x divide-rule">
+    <%= mini_stat "Visitors", "1,842", delta: "↑ 12%", direction: "up" %>
+    <%= mini_stat "Pageviews", "4,201", delta: "↑ 8%", direction: "up" %>
+    <%= mini_stat "Bounce", "54%", delta: "↓ 3%", direction: "up" %>
+  </div>
+
+  <div class="px-3 pt-3 pb-2 border-b border-rule">
+    <div class="flex items-center gap-4 mb-2">
+      <span class="flex items-center gap-1.5 text-[9px] text-ink-2">
+        <span class="inline-block w-2.5 h-0.5 bg-signal" aria-hidden="true"></span>Visitors
+      </span>
+      <span class="label text-[9px] ml-auto">Last 30 days</span>
+    </div>
+    <%= mini_sparkline %>
+  </div>
+
+  <div class="grid grid-cols-2 divide-x divide-rule">
+    <div class="py-1.5">
+      <p class="label text-[9px] px-2.5 pb-1">Top pages</p>
+      <%= mini_bar_rows [["/", 612], ["/pricing", 388], ["/docs", 241], ["/blog/gdpr", 174]] %>
+    </div>
+    <div class="py-1.5">
+      <p class="label text-[9px] px-2.5 pb-1">Sources</p>
+      <%= mini_bar_rows [["Direct", 701], ["Google", 452], ["Hacker News", 233], ["Reddit", 128]] %>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,49 @@
+<%# Illustrations for the limitations section. These show the consequences rather
+    than describing them, because "a returning visitor is counted again" is much
+    easier to grasp as three columns of identifiers that do not match. -%>
+<div class="space-y-4">
+
+  <%# 1. The identifier rotates, so the same person is a new visitor tomorrow. -%>
+  <div class="card">
+    <div class="px-3 py-2 border-b border-rule">
+      <p class="label text-[9px]">The same person, three days running</p>
+    </div>
+    <div class="grid grid-cols-3 divide-x divide-rule">
+      <% [
+           ["Mon", "a3f1…08c2"],
+           ["Tue", "7b04…d19e"],
+           ["Wed", "e52c…4a77"]
+         ].each do |day, hash| %>
+        <div class="px-3 py-3">
+          <p class="label text-[9px] mb-2"><%= day %></p>
+          <div class="flex items-center gap-1.5 mb-1.5">
+            <span class="w-2.5 h-2.5 bg-signal inline-block shrink-0" aria-hidden="true"></span>
+            <span class="text-[10px] text-ink-2">1 visitor</span>
+          </div>
+          <p class="text-[9px] text-muted font-mono truncate"><%= hash %></p>
+        </div>
+      <% end %>
+    </div>
+    <div class="px-3 py-2 border-t border-rule bg-surface-2">
+      <p class="text-[10px] text-ink-2">
+        Reported as <strong class="text-ink">3 visitors</strong> over three days, because the
+        secret that produced Monday's identifier no longer exists.
+      </p>
+    </div>
+  </div>
+
+  <%# 2. k-anonymity, shown with a row actually withheld. -%>
+  <div class="card">
+    <div class="px-3 py-2 border-b border-rule flex items-baseline justify-between">
+      <p class="label text-[9px]">Top pages</p>
+      <span class="label text-[9px]">Visitors</span>
+    </div>
+    <div class="py-1.5">
+      <%= mini_bar_rows [["/", 612], ["/pricing", 388], ["/docs", 241]] %>
+    </div>
+    <p class="px-2.5 py-2 text-[10px] text-muted border-t border-rule">
+      2 rows withheld (7 visitors) because each was seen by fewer than 25 visitors.
+    </p>
+  </div>
+
+</div>

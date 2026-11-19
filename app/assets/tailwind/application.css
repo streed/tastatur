@@ -13,16 +13,6 @@
 @source "../../javascript/**/*.js";
 @source "../../controllers/**/*.rb";
 
-/* The same directories inside any edition (CLAUDE.md §20). One stylesheet is
-   built for the whole application, so an edition's templates have to be scanned
-   here or every utility class used only by them is absent from the build — and
-   the failure is a marketing page rendered with no styling at all, with nothing
-   logged and nothing raised. The globs match nothing where no edition is checked
-   out, which is the community edition. */
-@source "../../../editions/*/app/views/**/*.{erb,html}";
-@source "../../../editions/*/app/helpers/**/*.rb";
-@source "../../../editions/*/app/controllers/**/*.rb";
-
 /* ===========================================================================
    Tastatur — "Papier"
 

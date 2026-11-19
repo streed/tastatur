@@ -304,13 +304,8 @@ class Rack::Attack
   # one address being mailed repeatedly; this stops one caller working through a
   # list of addresses instead.
   #
-  # The waitlist itself is an edition (§20) and /waitlist does not exist in the
-  # community edition, where this rule then throttles a path that 404s and costs
-  # nothing. It stays HERE rather than moving with the feature because the whole
-  # of this file's shape — `client_key`, the hashed keys §12 requires, the
-  # ordering against `UNTHROTTLED_PATHS` — is private to this initializer, and a
-  # second repository reaching into it would be a worse coupling than one rule
-  # naming a path it does not serve.
+  # /waitlist does not exist on a self-hosted instance (§20), where this rule
+  # throttles a path that 404s and costs nothing.
   throttle("waitlist/client", limit: 5, period: 1.hour) do |req|
     client_key(req) if req.path == "/waitlist" && req.post?
   end

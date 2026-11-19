@@ -1,0 +1,38 @@
+<%# The join form, rendered on /revenue, on /pricing and in site settings.
+
+    Locals:
+      source   where it is being rendered, which is the only thing that varies
+      feature  defaults to revenue attribution, the only list there is
+      email    optional prefill — in-app we already know who is asking
+
+    One partial for all three so the copy, the field and the promise underneath
+    it cannot drift apart: the sentence about deleting rather than unsubscribing
+    is a commitment, and a second copy of a commitment is a commitment that gets
+    edited in one place. -%>
+<% feature = local_assigns.fetch(:feature, "revenue_attribution") %>
+<% source  = local_assigns.fetch(:source) %>
+
+<%= form_with model: WaitlistSignup.new(email: local_assigns[:email], feature: feature),
+              url: waitlist_path, class: "space-y-4",
+              data: { analytics_event: "Waitlist Joined",
+                      analytics_props: { source: source }.to_json } do |f| %>
+  <%# Neither is a question for the person filling this in: one names the list,
+      the other names the page. Constrained on the way back in by the contract
+      and by a CHECK constraint, so a rewritten value lands on a list that exists
+      or on a rejection. -%>
+  <%= f.hidden_field :feature, value: feature %>
+  <%= f.hidden_field :source, value: source %>
+
+  <div class="sm:flex sm:items-end sm:gap-3">
+    <%= f.field :email, "Email", placeholder: "you@company.com",
+                type: "email", autocomplete: "email", required: true,
+                wrapper: "flex-1" %>
+    <%= f.submit "Tell me when it ships", class: "btn btn-primary w-full sm:w-auto mt-3 sm:mt-0" %>
+  </div>
+<% end %>
+
+<p class="text-[12px] text-muted mt-3 leading-relaxed max-w-xl">
+  One email, when it ships. We keep the address and nothing else, and you confirm it
+  first — nothing is on the list until you click the link. Leaving deletes the address
+  rather than marking it unsubscribed.
+</p>

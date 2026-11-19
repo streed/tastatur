@@ -1,0 +1,37 @@
+<% content_for :preheader, "One click to hear from us when #{@feature_name} ships. Nothing happens until you do." %>
+
+<h1 style="margin:0 0 16px; font-size:21px; font-weight:600; letter-spacing:-0.4px; line-height:1.2; color:#16150f;">
+  Confirm your place on the list
+</h1>
+
+<%# Phrased as "this address was entered", never "you signed up": the person
+    reading this may not be the person who typed it, and a form that anyone can
+    submit does not get to tell somebody what they did. %>
+<p style="margin:0 0 20px; color:#57564e;">
+  This address was entered on Tastatur to hear about <strong style="color:#16150f;"><%= @feature_name %></strong>
+  when it ships. Confirm below and we will email you once — when it is ready.
+</p>
+
+<%= render "devise/mailer/button", url: @confirm_url, label: "Confirm" %>
+
+<p style="margin:0 0 10px; font-size:11px; font-weight:600; letter-spacing:1.6px; text-transform:uppercase; color:#8c8a80;">
+  What we do with this
+</p>
+
+<p style="margin:0 0 20px; font-size:13px; color:#57564e;">
+  We keep the address and nothing else — no name, no company, no tracking of whether
+  you opened this. It is used for one email about <%= @feature_name %> and is not
+  added to any other list. You can remove it at any time from the page the button
+  above takes you to, and removing it deletes the address rather than marking it
+  unsubscribed.
+  <a href="<%= Tastatur.base_url %>/privacy" style="color:#00628f;">How we handle data</a>.
+</p>
+
+<%# The way off, for the case that matters most: somebody who did not do this.
+    Ignoring the message is genuinely sufficient — an unconfirmed address is
+    swept within a week and is never mailed again in the meantime. %>
+<p style="margin:0; padding-top:16px; border-top:1px solid #e3e1d8; font-size:13px; color:#8c8a80;">
+  If you did not enter this address, ignore this message. Nothing is on any list until
+  the button above is clicked, and an address that is never confirmed is deleted within
+  a week.
+</p>

@@ -2,77 +2,46 @@
 
 # Deployment-mode configuration.
 #
-# This repository is the AGPL-licensed community edition and runs on its own. A
-# hosted SaaS is the same code with an edition loaded (see the block below) and
-# billing configured. Everything that differs between one deployment and another
+# This repository is AGPL-licensed and runs on its own. The hosted SaaS is the
+# same code with billing configured and SELF_HOSTED unset; a self-hoster sets
+# SELF_HOSTED=1. Everything that differs between one deployment and another
 # is decided here, as a predicate, so no feature has to reach for `Rails.env`,
 # inspect the filesystem, or guess.
 
 module Tastatur
-  # --- Editions -------------------------------------------------------------
+  # --- What this deployment serves --------------------------------------------
   #
-  # What an edition (config/application.rb) has added to this deployment.
-  #
-  # THESE ARE PREDICATES, NOT A LOADED-EDITION LIST, and that is the same
-  # decision `billing_enabled?` makes below for the same reason. A caller that
-  # asks "is editions/private loaded?" has to know what is in it; a caller that
-  # asks "does this instance serve a marketing site?" does not, and still reads
-  # correctly if the answer starts coming from somewhere else. Nothing outside
-  # this block should ever name an edition.
-  #
-  # An edition registers from `config.after_initialize`, which is the first point
-  # at which this file has been loaded — engine initializers run *before* the
-  # application's config/initializers, so registering any earlier would call a
-  # method that does not exist yet.
-  def self.features
-    @features ||= Set.new
-  end
-
-  def self.enable_feature(name)
-    features << name.to_sym
-  end
+  # THESE ARE PREDICATES ABOUT WHAT A DEPLOYMENT DOES, and a view branches on
+  # them rather than on `Rails.env` or the filesystem.
 
   # Does this instance serve the marketing site — /pricing, /about, /faq,
   # /revenue and the landing page that sells the hosted service?
   #
-  # False in the community edition, where `/` is the sign-in form and those
-  # routes do not exist at all. Views must guard with this before
-  # naming any of their helpers: `pricing_path` is genuinely undefined here, so
-  # an unguarded call is a NameError rather than a broken link.
+  # False on somebody's own install, where `/` is the sign-in form and those
+  # routes do not exist at all: a page selling a hosted service has nothing to say
+  # on their hardware. Views must guard with this before naming `pricing_path` or
+  # `faq_path`, because on a self-hosted instance those helpers still exist but
+  # the routes answer 404 (see config/routes.rb).
   def self.marketing_site?
-    features.include?(:marketing_site)
+    !self_hosted?
   end
 
   # Can this instance take an address for a feature that has not shipped?
-  # See the edition that provides it; the community edition holds no addresses
-  # for people who are not users, which is the stronger position and the one
-  # /privacy describes.
+  #
+  # False when self-hosted: that deployment holds no addresses for people who are
+  # not users, which is the stronger position and the one /privacy describes.
   def self.waitlist_enabled?
-    features.include?(:waitlist)
+    !self_hosted?
   end
 
-  # Every cron entry this deployment runs: config/schedule.yml plus one file per
-  # edition that ships jobs of its own.
+  # Every cron entry this deployment runs, from config/schedule.yml.
   #
   # Read by the Sidekiq server at startup AND by spec/jobs/queue_names_spec.rb,
-  # deliberately through the same method. A job whose cron entry lives in a file
+  # deliberately through the same method: a job whose cron entry lives in a file
   # nothing loads is enqueued never and raises nothing, which is §5's outage in a
-  # new costume — an edition is exactly the kind of place a second schedule file
-  # appears without anyone re-reading the initializer.
-  #
-  # A duplicate key across two files is a genuine conflict (two schedules for one
-  # job name, last one silently winning), so it raises rather than merging.
+  # new costume.
   def self.cron_schedule
-    files = [ Rails.root.join("config/schedule.yml") ] +
-            Dir[Rails.root.join("editions/*/config/schedule.yml")].sort
-
-    files.select { |f| File.exist?(f) }.each_with_object({}) do |file, merged|
-      entries = YAML.load_file(file) || {}
-      clashes = merged.keys & entries.keys
-      raise "duplicate cron entries #{clashes.join(', ')} in #{file}" if clashes.any?
-
-      merged.merge!(entries)
-    end
+    YAML.load_file(Rails.root.join("config/schedule.yml")) || {}
   end
 
   # Set SELF_HOSTED=1 to run without billing. In this mode Stripe is never

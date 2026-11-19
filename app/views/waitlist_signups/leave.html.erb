@@ -1,0 +1,30 @@
+<% content_for :title, "Remove your address · Tastatur" %>
+
+<%# THE PAGE THAT EXISTS SO A LINK CANNOT DELETE ANYTHING. Mail clients and
+    security scanners fetch every URL in a message; if the email's unsubscribe
+    link removed the row on GET, a person could be taken off the list without
+    ever seeing this page, and the first they would know is not being emailed.
+    So the link lands here and the button below does the work. -%>
+<div class="shell max-w-2xl">
+  <div class="rule-heavy pt-8 pb-10">
+    <p class="label mb-5">Revenue attribution</p>
+    <h1 class="text-[clamp(1.75rem,3.5vw,2.5rem)] font-semibold leading-[1.1] tracking-[-0.03em]">
+      Remove your address?
+    </h1>
+    <p class="text-lg text-ink-2 mt-6 leading-relaxed">
+      <strong class="text-ink"><%= @signup.email %></strong> will be deleted from the list.
+      Not marked unsubscribed — deleted, so there is nothing left of it to be on a
+      suppression list.
+    </p>
+  </div>
+
+  <div class="card card-body mt-8">
+    <%= button_to "Remove my address", leave_waitlist_path(token: @token), method: :delete,
+                  class: "btn btn-primary" %>
+    <p class="text-[12px] text-muted mt-4 leading-relaxed">
+      You can join again at any time from
+      <%= link_to "the revenue attribution page", revenue_path, class: "underline hover:text-ink" %>,
+      which will send a fresh confirmation link to this address.
+    </p>
+  </div>
+</div>

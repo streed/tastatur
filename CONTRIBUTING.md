@@ -64,55 +64,26 @@ instead of 40.
 **Migrations that create a continuous aggregate need `disable_ddl_transaction!`**,
 and must refresh *before* adding the refresh policy or the two collide.
 
-## Editions
+## Hosted and self-hosted
 
-This repository is the community edition, and it has to stay complete on its own:
-it boots, and this whole suite passes, with no `editions/` directory present.
-**That is the property your change has to preserve, and nothing else in the suite
-will catch you breaking it** — a maintainer's checkout has an edition in it and
-yours does not, so the same diff behaves differently on the two.
-
-An edition is a Rails engine in `editions/<name>`, kept in its own repository and
-ignored here. The hosted deployment loads one holding its marketing site and a
-waitlist. **Nothing here may name an edition** — not a constant, not a path, not a
-conditional. There are four extension points and no others:
+There is one repository and one code path. What differs between the hosted service
+and somebody's own install is a property of the deployment: `SELF_HOSTED=1`. Two
+predicates follow from it, and a view branches on them rather than on `Rails.env`:
 
 | | |
 |---|---|
-| `Tastatur.marketing_site?`, `.waitlist_enabled?` | a view branches on what a deployment *does*, never on which repository is on disk |
-| `Seo::BuildSitemap.register(key)` | an edition's literal URL list |
-| `Seo::BuildStructuredData.register_page` / `.register_offers` | its JSON-LD nodes |
-| `EditionHelper#edition_partial` | a view slot that renders nothing when unfilled |
+| `Tastatur.marketing_site?` | the landing page, pricing, about, FAQ, revenue page and `llms.txt` exist (their routes 404 otherwise) |
+| `Tastatur.waitlist_enabled?` | the waitlist exists; a self-hosted install holds no addresses for non-users |
 
-Two consequences worth knowing before they surprise you:
+Two things worth knowing before they surprise you:
 
-- **Guard on the predicate before naming a helper an edition owns.**
-  `pricing_path` is genuinely undefined here, so an unguarded call is a
-  `NameError`, not a dead link.
-- **Markup that only exists over there gets an `edition_partial` slot, not a
-  guarded `render`.** A predicate and a partial that disagree raise
-  `MissingTemplate` in production, on a page unrelated to whatever you were
-  changing.
+- **Guard a link to a marketing page on `marketing_site?`.** The route helpers
+  exist everywhere, but on a self-hosted instance the routes answer 404, so an
+  unguarded link is a dead one.
+- **A spec that stubs `self_hosted?` also needs `needs_first_run_setup?` stubbed**
+  (to `false`), or the first-run wizard redirects the request to `/setup`.
 
-Migrations are the sharp edge, because there is no schema file and two
-repositories now write into one database: versions must be unique across both, an
-edition may reference a table here but never the reverse, and an edition's
-migrations are dated *after* this repository's newest rather than back-dated to
-interleave. `spec/db/migration_paths_spec.rb` enforces what can be enforced.
-[CLAUDE.md](CLAUDE.md) §20 has the reasoning for each.
-
-If you do have an edition checked out, run both configurations before believing a
-change works:
-
-```bash
-bin/dspec
-mv editions ../editions-stash && bin/dspec; mv ../editions-stash editions
-```
-
-Stash it *outside* the repository, as above, and do not edit anything under
-`editions/` while it is stashed — the restoring `mv` then nests the stash inside a
-freshly recreated `editions/` instead of failing, which loses nothing but looks
-alarming.
+[CLAUDE.md](CLAUDE.md) §20 has the reasoning.
 
 ## The privacy invariants
 

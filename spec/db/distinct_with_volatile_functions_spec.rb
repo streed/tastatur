@@ -45,13 +45,4 @@ RSpec.describe "Migrations that de-duplicate" do
       "subquery and generate the value in the outer SELECT — or leave the column out and let " \
       "its default fill it in."
   end
-
-  # The same check for the edition, which writes into the same database (§20)
-  # and has exactly the same reasons to backfill.
-  it "holds for an edition's migrations too" do
-    paths = Dir[Rails.root.join("editions/*/db/migrate/*.rb")]
-    offenders = paths.select { |path| select_lists(code(path)).any? { |l| l.match?(VOLATILE) } }
-
-    expect(offenders).to be_empty
-  end
 end

@@ -80,16 +80,12 @@ module Users
 
     # ONE SWITCH, TWO DIFFERENT FACTS. ALLOW_SIGNUP=0 on somebody's own install
     # means "this instance is theirs, ask them" — there is nothing to wait for
-    # and telling a stranger to wait would be a lie. Where the deployment can
-    # take an address for something that does not exist yet, it means "not yet",
-    # and the sign-in screen this redirects to carries the form that says so.
-    #
-    # Branching on the predicate rather than on which repository is on disk, per
-    # §20; the message and the form on the other end are switched by the same
-    # one, so they cannot end up promising different things.
+    # and telling a stranger to wait would be a lie. On the hosted service it
+    # means "not yet". Switched on `Tastatur.waitlist_enabled?`, which is false
+    # exactly when the instance is self-hosted.
     def signup_closed_message
       if Tastatur.waitlist_enabled?
-        "Signups are not open yet. Leave your address below and we will email you when they are."
+        "Signups are not open yet."
       else
         "Registration is closed on this instance. Ask an administrator for an invitation."
       end

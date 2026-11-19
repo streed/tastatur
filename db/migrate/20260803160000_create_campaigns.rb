@@ -24,11 +24,7 @@
 # added in 20260803150000 — an index cannot span a join. The model keeps the
 # copy in step; the column is not a second opinion.
 #
-# On the timestamp: see the header of 20260803150000. The window between this
-# repository's newest and the oldest an edition contributes is the only place a
-# migration here may sit, ...140000 and ...130000 are already burned in local
-# schema_migrations, and ...150000 is the campaign_links table itself. This is
-# the next free number in that window, not today's date.
+# On the timestamp: see the header of 20260803150000.
 class CreateCampaigns < ActiveRecord::Migration[8.1]
   def up
     create_table :campaigns do |t|

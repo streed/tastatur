@@ -62,7 +62,7 @@
             <%# On phones the bar only has room for the two account actions;
                 Pricing and Docs stay reachable through the footer and the
                 home page. %>
-            <%= edition_partial "marketing/nav_links" %>
+            <%= render "marketing/nav_links" if Tastatur.marketing_site? %>
             <%= link_to "Docs", docs_path, class: "hidden sm:inline-flex btn btn-quiet btn-sm" %>
           <% end %>
           <% if user_signed_in? %>
@@ -128,12 +128,10 @@
                         class: "hover:text-ink underline", rel: "noopener" %></span>
         </span>
         <nav class="flex flex-wrap gap-x-5 gap-y-2">
-          <%# About, Pricing, Revenue and FAQ belong to the marketing site, which
-              is an edition. Those helpers do not exist in the community edition,
-              so this slot renders nothing there rather than raising — the same
-              reason config/routes.rb says to guard on Tastatur.marketing_site?
-              instead of on the route. -%>
-          <%= edition_partial "marketing/footer_links" %>
+          <%# About, Pricing, Revenue and FAQ belong to the marketing site, which a
+              self-hosted instance does not serve (config/routes.rb), so the links
+              are guarded on the same predicate as the routes. -%>
+          <%= render "marketing/footer_links" if Tastatur.marketing_site? %>
           <%= link_to "Docs", docs_path, class: "hover:text-ink" %>
           <%= link_to "Privacy", privacy_path, class: "hover:text-ink" %>
           <%= link_to "DPA", dpa_path, class: "hover:text-ink" %>

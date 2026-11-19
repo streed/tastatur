@@ -12,16 +12,16 @@ visitors.
 >
 > A deployment that also serves a marketing site repeats that status on
 > `/revenue`, `/revenue.md` and the pricing page, and offers a waitlist in place
-> of a connect button — all of which live in an edition (CLAUDE.md §19, §20) and
-> are pinned by that edition's own suite, so a half-launch cannot leave one
-> surface claiming otherwise. The community edition holds no addresses for people
-> who are not users, so here the card states the fact and stops.
+> of a connect button — all of which are pinned by their own specs (CLAUDE.md §19, §20), so a half-launch
+> cannot leave one surface claiming otherwise. A self-hosted install holds no
+> addresses for people who are not users, so there the card states the fact and
+> stops.
 
 This is the only *pipeline* in Tastatur that stores data about identifiable
 people, and the only part that is not anonymous by construction. That is
 deliberate, it is confined to five tables, and this document exists so nobody has
 to reverse-engineer why from the schema. (The waitlist above is the other place an
-address is held on the hosted service; it lives in an edition, it is a mailing list
+address is held on the hosted service; it is a mailing list
 rather than a measurement pipeline, and nothing joins the two.)
 
 ## The two pipelines

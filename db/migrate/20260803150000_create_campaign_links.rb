@@ -1,12 +1,7 @@
-# Dated ahead of this repository's previous newest migration and BEHIND the
-# oldest an edition has contributed, which is not a free choice — see §20 and
-# spec/db/migration_paths_spec.rb. That spec requires every edition migration to
-# sort after every migration here, so a new one here dated today would fail it,
-# and its stated remedy (re-date the edition's) means re-dating migrations
-# already applied on the hosted deployment, which would re-run them. The
-# timestamp encodes ordering rather than the calendar; the ordering it has to
-# encode is "before anything private", because nothing private depends on this
-# table and this table must not depend on anything private.
+# The timestamp sits in a window below the waitlist migration, which used to live
+# in a separate repository and had to sort after everything here. That constraint
+# is gone (the waitlist is in db/migrate now); new migrations take the date they
+# are written. Kept for the record because the version is already applied.
 #
 # 20260803150000 rather than the obvious next number, because two versions in
 # this window (…130000, …140000) are already recorded in schema_migrations from

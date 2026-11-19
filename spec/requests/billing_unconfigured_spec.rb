@@ -123,8 +123,7 @@ RSpec.describe "Billing when Stripe is not configured", type: :request do
     end
 
     # The /pricing half of this — that an unconfigured instance publishes no
-    # prices — is asserted in the edition that owns the page. There is no
-    # pricing route here to assert against.
+    # prices — is asserted in spec/requests/pricing_spec.rb.
 
     it "shows no billing links anywhere" do
       get "/sites"

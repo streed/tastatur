@@ -206,23 +206,76 @@ Rails.application.routes.draw do
   # --- Documentation --------------------------------------------------------
   get "docs", to: "docs#show"
 
-  # NOTE: /about, /pricing, /faq, /revenue, /llms.txt, /index.md and the
-  # waitlist are NOT here. They belong to the marketing site, which is an
-  # edition (config/application.rb) rather than part of the community edition —
-  # a page selling a hosted service has nothing to say on somebody's own
-  # hardware. An edition prepends them, along with its own `/`.
+  # --- The marketing site ---------------------------------------------------
+
+  # Everything between here and the closing `end` answers 404 on a self-hosted
+  # instance (`Tastatur.marketing_site?`): a page selling the hosted service has
+  # nothing to say on somebody's own hardware, and the waitlist would hold
+  # addresses for people who are not users, which /privacy says a self-hosted
+  # install does not do. The constraint is a lambda so it is read per request.
   #
-  # This is why a view must guard on `Tastatur.marketing_site?` before naming
-  # `pricing_path` or `faq_path`: here those helpers do not exist at all, so an
-  # unguarded call raises NameError rather than rendering a dead link.
+  # `/` IS `as: nil`, and the real `root` is further down. Rails raises on a
+  # second route named `root`, and the first one to match wins, so on a
+  # self-hosted instance the constraint fails and `/` falls through to the
+  # sign-in forward (PagesController#home). Every `root_path` is still "/".
+  constraints(->(_request) { Tastatur.marketing_site? }) do
+    # The landing page that sells the hosted service.
+    get "/", to: "marketing/pages#home", as: nil
+
+    # /index.md is the landing page's directly fetchable markdown URL. The root
+    # route has no format segment, and an index that says "send this Accept header"
+    # is a worse index than a link.
+    get "index.md", to: "marketing/pages#home", as: :markdown_root, format: false, defaults: { format: :md }
+
+    get "about", to: "marketing/pages#about"
+    get "pricing", to: "marketing/pricing#show"
+
+    # The questions people ask before choosing an analytics tool. No `format: false`
+    # here, unlike llms.txt below: this one WANTS Rails' implicit `(.:format)`
+    # segment, because /faq.md is how a machine reader fetches it without content
+    # negotiation — exactly as /docs.md does.
+    get "faq", to: "marketing/pages#faq"
+
+    # The revenue-attribution marketing page. Same two-format contract as /faq:
+    # /revenue.md is the machine reader's copy.
+    get "revenue", to: "marketing/pages#revenue"
+
+    # The llms.txt convention (https://llmstxt.org): a markdown index at a
+    # well-known path telling an AI agent what is here and where the markdown-native
+    # pages live. `format: false` keeps ".txt" as a literal part of the path instead
+    # of letting Rails read it as a format; the default then pins the response to
+    # markdown regardless of the Accept header.
+    get "llms.txt", to: "marketing/pages#llms", as: :llms, format: false, defaults: { format: :md }
+
+    # --- The waitlist ---------------------------------------------------------
+    #
+    # Public, unauthenticated, and addressed by a token rather than by any
+    # identifier of the person — see WaitlistSignupsController.
+    #
+    # LEAVING IS TWO ROUTES ON ONE PATH and that is not an accident. The GET is a
+    # page with a button; only the DELETE removes anything. A mail client that
+    # prefetches links must not be able to delete somebody's place on the list
+    # before they have seen a word of it. Confirming has no such split, because a
+    # prefetched confirmation is the outcome they were about to produce anyway.
+    post   "waitlist",                to: "waitlist_signups#create",  as: :waitlist
+    get    "waitlist/confirm/:token", to: "waitlist_signups#confirm", as: :confirm_waitlist
+    get    "waitlist/leave/:token",   to: "waitlist_signups#leave",   as: :leave_waitlist
+    delete "waitlist/leave/:token",   to: "waitlist_signups#destroy"
+  end
+
+  # `/` forwards: to the site list for anybody signed in, and to the sign-in form
+  # for everybody else. Only reached on a self-hosted instance, which has no
+  # landing page — see PagesController#home for why one would have nothing to say
+  # there, and for why this forwards rather than routing the root path into
+  # Devise's own controller.
+  root to: "pages#home"
 
   # robots.txt and sitemap.xml, served by the application rather than out of
   # public/ — see CrawlersController for the two bugs that decision avoids, and
   # note that public/robots.txt must stay deleted or the first of these is never
   # reached, since ActionDispatch::Static runs ahead of the router.
   # `format: false` keeps the extension a literal part of the path, so ".xml" is
-  # not read as a format and negotiated away by an Accept header. An edition
-  # declaring /llms.txt needs the same flag for the same reason.
+  # not read as a format and negotiated away by an Accept header. /llms.txt below needs the same flag for the same reason.
   get "robots.txt", to: "crawlers#robots", as: :robots, format: false, defaults: { format: :text }
   get "sitemap.xml", to: "crawlers#sitemap", as: :sitemap, format: false, defaults: { format: :xml }
 
@@ -237,16 +290,6 @@ Rails.application.routes.draw do
   post "setup", to: "first_run#create"
 
   get "dashboard", to: "pages#dashboard"
-
-  # `/` forwards: to the site list for anybody signed in, and to the sign-in form
-  # for everybody else. There is no landing page in this repository — see
-  # PagesController#home for why one would have nothing to say here, and for why
-  # this forwards rather than routing the root path into Devise's own controller.
-  #
-  # An edition that serves a marketing site prepends its own `/` ahead of this
-  # one, so on that deployment this action is never reached. The route stays
-  # named `root`, which is what makes `root_path` mean "/" in both repositories.
-  root to: "pages#home"
 
   # --- Instance administration ----------------------------------------------
   # The `admin` flag on User: an operator of this installation, which is a

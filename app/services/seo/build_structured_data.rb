@@ -36,48 +36,11 @@ module Seo
     # the class of failure nothing else would notice, since the page still looks
     # perfect to a human.
     #
-    # `:home` stays here even though this repository serves no landing page — its
-    # graph is the SoftwareApplication node, and what Tastatur is, who wrote it
+    # `:home` is the SoftwareApplication node, and what Tastatur is, who wrote it
     # and what licence it carries are facts about the software rather than about
-    # one deployment. So the graph is this repository's to state; whether there
-    # is a page to publish it on is a separate question, and today only an
-    # edition puts one at `/`.
-    #
-    # An edition's own pages — /pricing, /faq and /about are the hosted
-    # service's — arrive through `register_page` below and are just as much a
-    # hard error when misspelled.
-    PAGES = %i[home docs].freeze
-
-    # --- Edition extension points --------------------------------------------
-    #
-    # Both take a block that is `instance_exec`'d on the service, so an edition
-    # writes `software`, `id_for("website")` and `faq_url(**@url_options)` the
-    # same way the nodes below do. That is deliberate: the alternative is
-    # duplicating the @id-and-absolute-URL discipline in a second repository,
-    # where a drifting copy would publish a graph whose nodes do not reference
-    # each other — valid JSON-LD that no consumer can join up, and nothing would
-    # raise.
-    #
-    # Keyed for the same reason BuildSitemap's registrations are: to_prepare
-    # re-registers on every reload in development.
-    def self.register_page(page, &block)
-      registered_pages[page.to_sym] = block
-    end
-
-    def self.registered_pages
-      @registered_pages ||= {}
-    end
-
-    # What a SoftwareApplication node costs. Empty here, because the community
-    # edition sells nothing and a deployment with no checkout must not publish an
-    # Offer — the same condition that keeps /pricing out of the sitemap.
-    def self.register_offers(key, &block)
-      registered_offers[key.to_sym] = block
-    end
-
-    def self.registered_offers
-      @registered_offers ||= {}
-    end
+    # one deployment. Whether there is a landing page to publish it on is a
+    # separate question: on a self-hosted instance `/` is the sign-in form.
+    PAGES = %i[home docs pricing about faq].freeze
 
     def initialize(page:, url_options:)
       @page = page.to_sym
@@ -85,9 +48,8 @@ module Seo
     end
 
     def call
-      known = PAGES + self.class.registered_pages.keys
-      unless known.include?(@page)
-        raise ArgumentError, "no structured data for #{@page.inspect}; known pages are #{known.join(', ')}"
+      unless PAGES.include?(@page)
+        raise ArgumentError, "no structured data for #{@page.inspect}; known pages are #{PAGES.join(', ')}"
       end
 
       Success(StructuredData.new(graph: [ website, *operator, *page_nodes ].compact))
@@ -147,7 +109,9 @@ module Seo
       case @page
       when :home then [ software ]
       when :docs then [ tech_article ]
-      else Array(instance_exec(&self.class.registered_pages.fetch(@page)))
+      when :pricing then [ software ]
+      when :about then [ software, maintainer_node ]
+      when :faq then [ faq_page ]
       end
     end
 
@@ -177,15 +141,69 @@ module Seo
 
     # What this instance sells, if anything.
     #
-    # Empty in the community edition and that is not a placeholder: an Offer node
-    # names a price and a currency, and the community edition has no checkout to
-    # honour one. The hosted edition registers the real offers, which is also
-    # where the `Billing::Plan::UNLIMITED` guard lives — `Float::INFINITY` is
-    # correct everywhere else in this application and is not representable in
-    # JSON, so `JSON.generate` raises on it and takes down every page carrying
-    # this node. Keep that guard with the code that interpolates a limit.
+    # Empty unless billing is configured: an Offer node names a price and a
+    # currency, and an instance with no checkout cannot honour one.
+    #
+    # THE `UNLIMITED` GUARD LIVES WITH THE CODE THAT INTERPOLATES A LIMIT.
+    # `Float::INFINITY` is correct everywhere else in this application and is not
+    # representable in JSON, so `JSON.generate` raises on it and takes down every
+    # page carrying this node.
     def plan_offers
-      self.class.registered_offers.values.flat_map { |block| instance_exec(&block) }
+      return [] unless Tastatur.billing_enabled?
+
+      Billing::Plan::OFFERED.map do |plan|
+        {
+          "@type" => "Offer",
+          "name" => plan.name,
+          "price" => plan.price_display,
+          "priceCurrency" => plan.currency.upcase,
+          "url" => pricing_url(**@url_options),
+          "availability" => "https://schema.org/InStock",
+          "priceSpecification" => {
+            "@type" => "UnitPriceSpecification",
+            "price" => plan.price_display,
+            "priceCurrency" => plan.currency.upcase,
+            "referenceQuantity" => {
+              "@type" => "QuantitativeValue", "value" => 1, "unitCode" => "MON"
+            }
+          },
+          "description" => offer_description(plan)
+        }
+      end
+    end
+
+    def offer_description(plan)
+      events = quota(plan.monthly_event_limit, "events a month")
+      sites = quota(plan.site_limit, "site".pluralize(plan.site_limit == 1 ? 1 : 2))
+
+      "#{events}, #{sites}, unlimited teammates."
+    end
+
+    def quota(value, noun)
+      return "Unlimited #{noun}" if value == Billing::Plan::UNLIMITED
+
+      "#{ActiveSupport::NumberHelper.number_to_delimited(value)} #{noun}"
+    end
+
+    def faq_page
+      faq = faq_url(**@url_options)
+
+      {
+        "@type" => "FAQPage",
+        "@id" => "#{faq}#faq",
+        "url" => faq,
+        "name" => "Tastatur — frequently asked questions",
+        "isPartOf" => { "@id" => id_for("website") },
+        "inLanguage" => "en",
+        "mainEntity" => Seo::Faq.entries.map do |entry|
+          {
+            "@type" => "Question",
+            "@id" => "#{faq}##{entry.anchor}",
+            "name" => entry.question,
+            "acceptedAnswer" => { "@type" => "Answer", "text" => entry.answer_text }
+          }
+        end
+      }
     end
 
     def tech_article

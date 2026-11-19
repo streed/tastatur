@@ -7,12 +7,14 @@ require "rails_helper"
 # a front door and nothing else, so it forwards rather than rendering, and it is
 # not offered to crawlers as though it were a page.
 #
-# SKIPPED WHOLESALE WHERE AN EDITION SERVES `/`, because there the root path is
-# that edition's landing page and is asserted in the repository that ships it.
-# The guard is the predicate — what this deployment *does* — and never a check
-# for a directory on disk; see CLAUDE.md §20.
-RSpec.describe "The root path", type: :request do
-  before { skip "an edition serves a landing page at / on this deployment" if Tastatur.marketing_site? }
+# On the hosted service `/` is the marketing landing page (spec/requests/
+# marketing_page_metadata_spec.rb); a self-hosted instance has none.
+RSpec.describe "The root path on a self-hosted instance", type: :request do
+  before do
+    allow(Tastatur).to receive(:self_hosted?).and_return(true)
+    # Not the setup wizard: on a fresh self-hosted install that wins over `/`.
+    allow(Tastatur).to receive(:needs_first_run_setup?).and_return(false)
+  end
 
   it "sends a visitor who is not signed in to the sign-in form" do
     get "/"

@@ -215,6 +215,19 @@ Two rules specific to this project:
 
 ### Changed
 
+- **The marketing site and the waitlist are back in this repository.** For a while
+  they lived in a private *edition* — a Rails engine in `editions/`, loaded by
+  `config/application.rb` and built into the hosted image. That arrangement is gone,
+  along with its extension points (`Seo::BuildSitemap.register`,
+  `Seo::BuildStructuredData.register_page` / `.register_offers`,
+  `EditionHelper#edition_partial`, `Tastatur.enable_feature`) and the `EDITION_*`
+  Docker build arguments. What remains is a property of the deployment:
+  `Tastatur.marketing_site?` and `.waitlist_enabled?` are true unless
+  `SELF_HOSTED=1`, and the marketing routes answer 404 under it, so a self-hosted
+  install behaves as before — `/` is the sign-in form and no addresses are held for
+  anyone who is not a user. **Self-hosters should set `SELF_HOSTED=1`**, which is
+  also what switches billing off. The sign-in screen's waitlist slot, which pointed
+  at a partial that never existed, is removed. See [CLAUDE.md](CLAUDE.md) §20.
 - This repository is now the **community edition**, and the pages that advertise
   one particular deployment — a hosted service's landing page, pricing, about and
   FAQ — along with the waitlist for the unshipped revenue feature, moved into an

@@ -1,0 +1,8 @@
+<%# The footer's marketing links, rendered into the application layout. Ordered to sit
+    before Docs, which the layout emits immediately after. -%>
+<%= link_to "About", about_path, class: "hover:text-ink" %>
+<% if Tastatur.billing_enabled? %>
+  <%= link_to "Pricing", pricing_path, class: "hover:text-ink" %>
+<% end %>
+<%= link_to "Revenue", revenue_path, class: "hover:text-ink" %>
+<%= link_to "FAQ", faq_path, class: "hover:text-ink" %>

@@ -1,0 +1,48 @@
+<% content_for :title, "You are on the list · Tastatur" %>
+
+<%# No `seo` block: this page is reached only from a link in one person's email,
+    it says which address it is about, and §17 is explicit that the metadata
+    block is opt-in for exactly this reason. A canonical tag and an og:title for
+    a token URL would be handing a stranger's address to any scraper that
+    followed a forwarded link. -%>
+<div class="shell max-w-2xl">
+  <div class="rule-heavy pt-8 pb-10">
+    <p class="label mb-5">Revenue attribution</p>
+    <h1 class="text-[clamp(1.75rem,3.5vw,2.5rem)] font-semibold leading-[1.1] tracking-[-0.03em]">
+      You are on the list.
+    </h1>
+    <p class="text-lg text-ink-2 mt-6 leading-relaxed">
+      We will email <strong class="text-ink"><%= @signup.email %></strong> once, when revenue
+      attribution ships. Not a newsletter, not a drip sequence — one email, and then this
+      list is deleted.
+    </p>
+  </div>
+
+  <div class="card card-body mt-8 space-y-4">
+    <div>
+      <p class="label">What we hold</p>
+      <p class="text-sm text-ink-2 mt-2 leading-relaxed">
+        The address above, the date you confirmed it, and which page you joined from.
+        No name, no company, no record of whether you open anything we send.
+      </p>
+    </div>
+
+    <div class="pt-4 border-t border-rule">
+      <p class="label">Changed your mind</p>
+      <p class="text-sm text-ink-2 mt-2 leading-relaxed">
+        Leaving deletes the address outright. There is no suppression list to be on
+        afterwards, which is the honest version of unsubscribing.
+      </p>
+      <%# Links to the page with the button rather than acting here: the same
+          reason the email's link does. -%>
+      <div class="mt-4">
+        <%= link_to "Remove my address", leave_waitlist_path(token: @token), class: "btn btn-sm" %>
+      </div>
+    </div>
+  </div>
+
+  <div class="mt-8 flex flex-wrap gap-3">
+    <%= link_to "What the feature does", revenue_path, class: "btn btn-quiet" %>
+    <%= link_to "How we handle data", privacy_path, class: "btn btn-quiet" %>
+  </div>
+</div>

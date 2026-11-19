@@ -63,7 +63,7 @@
       <p class="label mt-8 mb-3">Deeper</p>
       <ul class="border-t border-rule text-[13px]">
         <%# "Common questions" is the FAQ, which belongs to the marketing site and
-            so exists only where an edition provides it. -%>
+            so exists only where `Tastatur.marketing_site?`. -%>
         <% links = [["What we collect", privacy_path]]
            links << ["Common questions", faq_path] if Tastatur.marketing_site?
            links << ["Processor terms", dpa_path] %>

@@ -1,0 +1,8 @@
+<%# The top bar's marketing links, rendered into the application layout.
+
+    On phones the bar only has room for the two account actions; Pricing stays
+    reachable through the footer and the home page, which is what the hidden
+    sm:inline-flex pair is doing. -%>
+<% if Tastatur.billing_enabled? %>
+  <%= link_to "Pricing", pricing_path, class: "hidden sm:inline-flex btn btn-quiet btn-sm" %>
+<% end %>
