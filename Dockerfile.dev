@@ -6,7 +6,7 @@
 # bind mount in docker-compose.yml. Only the dependency manifests are copied,
 # so a code change never invalidates the bundle layer.
 
-FROM ruby:3.4.2-slim
+FROM ruby:3.4.13-slim
 
 ENV RAILS_ENV=development \
     BUNDLE_PATH=/usr/local/bundle \

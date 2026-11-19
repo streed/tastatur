@@ -59,7 +59,12 @@ group :development do
 end
 gem "devise"
 gem "pundit"
-gem "stripe"
+# Held on 19.x on purpose. The gem sets the Stripe API version this app talks to
+# (nothing here pins one), so a major bump changes the shape of every payload at
+# once — the pinned version is why `invoice.parent` and `current_period_end` work
+# the way .claude/rules/billing.md says. Upgrade deliberately, with the API
+# version and a sandbox run, not as part of a security sweep.
+gem "stripe", "~> 19.3"
 gem "sidekiq"
 gem "sidekiq-cron"
 gem "redis", ">= 5.0"

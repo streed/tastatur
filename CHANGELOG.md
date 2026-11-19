@@ -169,6 +169,13 @@ Two rules specific to this project:
 
 ### Security
 
+- Ruby 3.4.2 → 3.4.13 and every gem brought to its latest release, which clears all
+  advisories `bundler-audit` reported — among them Rails 8.1.3.1 (Active Storage
+  file read/write, Strong Parameters bypass, RemoteIp spoofing, several XSS in Action
+  View), Rack, Puma, Nokogiri, Loofah, rails-html-sanitizer, Addressable and net-ssh.
+  Includes major bumps of `sentry-ruby`/`sentry-rails` (7) and `alba` (4). `stripe`
+  is deliberately held on 19.x: the gem sets the Stripe API version, so that bump is
+  a billing change and is made separately.
 - Devise `paranoid` mode is on, so password reset and confirmation resend no longer
   disclose whether an address has an account here. On a single-company instance that
   answer discloses who works there.
