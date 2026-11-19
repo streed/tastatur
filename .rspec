@@ -1,14 +1,11 @@
-# `-I spec` because `--default-path .` below takes spec/ off the load path, and
-# both `--require spec_helper` here and the `require "rails_helper"` at the top
-# of every spec resolve through it.
--I spec
 --require spec_helper
 
-# Rooting the default path at the repository rather than at spec/ keeps the
-# discovery in one place: RSpec's own default pattern then finds spec/**/*_spec.rb.
+# DO NOT ADD `--pattern` HERE. It reads like documentation and it silently breaks
+# running one file: with a pattern configured, RSpec globs it and ignores the
+# paths on the command line, so `rspec spec/models/site_spec.rb` runs the entire
+# suite. Measured, not guessed.
 #
-# DO NOT ADD `--pattern` HERE to make that explicit. It reads like documentation
-# and it silently breaks running one file: with a pattern configured, RSpec globs
-# it and ignores the paths on the command line, so `rspec spec/models/site_spec.rb`
-# runs the entire suite. Measured, not guessed.
---default-path .
+# DO NOT ROOT THE DEFAULT PATH AT THE REPOSITORY (`--default-path .`) either. It
+# was done once so an edition's specs were found, and it makes RSpec load every
+# *_spec.rb under vendor/bundle on a CI runner, where gems install inside the
+# checkout — bundler-audit's own specs among them.
