@@ -60,6 +60,10 @@ class Rack::Attack
   # this one IS versioned and a v2 must not silently arrive unthrottled.
   API_PATH_PREFIX = %r{\A/api/v\d+/}
 
+  # The MCP endpoint, which authenticates with the same keys and so is keyed
+  # the same way, but is throttled separately and far lower: see "mcp/key".
+  MCP_PATH = "/mcp".freeze
+
   # The non-secret, indexed half of a presented API key: `tk_<prefix>_<secret>`.
   #
   # Deliberately does NOT authenticate — that is the controller's job and it
@@ -220,6 +224,20 @@ class Rack::Attack
   # falls back to the client, so an unauthenticated flood is still bounded.
   throttle("api/key", limit: 3_000, period: 1.minute) do |req|
     next unless API_PATH_PREFIX.match?(req.path)
+
+    prefix = api_key_prefix(req)
+    prefix ? "key:#{prefix}" : "anon:#{client_key(req)}"
+  end
+
+  # THE ENDPOINT WHERE ONE REQUEST CAN BE EXPENSIVE. An identify call is one row;
+  # a breakdown is a scan of the raw hypertable over up to two years. And the
+  # caller is an LLM in a loop, which retries, fans out and re-asks the same
+  # question with one word changed — a rate no human opening a dashboard reaches.
+  # 60 a minute is one a second, ample for an agent working through a question and
+  # low enough that a runaway loop costs the instance a bounded amount. A 429
+  # reaches the agent as an error it can read and back off from.
+  throttle("mcp/key", limit: 60, period: 1.minute) do |req|
+    next unless req.path == MCP_PATH
 
     prefix = api_key_prefix(req)
     prefix ? "key:#{prefix}" : "anon:#{client_key(req)}"

@@ -8,7 +8,13 @@ FactoryBot.define do
     # `token_digest` directly would produce rows that look right and cannot
     # authenticate, which is exactly the kind of divergence that makes a green
     # suite meaningless for the endpoint this protects.
-    initialize_with { ApiKey.generate!(site: site, name: name) }
+    scopes { ApiKey::DEFAULT_SCOPES }
+    initialize_with { ApiKey.generate!(site: site, name: name, scopes: scopes) }
+
+    # What the key given to an AI agent looks like: it reads, and cannot write.
+    trait :reader do
+      scopes { ["read:analytics"] }
+    end
 
     trait :revoked do
       revoked_at { 1.hour.ago }
