@@ -21,11 +21,26 @@ class ApiKey < ApplicationRecord
   # How stale `last_used_at` is allowed to get. See #note_use.
   USE_WRITE_INTERVAL = 1.minute
 
+  # What a key may do. Deliberately two separate capabilities with no "all":
+  # the key given to an agent reads, the key given to a server writes, and
+  # nothing is granted by omission. A new endpoint names the scope it needs
+  # rather than inheriting whatever the key happens to hold.
+  SCOPES = {
+    "write:identify" => "Attach a customer to a visitor (POST /api/v1/identify)",
+    "read:analytics" => "Read traffic, goals, funnels, campaigns and revenue (MCP at /mcp)"
+  }.freeze
+
+  # What a key created without saying gets. Matches the column default, and is
+  # what every key could do before scopes existed.
+  DEFAULT_SCOPES = ["write:identify"].freeze
+
   belongs_to :site
 
   has_secure_password :token, validations: false
 
   validates :name, presence: true, uniqueness: { scope: :site_id }
+  validates :scopes, length: { minimum: 1, message: "must include at least one permission" }
+  validate :scopes_are_known
   validates :token_digest, :token_prefix, :last_four, presence: true
 
   scope :live, -> { where(revoked_at: nil) }
@@ -40,12 +55,12 @@ class ApiKey < ApplicationRecord
   # what lets authentication do ONE bcrypt comparison instead of one per key in
   # the table — see the migration for why that distinction is a denial-of-service
   # issue rather than a performance note.
-  def self.generate!(site:, name:)
+  def self.generate!(site:, name:, scopes: DEFAULT_SCOPES)
     prefix = SecureRandom.alphanumeric(PREFIX_LENGTH).downcase
     secret = SecureRandom.urlsafe_base64(SECRET_LENGTH)
     plaintext = "#{PREFIX}_#{prefix}_#{secret}"
 
-    key = new(site: site, name: name, token_prefix: prefix,
+    key = new(site: site, name: name, token_prefix: prefix, scopes: Array(scopes).map(&:to_s).uniq,
               last_four: plaintext.last(4), token: plaintext)
     key.instance_variable_set(:@plaintext, plaintext)
     key
@@ -99,6 +114,14 @@ class ApiKey < ApplicationRecord
   def revoked? = revoked_at.present?
   def live? = !revoked?
 
+  # The form's single-choice view of `scopes`: the key's first permission.
+  def scope = scopes.first
+
+  def allows?(scope) = scopes.include?(scope.to_s)
+
+  # One short description per scope this key holds, for the list screen.
+  def scope_descriptions = scopes.filter_map { |scope| SCOPES[scope] }
+
   def revoke!
     update!(revoked_at: Time.current)
   end
@@ -122,5 +145,12 @@ class ApiKey < ApplicationRecord
     return if last_used_at.present? && last_used_at > at - USE_WRITE_INTERVAL
 
     update_column(:last_used_at, at)
+  end
+
+  private
+
+  def scopes_are_known
+    unknown = scopes - SCOPES.keys
+    errors.add(:scopes, "contains unknown permissions: #{unknown.join(', ')}") if unknown.any?
   end
 end

@@ -23,6 +23,13 @@ Rails.application.routes.draw do
     end
   end
 
+  # --- MCP: an LLM agent reading analytics ----------------------------------
+  # Outside /api/v1 because the path is a convention MCP clients are configured
+  # with by hand, and because it speaks JSON-RPC rather than this API's
+  # resource-per-route shape. Same ApiKey authentication, different scope.
+  post "mcp", to: "mcp#create"
+  match "mcp", to: "mcp#unsupported", via: %i[get delete]
+
   # Custom registrations controller so a new user is given an account to own at
   # signup, and so signup can be closed on a self-hosted instance. Custom
   # sessions controller so a password can be accepted without the sign-in being

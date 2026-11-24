@@ -14,6 +14,8 @@ module Api
     # That indirection is the whole cross-day attribution mechanism, and it is why
     # this product needs no cookie to do first-touch attribution.
     class IdentifyController < BaseController
+      self.required_scope = "write:identify"
+
       def create
         validated = IdentifyContract.new.call(body_params)
         return refuse_invalid(validated.errors) if validated.failure?

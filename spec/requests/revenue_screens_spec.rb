@@ -96,6 +96,30 @@ RSpec.describe "Revenue screens", type: :request do
       expect(response.body).to include("not shown again")
     end
 
+    it "mints a key for an AI agent that can read and cannot write" do
+      sign_in_as("admin")
+
+      post site_api_keys_path(site), params: { api_key: { name: "claude", scope: "read:analytics" } }
+
+      expect(site.api_keys.first.scopes).to eq(["read:analytics"])
+    end
+
+    it "mints an identify-only key when no permission is chosen" do
+      sign_in_as("admin")
+
+      post site_api_keys_path(site), params: { api_key: { name: "production" } }
+
+      expect(site.api_keys.first.scopes).to eq(["write:identify"])
+    end
+
+    it "refuses an unknown permission" do
+      sign_in_as("admin")
+
+      post site_api_keys_path(site), params: { api_key: { name: "x", scope: "everything" } }
+
+      expect(site.api_keys).to be_empty
+    end
+
     it "does not show the key again on a later visit" do
       sign_in_as("admin")
       post site_api_keys_path(site), params: { api_key: { name: "production" } }

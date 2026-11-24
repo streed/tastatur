@@ -144,6 +144,7 @@ Section numbers (§9, §12, ...) are referenced across the rules files.
 - §19 The waitlist (never on a self-hosted install): `.claude/rules/waitlist.md`
 - §20 One repository; what `SELF_HOSTED=1` takes away (`marketing_site?`, `waitlist_enabled?`):
   `.claude/rules/hosted-vs-self-hosted.md`
+- §21 The MCP server and `ApiKey` scopes (`read:analytics` vs `write:identify`): `.claude/rules/mcp.md`
 - Seeded development users: `.claude/rules/dev-seeds.md`; routes provided out of the box: `.claude/rules/routes.md`
 
 ### 13. The privacy invariants

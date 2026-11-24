@@ -29,6 +29,13 @@ module Api
       include Dry::Monads[:result]
 
       before_action :authenticate_api_key!
+      before_action :authorize_scope!
+
+      # Every endpoint names the one permission it needs. There is no default:
+      # a controller that forgets to say gets a 500 in its first spec rather
+      # than quietly accepting any key, which is the failure that would hand an
+      # agent's read-only key a write endpoint.
+      class_attribute :required_scope, instance_accessor: false
 
       private
 
@@ -48,6 +55,22 @@ module Api
 
         @site = @api_key.site
         @api_key.note_use
+      end
+
+      # 403, not 401, and a message that names the scope. Unlike a bad key, this
+      # caller has already proved who it is, so there is nothing to protect by
+      # being vague, and "which permission is missing" is the only thing that
+      # lets them fix it.
+      def authorize_scope!
+        scope = self.class.required_scope
+        raise NotImplementedError, "#{self.class} must declare required_scope" if scope.blank?
+        return if api_key.nil? || api_key.allows?(scope)
+
+        render json: {
+          error: "insufficient_scope",
+          message: "This API key lacks the `#{scope}` permission. Create a key with it " \
+                   "under Settings → API keys."
+        }, status: :forbidden
       end
 
       def bearer_token

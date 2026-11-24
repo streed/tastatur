@@ -103,4 +103,26 @@ RSpec.describe "Rate limiting", :throttled, type: :request do
       expect(keys.join).not_to include("203.0.113.99")
     end
   end
+
+  describe "the MCP endpoint" do
+    let(:api_key) { create(:api_key, :reader, site: site) }
+
+    # An agent in a loop is the caller this exists for, and one breakdown is a scan
+    # of the raw hypertable. A 429 is the right answer HERE, unlike on ingest: the
+    # caller is authenticated, and a model can read it and back off.
+    it "stops a key at 60 requests a minute, and counts each key on its own" do
+      other = create(:api_key, :reader, site: create(:site))
+      call = lambda do |token|
+        post "/mcp", params: { jsonrpc: "2.0", id: 1, method: "ping" }.to_json,
+             headers: { "Content-Type" => "application/json", "Authorization" => "Bearer #{token}" }
+        response.status
+      end
+
+      statuses = 62.times.map { call.call(api_key.plaintext) }
+
+      expect(statuses.first(60).uniq).to eq([200])
+      expect(statuses.last(2).uniq).to eq([429])
+      expect(call.call(other.plaintext)).to eq(200)
+    end
+  end
 end

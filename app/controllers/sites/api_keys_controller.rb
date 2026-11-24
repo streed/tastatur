@@ -14,7 +14,8 @@ module Sites
     end
 
     def create
-      key = ApiKey.generate!(site: @site, name: params.dig(:api_key, :name).to_s.strip)
+      key = ApiKey.generate!(site: @site, name: params.dig(:api_key, :name).to_s.strip,
+                             scopes: requested_scopes)
       authorize key
 
       if key.save
@@ -33,6 +34,14 @@ module Sites
         render :index, status: :unprocessable_entity
       end
     end
+
+    # ONE PURPOSE PER KEY, chosen from the declared list and defaulting to the
+    # narrower legacy one. An unknown value reaches the model as-is so its
+    # validation, not this method, is what refuses it.
+    def requested_scopes
+      Array(params.dig(:api_key, :scope).presence || ApiKey::DEFAULT_SCOPES)
+    end
+    private :requested_scopes
 
     def destroy
       key = policy_scope(ApiKey).where(site: @site).find_by_public_id!(params[:public_id])
