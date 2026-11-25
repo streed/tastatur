@@ -52,4 +52,36 @@ RSpec.describe ApiKey, "scopes" do
       expect { maker.destroy }.to change(ApiKey, :count).by(-1)
     end
   end
+
+  describe "key names" do
+    let(:one) { create(:user) }
+    let(:two) { create(:user) }
+
+    def agent_key(name, user) = ApiKey.generate!(site: site, name: name, scopes: ["read:analytics"], user: user)
+
+    it "may be reused by different people on the same site" do
+      agent_key("claude", one).save!
+
+      expect(agent_key("claude", two)).to be_valid
+    end
+
+    it "may not be reused by the same person" do
+      agent_key("claude", one).save!
+
+      expect(agent_key("claude", one)).not_to be_valid
+    end
+
+    it "is still unique per site for identify keys, which have no owner" do
+      ApiKey.generate!(site: site, name: "production").save!
+
+      expect(ApiKey.generate!(site: site, name: "production")).not_to be_valid
+    end
+
+    it "is enforced by the database too, including for unowned keys" do
+      ApiKey.generate!(site: site, name: "production").save!
+
+      expect { ApiKey.generate!(site: site, name: "production").save!(validate: false) }
+        .to raise_error(ActiveRecord::RecordNotUnique)
+    end
+  end
 end

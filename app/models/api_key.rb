@@ -40,7 +40,9 @@ class ApiKey < ApplicationRecord
 
   has_secure_password :token, validations: false
 
-  validates :name, presence: true, uniqueness: { scope: :site_id }
+  # Per person: two teammates may each have a key called "claude". Identify keys have
+  # no owner, so for them this is still per site. Mirrored by a NULLS NOT DISTINCT index.
+  validates :name, presence: true, uniqueness: { scope: %i[site_id user_id] }
   validates :scopes, length: { minimum: 1, message: "must include at least one permission" }
   validates :user, presence: { message: "is required for a key that reads analytics" }, if: :agent?
   validate :scopes_are_known
