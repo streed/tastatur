@@ -305,6 +305,28 @@ The endpoint answers `202` for everything, including a payload it rejected.
 That is deliberate: a distinguishable response would let anyone test which site
 keys are valid. Check your dashboard to confirm events are arriving.
 
+## AI agents (MCP)
+
+Let an assistant such as Claude query a site's analytics. Any member of your
+organisation can make a key from the **AI agents** button on a site's dashboard.
+It carries the `read:analytics` permission, belongs to whoever made it, and stops
+working if they leave the organisation.
+
+```sh
+claude mcp add --transport http tastatur <%= Tastatur.base_url %>/mcp \
+  --header "Authorization: Bearer tk_..."
+```
+
+Tools: `describe_site` (start here), `get_summary`, `get_timeseries`,
+`get_breakdown`, `get_goals`, `get_funnel`, `get_campaigns` and, where revenue
+attribution is enabled, `get_revenue_attribution`. All accept a period and the
+same filters as the dashboard.
+
+The tools call the same reports as the dashboard, so rows with too few visitors
+are withheld, and each answer carries the caveats that apply to its numbers. A
+key cannot write, cannot see another site, and is limited to 60 requests a
+minute.
+
 ## Without JavaScript
 
 A tracking pixel for visitors who run no scripts.

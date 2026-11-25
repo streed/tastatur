@@ -18,6 +18,14 @@ RSpec.describe "Markdown for machine readers", type: :request do
       expect(response.body).not_to include("<div")
     end
 
+    it "lists the AI agent feature, in both renderings" do
+      get "/"
+      expect(response.body).to include("Ask an AI agent")
+
+      get "/", headers: { "Accept" => "text/markdown" }
+      expect(response.body).to include("**Ask an AI agent**")
+    end
+
     it "prefers markdown when the agent ranks it above HTML" do
       get "/", headers: { "Accept" => "text/markdown;q=1.0, text/html;q=0.8" }
 
@@ -46,6 +54,17 @@ RSpec.describe "Markdown for machine readers", type: :request do
   end
 
   describe "the docs" do
+    it "documents the MCP server, with the endpoint unescaped in the snippet" do
+      get "/docs", headers: { "Accept" => "text/markdown" }
+
+      expect(response.body).to include("## AI agents (MCP)")
+      expect(response.body).to include("claude mcp add --transport http tastatur #{Tastatur.base_url}/mcp")
+
+      get "/docs"
+      expect(response.body).to include("AI agents (MCP)")
+      expect(response.body).to include("/mcp")
+    end
+
     it "serves markdown for Accept: text/markdown" do
       get "/docs", headers: { "Accept" => "text/markdown" }
 
