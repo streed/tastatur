@@ -28,6 +28,39 @@ RSpec.describe Dashboards::Render do
     create_event(site, path: "/pricing", visitor: "walker", at: 3.days.ago + 10.minutes)
   end
 
+  describe "a breakdown widget grouped by an event property" do
+    let(:site) { create(:site, timezone: "Asia/Kolkata") }
+
+    before do
+      30.times { |i| create_event(site, event_name: "Signup", visitor: "pro#{i}", at: 2.days.ago, props: { plan: "pro" }) }
+      40.times { |i| create_event(site, event_name: "Signup", visitor: "ent#{i}", at: 2.days.ago, props: { plan: "enterprise" }) }
+      create_event(site, event_name: "Signup", visitor: "other", at: 2.days.ago, props: { plan: "free" })
+      30.times { |i| create_event(site, event_name: "Cancelled", visitor: "can#{i}", at: 2.days.ago, props: { plan: "team" }) }
+    end
+
+    it "shows that event's values and withholds small ones" do
+      dashboard = create(:dashboard, site: site, widgets: [
+        { kind: "breakdown", dimension: "props:plan", filters: { "event" => "Signup" } }
+      ])
+      widget = render(dashboard).widgets.first
+
+      expect(widget).to be_ok
+      expect(widget.data.rows.map(&:value)).to eq(["enterprise"])
+      # "free" has one visitor; the smallest kept value ("pro") goes with it.
+      expect(widget.data.suppressed_rows).to eq(2)
+    end
+
+    it "is an empty panel, not an error, for a property the event never carried" do
+      dashboard = create(:dashboard, site: site, widgets: [
+        { kind: "breakdown", dimension: "props:nothing", filters: { "event" => "Signup" } }
+      ])
+      widget = render(dashboard).widgets.first
+
+      expect(widget).to be_ok
+      expect(widget.data.rows).to be_empty
+    end
+  end
+
   describe "one widget of every kind" do
     let(:funnel) { create(:funnel, site: site) }
     let(:dashboard) do

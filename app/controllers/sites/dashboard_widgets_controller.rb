@@ -110,7 +110,7 @@ module Sites
     # model ever saw it, and the writer never ran.
     def widget_params
       params.expect(
-        dashboard_widget: [:kind, :title, :metric, :dimension, :row_limit, :funnel_public_id,
+        dashboard_widget: [:kind, :title, :metric, :dimension, :property_name, :row_limit, :funnel_public_id,
                            { filter_pairs_attributes: [%i[dimension value]] }]
       ).with_defaults(filter_pairs_attributes: {})
     end

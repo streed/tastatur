@@ -9,6 +9,17 @@ RSpec.describe DashboardWidget do
   end
 
   describe "per-kind validation" do
+    it "accepts a custom event property on a breakdown widget only when scoped to an event" do
+      ok = widget(kind: "breakdown", dimension: "property", property_name: "plan", filters: { "event" => "Signup" })
+      expect(ok).to be_valid
+      expect(ok.dimension).to eq("props:plan")
+      expect(ok.display_title).to eq("plan")
+
+      expect(widget(kind: "breakdown", dimension: "property", property_name: "plan")).not_to be_valid
+      expect(widget(kind: "breakdown", dimension: "property", property_name: " ",
+                    filters: { "event" => "Signup" })).not_to be_valid
+    end
+
     it "requires a known metric on a stat widget" do
       expect(widget(kind: "stat", metric: "visitors")).to be_valid
       expect(widget(kind: "stat", metric: "clicks")).not_to be_valid

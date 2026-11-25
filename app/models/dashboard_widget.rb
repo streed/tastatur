@@ -50,7 +50,8 @@ class DashboardWidget < ApplicationRecord
   validates :position, numericality: { greater_than: 0 }
   validates :title, length: { maximum: 120 }
   validates :metric, inclusion: { in: METRICS }, if: :stat?
-  validates :dimension, inclusion: { in: Analytics::Filters::DIMENSIONS.keys }, if: :breakdown?
+  validates :dimension, inclusion: { in: Analytics::Filters::DIMENSIONS.keys }, if: -> { breakdown? && !property_dimension? }
+  validate :property_dimension_is_well_formed, if: -> { breakdown? && property_dimension? }
   validates :row_limit, numericality: { in: 1..50 }
 
   # Presence is gated on the funnel CHANGING (or the row being new, or the kind
@@ -66,8 +67,24 @@ class DashboardWidget < ApplicationRecord
   # The no-JS form submits every per-kind field regardless of the chosen kind
   # (the sections are merely hidden), so whatever the kind does not use is
   # cleared rather than stored — stored config must mean what the kind says.
+  before_validation :store_property_dimension
   before_validation :clear_irrelevant_config
   before_validation :normalize_filters
+
+  # The form's one extra choice on a breakdown widget: group by a custom event
+  # property rather than a fixed dimension. Stored in `dimension` as
+  # "props:<name>", the same spelling Analytics::Filters uses, so there is one
+  # vocabulary and no new column. The key is the customer's own and cannot be
+  # listed in a <select>, so the form offers PROPERTY_CHOICE and a text field.
+  PROPERTY_CHOICE = "property".freeze
+
+  attr_writer :property_name
+
+  def property_dimension? = Analytics::Filters.property?(dimension)
+
+  def property_name
+    property_dimension? ? dimension.delete_prefix(Analytics::Filters::PROPERTY_PREFIX) : @property_name
+  end
 
   def stat? = kind == "stat"
   def breakdown? = kind == "breakdown"
@@ -89,6 +106,8 @@ class DashboardWidget < ApplicationRecord
     when "stat" then METRIC_LABELS.fetch(metric, "Stat")
     when "timeseries" then "Traffic"
     when "breakdown"
+      return property_name if property_dimension?
+
       BREAKDOWN_TITLES[dimension] ||
         Analytics::Filters::HUMAN_LABELS.fetch(dimension) { dimension.to_s.humanize }
     when "goals" then "Goal conversions"
@@ -137,6 +156,25 @@ class DashboardWidget < ApplicationRecord
   end
 
   private
+
+  def store_property_dimension
+    return unless breakdown? && dimension == PROPERTY_CHOICE
+
+    self.dimension = "#{Analytics::Filters::PROPERTY_PREFIX}#{@property_name.to_s.strip}"
+  end
+
+  # A property belongs to an event: `plan` on Signup and `plan` on Cancelled are
+  # different facts, so a widget pooling them would show rows nobody can
+  # interpret. The dashboard enforces the same thing by only offering property
+  # panels once an event is chosen (Analytics::Dashboard#properties).
+  def property_dimension_is_well_formed
+    name = property_name.to_s
+    if name.empty? || name.length > Analytics::Filters::MAX_PROPERTY_KEY
+      errors.add(:property_name, "must be 1 to #{Analytics::Filters::MAX_PROPERTY_KEY} characters")
+    elsif saved_filters["event"].blank?
+      errors.add(:dimension, "needs an Event filter: a property belongs to one event")
+    end
+  end
 
   def clear_irrelevant_config
     self.metric = nil unless stat?

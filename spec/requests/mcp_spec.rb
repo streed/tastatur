@@ -84,7 +84,7 @@ RSpec.describe "POST /mcp", type: :request do
       tools = result["tools"]
 
       expect(tools.map { |t| t["name"] }).to include("list_sites", "describe_site", "get_summary", "get_timeseries",
-                                                      "get_breakdown", "get_goals", "get_funnel", "get_campaigns")
+                                                      "get_breakdown", "get_event_properties", "get_goals", "get_funnel", "get_campaigns")
       expect(tools).to all(satisfy { |t| t.dig("annotations", "readOnlyHint") == true })
     end
 
@@ -256,6 +256,54 @@ RSpec.describe "POST /mcp", type: :request do
 
       expect(result["isError"]).to be(true)
       expect(result["content"].first["text"]).to include("No funnel")
+    end
+
+    describe "event properties" do
+      before do
+        base = 2.days.ago.change(hour: 13)
+        30.times { |n| create_event(site, path: "/", visitor: "p#{n}", at: base + n.minutes, event_name: "Signup", props: { plan: "pro" }) }
+        30.times { |n| create_event(site, path: "/", visitor: "f#{n}", at: base + n.minutes, event_name: "Signup", props: { plan: "free" }) }
+        create_event(site, path: "/", visitor: "x", at: base, event_name: "Signup", props: { plan: "secret" })
+        30.times { |n| create_event(site, path: "/", visitor: "c#{n}", at: base + n.minutes, event_name: "Cancelled", props: { plan: "pro" }) }
+      end
+
+      it "breaks one event down by its properties, withholding small values" do
+        call_tool("get_event_properties", { event: "Signup", period: "7d" })
+        plan = payload["data"]["properties"].find { |p| p["property"] == "plan" }
+
+        # "secret" has one visitor; withheld alone it would be total - sum(visible),
+        # so the smallest kept value ("free") is withheld with it.
+        expect(plan["values"].map { |v| v["value"] }).to eq(["pro"])
+        expect(plan["withheld"]["rows"]).to eq(2)
+        expect(plan["withheld"]["visitors"]).to eq(31)
+        expect(response.body).not_to include("secret", "free")
+      end
+
+      it "does not pool another event's properties" do
+        call_tool("get_event_properties", { event: "Signup", period: "7d" })
+        pro = payload["data"]["properties"].first["values"].find { |v| v["value"] == "pro" }
+
+        expect(pro["visitors"]).to eq(30)
+      end
+
+      it "filters any report by a property" do
+        call_tool("get_summary", { period: "7d", filters: { event: "Signup", props: { plan: "free" } } })
+
+        expect(payload["data"]["metrics"]["visitors"]).to eq(30)
+        expect(payload["data"]["filters"]).to eq("event" => "Signup", "props" => { "plan" => "free" })
+      end
+
+      it "refuses a property filter it cannot apply" do
+        call_tool("get_summary", { filters: { props: { plan: ["pro"] } } })
+
+        expect(result["isError"]).to be(true)
+        expect(result["content"].first["text"]).to include("plan")
+      end
+
+      it "requires the event" do
+        call_tool("get_event_properties", { period: "7d" })
+        expect(result["isError"]).to be(true)
+      end
     end
 
     it "reports campaigns" do

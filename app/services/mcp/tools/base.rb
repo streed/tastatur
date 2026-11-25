@@ -45,8 +45,13 @@ module Mcp
         filters: {
           type: "object",
           description: "Narrow every number to visits matching ALL of these, e.g. {\"country\": \"DE\", \"device\": \"mobile\"}. " \
-                       "Call describe_site for the valid keys. Values are exact matches.",
-          properties: Analytics::Filters::DIMENSIONS.keys.index_with { { type: "string" } },
+                       "Call describe_site for the valid keys. Values are exact matches. " \
+                       "To filter on a custom event property use `props`, e.g. {\"event\": \"Signup\", \"props\": {\"plan\": \"pro\"}}; " \
+                       "get_event_properties lists the property names and values a site has.",
+          properties: Analytics::Filters::DIMENSIONS.keys.index_with { { type: "string" } }.merge(
+            props: { type: "object", description: "Custom event property name => exact value.",
+                     additionalProperties: { type: "string" } }
+          ),
           additionalProperties: false
         }
       }.freeze
@@ -147,7 +152,7 @@ module Mcp
 
         filters = @arguments[:filters]
         if filters.is_a?(Hash)
-          unknown = filters.keys.map(&:to_s) - Analytics::Filters::DIMENSIONS.keys
+          unknown = filters.keys.map(&:to_s) - Analytics::Filters::DIMENSIONS.keys - %w[props]
           problems[:filters] = ["has unknown keys: #{unknown.join(', ')}"] if unknown.any?
         end
         problems
@@ -177,7 +182,7 @@ module Mcp
         }
       end
 
-      def filters_data = filters.each.to_h
+      def filters_data = filters.to_param
 
       def result(data, notes = [])
         Success(Mcp::ToolResult.new(data: data, notes: notes))

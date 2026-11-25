@@ -8,7 +8,7 @@ module Mcp
     REQUIRED_SCOPE = "read:analytics".freeze
 
     ALL = %w[
-      ListSites DescribeSite GetSummary GetTimeseries GetBreakdown GetGoals GetFunnel GetCampaigns GetRevenueAttribution
+      ListSites DescribeSite GetSummary GetTimeseries GetBreakdown GetEventProperties GetGoals GetFunnel GetCampaigns GetRevenueAttribution
     ].freeze
 
     module_function
