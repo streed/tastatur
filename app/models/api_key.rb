@@ -35,15 +35,20 @@ class ApiKey < ApplicationRecord
   DEFAULT_SCOPES = ["write:identify"].freeze
 
   belongs_to :site
+  # The member who made an agent key; see the migration. Nil for identify keys.
+  belongs_to :user, optional: true
 
   has_secure_password :token, validations: false
 
   validates :name, presence: true, uniqueness: { scope: :site_id }
   validates :scopes, length: { minimum: 1, message: "must include at least one permission" }
+  validates :user, presence: { message: "is required for a key that reads analytics" }, if: :agent?
   validate :scopes_are_known
   validates :token_digest, :token_prefix, :last_four, presence: true
 
   scope :live, -> { where(revoked_at: nil) }
+  # Keys that only read, as opposed to the identify keys an admin keeps for a server.
+  scope :agent_keys, -> { where("NOT ('write:identify' = ANY (api_keys.scopes))") }
   scope :ordered, -> { order(revoked_at: :asc, created_at: :desc) }
 
   attr_reader :plaintext
@@ -55,12 +60,12 @@ class ApiKey < ApplicationRecord
   # what lets authentication do ONE bcrypt comparison instead of one per key in
   # the table — see the migration for why that distinction is a denial-of-service
   # issue rather than a performance note.
-  def self.generate!(site:, name:, scopes: DEFAULT_SCOPES)
+  def self.generate!(site:, name:, scopes: DEFAULT_SCOPES, user: nil)
     prefix = SecureRandom.alphanumeric(PREFIX_LENGTH).downcase
     secret = SecureRandom.urlsafe_base64(SECRET_LENGTH)
     plaintext = "#{PREFIX}_#{prefix}_#{secret}"
 
-    key = new(site: site, name: name, token_prefix: prefix, scopes: Array(scopes).map(&:to_s).uniq,
+    key = new(site: site, name: name, user: user, token_prefix: prefix, scopes: Array(scopes).map(&:to_s).uniq,
               last_four: plaintext.last(4), token: plaintext)
     key.instance_variable_set(:@plaintext, plaintext)
     key
@@ -88,7 +93,10 @@ class ApiKey < ApplicationRecord
       return nil
     end
 
-    key.authenticate_token(token) || nil
+    authenticated = key.authenticate_token(token)
+    return nil unless authenticated && authenticated.owner_still_member?
+
+    authenticated
   end
 
   # `split("_", 3)`, and the limit is not cosmetic.
@@ -116,6 +124,19 @@ class ApiKey < ApplicationRecord
 
   # The form's single-choice view of `scopes`: the key's first permission.
   def scope = scopes.first
+
+  # A key that only reads. These are the ones any member may make, and the ones
+  # that are bound to their maker.
+  def agent? = scopes.present? && scopes.all? { |scope| scope.start_with?("read:") }
+
+  # Checked on EVERY request, not at creation: the whole point is that removing
+  # someone from the organisation takes their keys with them. One indexed lookup,
+  # and only for keys that have an owner.
+  def owner_still_member?
+    return true if user_id.nil?
+
+    Membership.exists?(user_id: user_id, account_id: site.account_id)
+  end
 
   def allows?(scope) = scopes.include?(scope.to_s)
 

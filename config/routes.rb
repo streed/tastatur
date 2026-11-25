@@ -139,6 +139,12 @@ Rails.application.routes.draw do
       resources :customers, only: %i[index show], param: :public_id
 
       resources :api_keys, only: %i[index create destroy], param: :public_id
+
+      # Connecting an AI agent. Open to every member, unlike the keys screen above;
+      # see Sites::McpController.
+      get "mcp", to: "mcp#show"
+      post "mcp/keys", to: "mcp#create", as: :mcp_keys
+      delete "mcp/keys/:public_id", to: "mcp#destroy", as: :mcp_key
     end
 
     # Admin-and-up. A singular resource because a site has at most one live

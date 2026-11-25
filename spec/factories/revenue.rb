@@ -9,11 +9,18 @@ FactoryBot.define do
     # authenticate, which is exactly the kind of divergence that makes a green
     # suite meaningless for the endpoint this protects.
     scopes { ApiKey::DEFAULT_SCOPES }
-    initialize_with { ApiKey.generate!(site: site, name: name, scopes: scopes) }
+    user { nil }
+    initialize_with { ApiKey.generate!(site: site, name: name, scopes: scopes, user: user) }
 
     # What the key given to an AI agent looks like: it reads, and cannot write.
+    #
+    # Made by a real member of the site's account, because an agent key is bound
+    # to its maker and is refused once they are not one.
     trait :reader do
       scopes { ["read:analytics"] }
+      user do
+        create(:user).tap { |maker| create(:membership, account: site.account, user: maker, role: "viewer") }
+      end
     end
 
     trait :revoked do

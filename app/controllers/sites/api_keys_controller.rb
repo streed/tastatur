@@ -14,8 +14,12 @@ module Sites
     end
 
     def create
+      scopes = requested_scopes
+      # Only a key that READS is bound to its maker. An identify key belongs to a
+      # deployment and must keep working after the admin who made it moves on.
+      owner = scopes.all? { |scope| scope.start_with?("read:") } ? current_user : nil
       key = ApiKey.generate!(site: @site, name: params.dig(:api_key, :name).to_s.strip,
-                             scopes: requested_scopes)
+                             scopes: scopes, user: owner)
       authorize key
 
       if key.save

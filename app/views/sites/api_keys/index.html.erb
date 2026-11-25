@@ -96,18 +96,8 @@ Content-Type: application/json
     </div>
   </div>
 
-  <div class="card mt-8">
-    <div class="card-head"><h2 class="text-sm font-semibold">Connecting an AI agent</h2></div>
-    <div class="card-body text-sm space-y-3">
-      <p class="text-ink-2">
-        Create a <code>read:analytics</code> key and point any MCP client at this server. The agent can
-        read this site's traffic, goals, funnels, campaigns and revenue attribution, and nothing else:
-        it cannot write, and it cannot see another site. Small rows stay withheld, exactly as on your
-        dashboard.
-      </p>
-<pre class="text-xs overflow-x-auto"><code>claude mcp add --transport http tastatur <%= Tastatur.base_url %>/mcp \
-  --header "Authorization: Bearer tk_..."</code></pre>
-      <p class="text-ink-2">Limited to 60 requests a minute per key.</p>
-    </div>
-  </div>
+  <p class="text-sm text-ink-2 mt-8">
+    Connecting an AI agent? Anyone in the organisation can, from
+    <%= link_to "the AI agents page", site_mcp_path(@site), class: "link" %>.
+  </p>
 </div>
