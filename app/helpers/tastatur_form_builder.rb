@@ -17,8 +17,11 @@ class TastaturFormBuilder < ActionView::Helpers::FormBuilder
     control =
       case as
       when :select
-        select(name, choices || [], { include_blank: options.delete(:include_blank) },
-               **default_options(name, options))
+        select_options = { include_blank: options.delete(:include_blank) }
+        # For a field whose stored value is not itself one of the choices (a
+        # widget's "props:plan" is shown as "Custom event property").
+        select_options[:selected] = options.delete(:selected) if options.key?(:selected)
+        select(name, choices || [], select_options, **default_options(name, options))
       when :collection_select
         select(name, choices || [], {}, **default_options(name, options))
       when :text_area

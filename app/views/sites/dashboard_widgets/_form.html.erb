@@ -38,8 +38,13 @@
 
   <div class="grid sm:grid-cols-2 gap-4" data-widget-config-target="section" data-kinds="breakdown">
     <%= f.field :dimension, "Dimension", as: :select,
-                choices: Analytics::Filters::HUMAN_LABELS.map { |key, label| [label, key] } %>
+                selected: (widget.property_dimension? ? DashboardWidget::PROPERTY_CHOICE : widget.dimension),
+                choices: Analytics::Filters::HUMAN_LABELS.map { |key, label| [label, key] } +
+                         [["Custom event property…", DashboardWidget::PROPERTY_CHOICE]] %>
     <%= f.field :row_limit, "Rows", as: :select, choices: [5, 10, 15, 25, 50] %>
+    <%= f.field :property_name, "Property name",
+                placeholder: "plan",
+                hint: "Only for “Custom event property”. Add an Event filter below: a property belongs to one event." %>
   </div>
 
   <div data-widget-config-target="section" data-kinds="funnel">

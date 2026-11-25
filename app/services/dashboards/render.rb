@@ -65,6 +65,8 @@ module Dashboards
     end
 
     def breakdown_result(widget)
+      return property_result(widget) if widget.property_dimension?
+
       result = batched_breakdowns(widget.saved_filters)[widget.dimension]
       # A dimension that has left Analytics::Filters::DIMENSIONS since this
       # widget was saved. Breakdown.batch drops unknown dimensions rather than
@@ -72,6 +74,22 @@ module Dashboards
       return WidgetResult.new(widget: widget, status: :invalid) if result.nil?
 
       ok(widget, truncate(result, widget.row_limit))
+    end
+
+    # One property of one event. PropertyBreakdown returns every property the
+    # event carries from a single scan; the widget keeps its own. A property the
+    # event never carried in this window is an empty panel, which is the true
+    # answer, not an error.
+    def property_result(widget)
+      filters = widget.saved_filters
+      return WidgetResult.new(widget: widget, status: :invalid) unless filters.event_scoped?
+
+      panels = Analytics::PropertyBreakdown.call(site: @site, period: @period, filters: filters,
+                                                 limit: widget.row_limit).value!
+      result = panels.to_h[widget.property_name] ||
+               Analytics::Breakdown::Result.new(rows: [], suppressed_rows: 0, suppressed_visitors: 0,
+                                                threshold: Analytics::Scope.new(site: @site, period: @period, filters: filters).k_threshold)
+      ok(widget, result)
     end
 
     def batched_breakdowns(filters)
