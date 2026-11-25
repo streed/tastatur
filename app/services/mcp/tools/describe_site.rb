@@ -2,17 +2,16 @@ module Mcp
   module Tools
     class DescribeSite < Base
       NAME = "describe_site".freeze
-      DESCRIPTION = "Start here. Describes the one site this key can read: its timezone, the date presets and " \
+      DESCRIPTION = "Describes one site: its timezone, the date presets and " \
                     "filter dimensions the other tools accept, and the goals and funnels that exist (with the " \
                     "ids get_funnel needs). Cheap; reads no event data.".freeze
       PROPERTIES = {}.freeze
       REQUIRED = [].freeze
-      CONTRACT = Dry::Validation::Contract
+      CONTRACT = McpSiteContract
 
-      def call
-        problems = unknown_arguments
-        return Failure(invalid: problems) if problems.any?
+      private
 
+      def run
         result(
           {
             site: { domain: site.domain, timezone: site.timezone },
@@ -30,8 +29,6 @@ module Mcp
           ]
         )
       end
-
-      private
 
       def goal_data(goal)
         {

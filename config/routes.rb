@@ -139,12 +139,6 @@ Rails.application.routes.draw do
       resources :customers, only: %i[index show], param: :public_id
 
       resources :api_keys, only: %i[index create destroy], param: :public_id
-
-      # Connecting an AI agent. Open to every member, unlike the keys screen above;
-      # see Sites::McpController.
-      get "mcp", to: "mcp#show"
-      post "mcp/keys", to: "mcp#create", as: :mcp_keys
-      delete "mcp/keys/:public_id", to: "mcp#destroy", as: :mcp_key
     end
 
     # Admin-and-up. A singular resource because a site has at most one live
@@ -166,6 +160,12 @@ Rails.application.routes.draw do
   resource :account, only: %i[show edit update] do
     resources :members, only: %i[index create update destroy], module: :accounts
   end
+
+  # Connecting an AI agent. Open to every member, unlike the API keys screen on a
+  # site; account-level because a membership is. See Accounts::McpController.
+  get    "account/mcp",                  to: "accounts/mcp#show",    as: :account_mcp
+  post   "account/mcp/keys",             to: "accounts/mcp#create",  as: :account_mcp_keys
+  delete "account/mcp/keys/:public_id",  to: "accounts/mcp#destroy", as: :account_mcp_key
 
   # --- Billing --------------------------------------------------------------
   # All four routes exist on a self-hosted install too, and all four refuse to

@@ -168,15 +168,15 @@
 
   <%# --- AI agents (MCP) -----------------------------------------------------
       A pointer, not a copy: the page itself is open to every member, so it cannot
-      live behind this admin-only screen. See Sites::McpController. -%>
+      live behind this admin-only screen. See Accounts::McpController. -%>
   <div class="card mt-8">
     <div class="card-head">
       <h2 class="text-sm font-semibold">AI agents (MCP)</h2>
-      <%= link_to "Set up", site_mcp_path(@site), class: "link text-xs" %>
+      <%= link_to "Set up", account_mcp_path, class: "link text-xs" %>
     </div>
     <div class="card-body text-sm text-ink-2">
-      Anyone in your organisation can connect an AI agent to read this site's analytics.
-      Read-only, one site, small rows withheld.
+      Anyone in your organisation can connect an AI agent to read your analytics, this site
+      included. Read-only, one key for the whole account, small rows withheld.
     </div>
   </div>
 

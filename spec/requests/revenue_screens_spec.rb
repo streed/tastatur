@@ -102,31 +102,20 @@ RSpec.describe "Revenue screens", type: :request do
       get edit_site_path(site)
 
       expect(response.body).to include("AI agents (MCP)")
-      expect(response.body).to include(site_mcp_path(site))
+      expect(response.body).to include(account_mcp_path)
     end
 
-    it "mints a key for an AI agent that can read and cannot write" do
+    # Agent keys are made on the account's AI agents page. Asking for a read scope
+    # here must not produce one: it would be a site key that reads, which the
+    # database refuses to store.
+    it "makes only identify keys, whatever permission is asked for" do
       sign_in_as("admin")
 
       post site_api_keys_path(site), params: { api_key: { name: "claude", scope: "read:analytics" } }
 
-      expect(site.api_keys.first.scopes).to eq(["read:analytics"])
-    end
-
-    it "mints an identify-only key when no permission is chosen" do
-      sign_in_as("admin")
-
-      post site_api_keys_path(site), params: { api_key: { name: "production" } }
-
-      expect(site.api_keys.first.scopes).to eq(["write:identify"])
-    end
-
-    it "refuses an unknown permission" do
-      sign_in_as("admin")
-
-      post site_api_keys_path(site), params: { api_key: { name: "x", scope: "everything" } }
-
-      expect(site.api_keys).to be_empty
+      key = site.api_keys.sole
+      expect(key.scopes).to eq(["write:identify"])
+      expect(key.account_id).to be_nil
     end
 
     it "does not show the key again on a later visit" do

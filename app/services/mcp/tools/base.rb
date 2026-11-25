@@ -3,10 +3,14 @@ module Mcp
     # One MCP tool: validates its arguments, runs one existing report service
     # against ONE site, and returns a typed Mcp::ToolResult.
     #
-    # THE SITE IS NOT AN ARGUMENT. The API key names exactly one site and every
-    # tool is constructed with it, so there is no `site_id` an agent could be
-    # talked into changing — a prompt-injected page in a tool result cannot widen
-    # the tenant boundary, because the boundary is not in the model's hands.
+    # THE ACCOUNT IS NOT AN ARGUMENT; THE SITE IS, AND IT CAN ONLY BE ONE OF THE
+    # ACCOUNT'S. A key belongs to an account (its maker's access, which is
+    # account-wide) and every tool is constructed with that account, so there is no
+    # `account_id` an agent could be talked into changing. `site` is looked up
+    # THROUGH the account's own sites: a token or domain that belongs to somebody
+    # else's account is simply not found, and the error names only this account's
+    # sites. A prompt-injected page in a tool result can therefore redirect the
+    # agent between sites it was already allowed to read, and nowhere else.
     #
     # EVERY TOOL WRAPS AN `Analytics::` OR `Revenue::` SERVICE and none writes SQL.
     # That is how k-anonymity, complementary suppression and the
@@ -19,6 +23,14 @@ module Mcp
     #   Failure(not_found: "message")               the thing named does not exist
     #   Failure(unavailable: "message")             the report cannot be produced
     class Base < ApplicationService
+      SITE_PROPERTY = {
+        site: {
+          type: "string",
+          description: "Which site, by domain (example.com) or site token. Optional when the account has " \
+                       "exactly one site; otherwise required. list_sites shows the choices."
+        }
+      }.freeze
+
       PERIOD_PROPERTIES = {
         period: {
           type: "string", enum: Analytics::Period::PRESETS.keys,
@@ -49,7 +61,10 @@ module Mcp
         # shown a tool that always errors will keep retrying it.
         def available? = true
 
-        def properties = self::PROPERTIES
+        # Every tool but list_sites says which site it means.
+        def needs_site? = true
+
+        def properties = needs_site? ? SITE_PROPERTY.merge(self::PROPERTIES) : self::PROPERTIES
 
         def definition
           {
@@ -66,8 +81,8 @@ module Mcp
         end
       end
 
-      def initialize(site:, arguments:)
-        @site = site
+      def initialize(account:, arguments:)
+        @account = account
         @arguments = arguments.respond_to?(:to_unsafe_h) ? arguments.to_unsafe_h : arguments.to_h
         @arguments = @arguments.deep_symbolize_keys
       end
@@ -80,12 +95,46 @@ module Mcp
         return Failure(invalid: checked.errors.to_h) if checked.failure?
 
         @args = checked.to_h
+
+        if self.class.needs_site?
+          case find_site(args[:site])
+          in Success(found) then @site = found
+          in Failure => failure then return failure
+          end
+        end
+
         run
       end
 
       private
 
-      attr_reader :site, :args
+      attr_reader :account, :site, :args
+
+      SITE_CHOICES_SHOWN = 15
+
+      # Resolved against THIS ACCOUNT'S sites only. A single-site account needs no
+      # argument, which is the common case and the one a person trying it out is in.
+      def find_site(wanted)
+        sites = account.sites.order(:domain).to_a
+        return Failure(invalid: { site: ["This account has no sites yet."] }) if sites.empty?
+
+        if wanted.blank?
+          return Success(sites.first) if sites.one?
+
+          return Failure(invalid: { site: ["is required: this account has #{sites.size} sites. #{site_choices(sites)}"] })
+        end
+
+        matches = sites.select { |candidate| candidate.public_token == wanted || candidate.domain.casecmp?(wanted) }
+        return Success(matches.first) if matches.one?
+
+        Failure(invalid: { site: ["#{wanted.inspect} is not one of this account's sites. #{site_choices(sites)}"] })
+      end
+
+      def site_choices(sites)
+        shown = sites.first(SITE_CHOICES_SHOWN).map(&:domain).join(", ")
+        more = sites.size > SITE_CHOICES_SHOWN ? " and #{sites.size - SITE_CHOICES_SHOWN} more (see list_sites)" : ""
+        "Pass `site` as one of: #{shown}#{more}."
+      end
 
       def run = raise(NotImplementedError)
 

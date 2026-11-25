@@ -14,12 +14,10 @@ module Sites
     end
 
     def create
-      scopes = requested_scopes
-      # Only a key that READS is bound to its maker. An identify key belongs to a
-      # deployment and must keep working after the admin who made it moves on.
-      owner = scopes.all? { |scope| scope.start_with?("read:") } ? current_user : nil
-      key = ApiKey.generate!(site: @site, name: params.dig(:api_key, :name).to_s.strip,
-                             scopes: scopes, user: owner)
+      # An identify key, always: it belongs to a deployment and has no owner, so it
+      # keeps working after the admin who made it moves on. Agent keys are made on the
+      # account's AI agents page (Accounts::McpController), never here.
+      key = ApiKey.generate!(site: @site, name: params.dig(:api_key, :name).to_s.strip)
       authorize key
 
       if key.save
@@ -38,14 +36,6 @@ module Sites
         render :index, status: :unprocessable_entity
       end
     end
-
-    # ONE PURPOSE PER KEY, chosen from the declared list and defaulting to the
-    # narrower legacy one. An unknown value reaches the model as-is so its
-    # validation, not this method, is what refuses it.
-    def requested_scopes
-      Array(params.dig(:api_key, :scope).presence || ApiKey::DEFAULT_SCOPES)
-    end
-    private :requested_scopes
 
     def destroy
       key = policy_scope(ApiKey).where(site: @site).find_by_public_id!(params[:public_id])

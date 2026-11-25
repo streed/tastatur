@@ -4,10 +4,9 @@
   <div class="pt-5 rule-heavy mb-8">
     <h1 class="text-2xl font-semibold mt-5">API keys for <%= @site.domain %></h1>
     <p class="text-sm text-ink-2 mt-2">
-      Server-side credentials. A key does one job, chosen when you create it:
-      <code>write:identify</code> for your server to call <code>POST /api/v1/identify</code>, or
-      <code>read:analytics</code> to let an AI agent query this site over MCP. Different from the site
-      token in your snippet: that one is public by design, these must stay secret.
+      Server-side credentials for <code>POST /api/v1/identify</code>. Different from the site token in
+      your snippet: that one is public by design, this one attaches a name to a person and must stay
+      secret. To let an AI agent read your analytics, use the AI agents page instead.
     </p>
   </div>
 
@@ -31,9 +30,6 @@
       <h2 class="text-sm font-semibold">New key</h2>
       <%= f.field :name, "Label", placeholder: "production",
                   hint: "What uses it. A key nobody can identify is a key nobody dares revoke." %>
-      <%= f.field :scope, "Permission", as: :select,
-                  choices: ApiKey::SCOPES.map { |scope, description| [description, scope] },
-                  hint: "Give an AI agent a read:analytics key and nothing else: it cannot write identity. Use a separate key for your server." %>
       <%= f.actions "Create key", cancel_to: site_path(@site), cancel_label: "Back to dashboard" %>
     <% end %>
   <% else %>
@@ -54,7 +50,6 @@
               <% if key.revoked? %><span class="label ml-2">Revoked</span><% end %>
             </p>
             <p class="label mt-1 font-mono"><%= key.masked %></p>
-            <p class="label mt-1"><%= key.scopes.join(", ") %></p>
             <p class="label mt-1">
               <% if key.revoked? %>
                 Revoked <%= time_ago_in_words(key.revoked_at) %> ago
@@ -98,6 +93,6 @@ Content-Type: application/json
 
   <p class="text-sm text-ink-2 mt-8">
     Connecting an AI agent? Anyone in the organisation can, from
-    <%= link_to "the AI agents page", site_mcp_path(@site), class: "link" %>.
+    <%= link_to "the AI agents page", account_mcp_path, class: "link" %>.
   </p>
 </div>

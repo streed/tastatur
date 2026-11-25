@@ -24,7 +24,7 @@ module Api
     # does: no forgery protection to forget (the test environment disables it, so a
     # missing `skip_forgery_protection` would pass every spec and fail only in
     # production), no `authenticate_user!`, and no Pundit verification callbacks —
-    # authorization here is the API key, and the key names exactly one site.
+    # authorization here is the API key, and the key names exactly one site (an identify key) or one account (an agent key).
     class BaseController < ActionController::API
       include Dry::Monads[:result]
 
@@ -88,7 +88,8 @@ module Api
         render json: {
           error: "unauthorized",
           message: "Provide a live API key as `Authorization: Bearer tk_...`. " \
-                   "Keys are created per site under Settings → API keys."
+                   "Create one under a site's Settings → API keys (to identify customers) or " \
+                   "Account → AI agents (to read analytics)."
         }, status: :unauthorized
       end
 

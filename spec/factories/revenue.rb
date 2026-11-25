@@ -10,7 +10,8 @@ FactoryBot.define do
     # suite meaningless for the endpoint this protects.
     scopes { ApiKey::DEFAULT_SCOPES }
     user { nil }
-    initialize_with { ApiKey.generate!(site: site, name: name, scopes: scopes, user: user) }
+    account { nil }
+    initialize_with { ApiKey.generate!(site: site, account: account, name: name, scopes: scopes, user: user) }
 
     # What the key given to an AI agent looks like: it reads, and cannot write.
     #
@@ -18,8 +19,11 @@ FactoryBot.define do
     # to its maker and is refused once they are not one.
     trait :reader do
       scopes { ["read:analytics"] }
+      # An agent key lives on the account, not on a site. Pass `account:` to choose it.
+      site { nil }
+      account { association(:account) }
       user do
-        create(:user).tap { |maker| create(:membership, account: site.account, user: maker, role: "viewer") }
+        create(:user).tap { |maker| create(:membership, account: account, user: maker, role: "viewer") }
       end
     end
 

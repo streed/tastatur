@@ -56,7 +56,8 @@ class ApiKeyPolicy < ApplicationPolicy
     def resolve
       return scope.none if account.nil? || !context.member?
 
-      keys = scope.where(site_id: account.sites.select(:id))
+      # Identify keys hang off a site, agent keys off the account itself.
+      keys = scope.where(site_id: account.sites.select(:id)).or(scope.where(account_id: account.id))
       return keys if context.at_least?(:admin)
 
       # Everyone else sees only what they made, and only keys that read.
@@ -70,14 +71,11 @@ class ApiKeyPolicy < ApplicationPolicy
 
   def owner? = record.respond_to?(:user_id) && record.user_id.present? && record.user_id == user&.id
 
+  # Handles being asked about the class (index) as well as a row: a class answers
+  # no, so a class-level check never passes by accident.
   def same_account?
-    record_site&.account_id == account&.id
-  end
+    return false unless record.respond_to?(:owning_account_id)
 
-  # Handles being asked about the class (index) as well as a row.
-  def record_site
-    return nil unless record.respond_to?(:site)
-
-    record.site
+    record.owning_account_id.present? && record.owning_account_id == account&.id
   end
 end

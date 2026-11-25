@@ -376,24 +376,25 @@
 
       <%= render layout: "docs/section",
                  locals: { id: "mcp", title: "AI agents (MCP)",
-                           lede: "Let an assistant such as Claude query a site's analytics. Read-only, one site per key." } do %>
+                           lede: "Let an assistant such as Claude query your analytics. Read-only, one key for the whole account." } do %>
         <p class="text-[14px] text-ink-2 leading-relaxed">
           Any member of your organisation can make a key from the <strong>AI agents</strong> button on a
-          site's dashboard. It carries the <code>read:analytics</code> permission, belongs to whoever made
+          site's dashboard, or from the account page. One key covers every site in the account. It carries the <code>read:analytics</code> permission, belongs to whoever made
           it, and stops working if they leave the organisation. Point any MCP client that speaks Streamable
           HTTP at the endpoint:
         </p>
         <%= render "docs/snippet", language: "Shell",
                    code: %(claude mcp add --transport http tastatur #{Tastatur.base_url}/mcp \\\n  --header "Authorization: Bearer tk_...") %>
         <div class="card card-body space-y-2.5 text-[13px] text-ink-2">
-          <p><strong>Tools:</strong> <code>describe_site</code> (start here),
+          <p><strong>Tools:</strong> <code>list_sites</code> (start here), <code>describe_site</code>,
             <code>get_summary</code>, <code>get_timeseries</code>, <code>get_breakdown</code>,
             <code>get_goals</code>, <code>get_funnel</code>, <code>get_campaigns</code> and, where revenue
-            attribution is enabled, <code>get_revenue_attribution</code>. All accept a period and the same
-            filters as the dashboard.</p>
+            attribution is enabled, <code>get_revenue_attribution</code>. All but <code>list_sites</code> take a
+            <code>site</code> (a domain or token; optional when the account has one site), a period and the
+            same filters as the dashboard.</p>
           <p><strong>Same rules as the dashboard.</strong> The tools call the same reports, so rows with
             too few visitors are withheld, and each answer carries the caveats that apply to its numbers.
-            A key cannot write, cannot see another site, and is limited to 60 requests a minute.</p>
+            A key cannot write, cannot see another account, and is limited to 60 requests a minute.</p>
         </div>
       <% end %>
 

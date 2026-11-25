@@ -2,7 +2,7 @@ require "rails_helper"
 
 RSpec.describe "POST /mcp", type: :request do
   let(:site) { create(:site, timezone: "Etc/UTC") }
-  let!(:api_key) { create(:api_key, :reader, site: site) }
+  let!(:api_key) { create(:api_key, :reader, account: site.account) }
 
   def rpc(method, params = nil, id: 1, token: api_key.plaintext)
     body = { jsonrpc: "2.0", id: id, method: method }
@@ -83,7 +83,7 @@ RSpec.describe "POST /mcp", type: :request do
       rpc("tools/list")
       tools = result["tools"]
 
-      expect(tools.map { |t| t["name"] }).to include("describe_site", "get_summary", "get_timeseries",
+      expect(tools.map { |t| t["name"] }).to include("list_sites", "describe_site", "get_summary", "get_timeseries",
                                                       "get_breakdown", "get_goals", "get_funnel", "get_campaigns")
       expect(tools).to all(satisfy { |t| t.dig("annotations", "readOnlyHint") == true })
     end
@@ -114,9 +114,59 @@ RSpec.describe "POST /mcp", type: :request do
       expect(result["isError"]).to be(true)
     end
 
-    it "does not accept a site argument" do
+    it "does not reach a site in another account, and does not say whether it exists" do
       other = create(:site)
       call_tool("get_summary", { site: other.public_token })
+
+      expect(result["isError"]).to be(true)
+      expect(result["content"].first["text"]).to include("not one of this account's sites")
+      expect(result["content"].first["text"]).not_to include(other.domain)
+    end
+  end
+
+  describe "an account with several sites" do
+    # Pro, because a Free account is limited to one site.
+    let(:site) { create(:site, account: create(:account, plan: "pro"), timezone: "Etc/UTC") }
+    let!(:second) { create(:site, account: site.account, timezone: "Etc/UTC") }
+
+    before do
+      create_event(site, path: "/a", visitor: "a", session: "a", at: 1.day.ago)
+      create_event(second, path: "/b", visitor: "b1", session: "b1", at: 1.day.ago)
+      create_event(second, path: "/b", visitor: "b2", session: "b2", at: 1.day.ago)
+    end
+
+    it "lists the account's sites, and only those" do
+      stranger = create(:site)
+      call_tool("list_sites")
+
+      domains = payload["data"]["sites"].map { |s| s["domain"] }
+      expect(domains).to contain_exactly(site.domain, second.domain)
+      expect(response.body).not_to include(stranger.domain)
+    end
+
+    it "asks which site when none is given, naming the choices" do
+      call_tool("get_summary", { period: "7d" })
+
+      expect(result["isError"]).to be(true)
+      expect(result["content"].first["text"]).to include(site.domain, second.domain)
+    end
+
+    it "answers for the site named by domain, case-insensitively" do
+      call_tool("get_summary", { site: second.domain.upcase, period: "7d" })
+
+      expect(payload["data"]["metrics"]["visitors"]).to eq(2)
+    end
+
+    it "answers for the site named by token" do
+      call_tool("get_summary", { site: site.public_token, period: "7d" })
+
+      expect(payload["data"]["metrics"]["visitors"]).to eq(1)
+    end
+
+    it "keeps one site's funnel out of another's report" do
+      funnel = create(:funnel, site: second)
+      call_tool("get_funnel", { site: site.domain, funnel_id: funnel.public_id })
+
       expect(result["isError"]).to be(true)
     end
   end

@@ -53,8 +53,8 @@ module Mcp
         protocolVersion: PROTOCOL_VERSIONS.include?(requested) ? requested : PROTOCOL_VERSIONS.first,
         capabilities: { tools: { listChanged: false } },
         serverInfo: { name: "tastatur", version: "1" },
-        instructions: "Read-only analytics for one site. Call describe_site first. Figures are anonymous and " \
-                      "cookieless; every tool states the caveats that apply to its numbers."
+        instructions: "Read-only analytics for the sites in one account. Call list_sites, then describe_site. " \
+                      "Figures are anonymous and cookieless; every tool states the caveats that apply to its numbers."
       }
     end
 
@@ -67,7 +67,7 @@ module Mcp
       arguments = params["arguments"] || {}
       return error(id, INVALID_PARAMS, "\"arguments\" must be an object.") unless arguments.is_a?(Hash)
 
-      case tool.call(site: @api_key.site, arguments: arguments)
+      case tool.call(account: @api_key.account, arguments: arguments)
       in Success(tool_result) then reply(id, success_content(tool_result))
       in Failure(invalid: problems) then reply(id, failure_content("Invalid arguments: #{problems.to_json}"))
       in Failure(not_found: message) then reply(id, failure_content(message))

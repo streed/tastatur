@@ -4,7 +4,7 @@
 # server-to-server API is, so it inherits that controller's honest 401 / 403
 # (§12's "always 202" rule is for anonymous browsers and does not apply here) and
 # its freedom from forgery protection, Devise and Pundit: authorization is the key,
-# and the key names one site. See Api::V1::BaseController.
+# and the key names one account. See Api::V1::BaseController.
 #
 # The key is read-only by construction: nothing behind this endpoint writes.
 class McpController < Api::V1::BaseController
