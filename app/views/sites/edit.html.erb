@@ -166,6 +166,39 @@
     </div>
   <% end %>
 
+  <%# --- AI agents (MCP) -----------------------------------------------------
+      Its own card, NOT a footnote on the API keys page. The only other route to
+      that page is the small link in the Revenue card below, which is not where
+      anybody looks for "connect Claude to my analytics". The key itself is still
+      made on the API keys page, because that is where a secret is shown once. -%>
+  <div class="card mt-8">
+    <div class="card-head">
+      <h2 class="text-sm font-semibold">AI agents (MCP)</h2>
+      <%= link_to "Create a key", site_api_keys_path(@site), class: "link text-xs" %>
+    </div>
+    <div class="card-body text-sm space-y-3">
+      <p class="text-ink-2">
+        Let an AI agent such as Claude read this site's traffic, goals, funnels, campaigns and
+        revenue attribution. It cannot change anything and cannot see any other site, and small
+        rows stay withheld exactly as on your dashboard.
+      </p>
+      <ol class="list-decimal pl-5 space-y-1 text-ink-2">
+        <li>
+          <%= link_to "Create an API key", site_api_keys_path(@site), class: "link" %> with the
+          <code>read:analytics</code> permission, and copy it. It is shown once.
+        </li>
+        <li>Add this server to your MCP client:</li>
+      </ol>
+<pre class="text-xs overflow-x-auto"><code>claude mcp add --transport http tastatur <%= Tastatur.base_url %>/mcp \
+  --header "Authorization: Bearer tk_..."</code></pre>
+      <p class="text-ink-2">
+        Other clients take the same two things: the URL <code><%= Tastatur.base_url %>/mcp</code> and an
+        <code>Authorization: Bearer</code> header. Ask the agent to start with <code>describe_site</code>.
+        Limited to 60 requests a minute per key.
+      </p>
+    </div>
+  </div>
+
   <%# --- Revenue -------------------------------------------------------------
       Above the delete card and below everything else, because connecting Stripe
       is a setup step somebody does once and then forgets — but disconnecting is

@@ -96,6 +96,16 @@ RSpec.describe "Revenue screens", type: :request do
       expect(response.body).to include("not shown again")
     end
 
+    it "tells an admin how to connect an AI agent, on the site settings page" do
+      sign_in_as("admin")
+
+      get edit_site_path(site)
+
+      expect(response.body).to include("AI agents (MCP)")
+      expect(response.body).to include("#{Tastatur.base_url}/mcp")
+      expect(response.body).to include(site_api_keys_path(site))
+    end
+
     it "mints a key for an AI agent that can read and cannot write" do
       sign_in_as("admin")
 
