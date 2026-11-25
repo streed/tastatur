@@ -307,8 +307,9 @@ keys are valid. Check your dashboard to confirm events are arriving.
 
 ## AI agents (MCP)
 
-Let an assistant such as Claude query a site's analytics. Any member of your
-organisation can make a key from the **AI agents** button on a site's dashboard.
+Let an assistant such as Claude query your analytics. Any member of your
+organisation can make a key from the **AI agents** button on a site's dashboard,
+or from the account page. One key covers every site in the account.
 It carries the `read:analytics` permission, belongs to whoever made it, and stops
 working if they leave the organisation.
 
@@ -317,14 +318,15 @@ claude mcp add --transport http tastatur <%= Tastatur.base_url %>/mcp \
   --header "Authorization: Bearer tk_..."
 ```
 
-Tools: `describe_site` (start here), `get_summary`, `get_timeseries`,
+Tools: `list_sites` (start here), `describe_site`, `get_summary`, `get_timeseries`,
 `get_breakdown`, `get_goals`, `get_funnel`, `get_campaigns` and, where revenue
-attribution is enabled, `get_revenue_attribution`. All accept a period and the
-same filters as the dashboard.
+attribution is enabled, `get_revenue_attribution`. All but `list_sites` take a
+`site` (a domain or token; optional when the account has one site), a period and
+the same filters as the dashboard.
 
 The tools call the same reports as the dashboard, so rows with too few visitors
 are withheld, and each answer carries the caveats that apply to its numbers. A
-key cannot write, cannot see another site, and is limited to 60 requests a
+key cannot write, cannot see another account, and is limited to 60 requests a
 minute.
 
 ## Without JavaScript

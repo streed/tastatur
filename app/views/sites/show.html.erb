@@ -62,8 +62,9 @@
                             analytics_props: { source: "dashboard_header" } } %>
       <% end %>
       <%# For every member, viewers included: an agent key reads what the member
-          can already see, and is bound to them. See Sites::McpController. -%>
-      <%= link_to "AI agents", site_mcp_path(@site), class: "btn btn-sm" %>
+          can already see, and is bound to them. Account-level, so this leaves the
+          site. See Accounts::McpController. -%>
+      <%= link_to "AI agents", account_mcp_path, class: "btn btn-sm" %>
       <%# Which of the two routes to the snippet was taken: the header button on a
           working site is somebody re-installing or checking, the empty-state
           button below is somebody still trying to get their first event in. %>

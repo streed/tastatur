@@ -5,7 +5,7 @@
 # a human may have edited and wrong here: an agent that asks for "last_week" and is
 # silently handed 30 days will analyse the wrong window and say so with total
 # confidence. So an unknown preset is an error the agent can read and correct.
-class McpPeriodContract < Dry::Validation::Contract
+class McpPeriodContract < McpSiteContract
   json do
     optional(:period).filled(:string, included_in?: Analytics::Period::PRESETS.keys)
     optional(:from).filled(:string)

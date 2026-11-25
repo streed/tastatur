@@ -19,6 +19,17 @@
   <div class="mb-6"><%= render "accounts/two_factor" %></div>
 
   <div class="card mb-6">
+    <div class="card-head">
+      <h2 class="text-sm font-semibold">AI agents (MCP)</h2>
+      <%= link_to "Set up", account_mcp_path, class: "link text-xs" %>
+    </div>
+    <div class="card-body text-sm text-ink-2">
+      Anyone in your organisation can connect an AI agent such as Claude to read the analytics of
+      every site here. Read-only, one key, small rows withheld.
+    </div>
+  </div>
+
+  <div class="card mb-6">
     <div class="card-head"><h2 class="text-sm font-semibold">Data retention</h2></div>
     <div class="card-body">
       <p class="figure"><%= @account.data_retention_days %> <span class="text-base font-normal text-muted">days</span></p>

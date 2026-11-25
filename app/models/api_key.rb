@@ -1,4 +1,5 @@
-# A server-side credential for one site.
+# A credential for the API: an identify key for one site's server, or an agent key
+# for an account (see MakeAgentKeysAccountLevel).
 #
 # THE PLAINTEXT EXISTS EXACTLY ONCE, in memory, on the request that created it.
 # `#plaintext` is populated by `generate!` and by nothing else; it is never
@@ -34,15 +35,21 @@ class ApiKey < ApplicationRecord
   # what every key could do before scopes existed.
   DEFAULT_SCOPES = ["write:identify"].freeze
 
-  belongs_to :site
+  # Exactly one of these is set: an identify key belongs to a site, an agent key to
+  # an account (see MakeAgentKeysAccountLevel).
+  belongs_to :site, optional: true
+  belongs_to :account, optional: true
   # The member who made an agent key; see the migration. Nil for identify keys.
   belongs_to :user, optional: true
 
   has_secure_password :token, validations: false
 
-  # Per person: two teammates may each have a key called "claude". Identify keys have
-  # no owner, so for them this is still per site. Mirrored by a NULLS NOT DISTINCT index.
-  validates :name, presence: true, uniqueness: { scope: %i[site_id user_id] }
+  validates :name, presence: true
+  # Per person: two teammates may each have a key called "claude". An identify key has
+  # no owner and is named per site. Mirrored by two partial unique indexes.
+  validates :name, uniqueness: { scope: %i[account_id user_id] }, if: :account_id?
+  validates :name, uniqueness: { scope: :site_id }, if: :site_id?
+  validate :belongs_to_exactly_what_its_scope_needs
   validates :scopes, length: { minimum: 1, message: "must include at least one permission" }
   validates :user, presence: { message: "is required for a key that reads analytics" }, if: :agent?
   validate :scopes_are_known
@@ -62,12 +69,12 @@ class ApiKey < ApplicationRecord
   # what lets authentication do ONE bcrypt comparison instead of one per key in
   # the table — see the migration for why that distinction is a denial-of-service
   # issue rather than a performance note.
-  def self.generate!(site:, name:, scopes: DEFAULT_SCOPES, user: nil)
+  def self.generate!(name:, site: nil, account: nil, scopes: DEFAULT_SCOPES, user: nil)
     prefix = SecureRandom.alphanumeric(PREFIX_LENGTH).downcase
     secret = SecureRandom.urlsafe_base64(SECRET_LENGTH)
     plaintext = "#{PREFIX}_#{prefix}_#{secret}"
 
-    key = new(site: site, name: name, user: user, token_prefix: prefix, scopes: Array(scopes).map(&:to_s).uniq,
+    key = new(site: site, account: account, name: name, user: user, token_prefix: prefix, scopes: Array(scopes).map(&:to_s).uniq,
               last_four: plaintext.last(4), token: plaintext)
     key.instance_variable_set(:@plaintext, plaintext)
     key
@@ -137,8 +144,11 @@ class ApiKey < ApplicationRecord
   def owner_still_member?
     return true if user_id.nil?
 
-    Membership.exists?(user_id: user_id, account_id: site.account_id)
+    Membership.exists?(user_id: user_id, account_id: owning_account_id)
   end
+
+  # The account this key acts within, whichever way it is attached.
+  def owning_account_id = account_id || site&.account_id
 
   def allows?(scope) = scopes.include?(scope.to_s)
 
@@ -171,6 +181,19 @@ class ApiKey < ApplicationRecord
   end
 
   private
+
+  # A key that reads lives on the account and a key that writes lives on a site, and
+  # mixing them up is the bug the database check also refuses. Said here first so the
+  # error reads as a sentence instead of a constraint name.
+  def belongs_to_exactly_what_its_scope_needs
+    if site_id.present? && account_id.present?
+      errors.add(:base, "must belong to a site or an account, not both")
+    elsif agent? && account_id.blank?
+      errors.add(:account, "is required for a key that reads analytics")
+    elsif !agent? && site_id.blank?
+      errors.add(:site, "is required for a key that writes")
+    end
+  end
 
   def scopes_are_known
     unknown = scopes - SCOPES.keys

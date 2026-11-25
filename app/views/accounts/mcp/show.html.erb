@@ -1,12 +1,14 @@
-<% content_for :title, "AI agents · #{@site.domain}" %>
+<% content_for :title, "AI agents · #{@account.name}" %>
 
 <div class="shell max-w-3xl">
   <div class="pt-5 rule-heavy mb-8">
-    <h1 class="text-2xl font-semibold mt-5">Connect an AI agent to <%= @site.domain %></h1>
+    <h1 class="text-2xl font-semibold mt-5">Connect an AI agent to <%= @account.name %></h1>
     <p class="text-sm text-ink-2 mt-2">
-      Let an assistant such as Claude read this site's traffic, goals, funnels, campaigns and revenue
-      attribution through the Model Context Protocol. The agent can read and nothing else: it cannot
-      change anything, it cannot see any other site, and small rows stay withheld exactly as on your
+      Let an assistant such as Claude read your traffic, goals, funnels, campaigns and revenue
+      attribution through the Model Context Protocol. One key covers
+      <%= @sites.any? ? "all #{pluralize(@sites.size, 'site')} in this account" : "every site in this account" %>,
+      the same ones you can already see. The agent can read and nothing else: it cannot change
+      anything, it cannot see any other account, and small rows stay withheld exactly as on your
       dashboard. Anyone in your organisation can connect one.
     </p>
   </div>
@@ -23,12 +25,12 @@
     </div>
   <% end %>
 
-  <%= form_with model: @api_key, url: site_mcp_keys_path(@site), class: "card card-body space-y-6" do |f| %>
+  <%= form_with model: @api_key, url: account_mcp_keys_path, class: "card card-body space-y-6" do |f| %>
     <%= f.error_summary %>
     <h2 class="text-sm font-semibold">1. Make a key</h2>
     <%= f.field :name, "Label", placeholder: "claude on my laptop",
                 hint: "What will use it. The key is yours: it stops working if you leave the organisation." %>
-    <%= f.actions "Create key", cancel_to: site_path(@site), cancel_label: "Back to dashboard" %>
+    <%= f.actions "Create key", cancel_to: account_path, cancel_label: "Back to account" %>
   <% end %>
 
   <div class="card mt-8">
@@ -39,7 +41,7 @@
       <p class="text-ink-2">
         Any MCP client that speaks Streamable HTTP takes the same two things: the URL
         <code><%= Tastatur.base_url %>/mcp</code> and an <code>Authorization: Bearer</code> header carrying the key.
-        Ask the agent to start with <code>describe_site</code>. Limited to 60 requests a minute per key.
+        Ask the agent to start with <code>list_sites</code>. Limited to 60 requests a minute per key.
       </p>
     </div>
   </div>
@@ -67,7 +69,7 @@
             </p>
           </div>
           <% if key.live? && policy(key).destroy? %>
-            <%= button_to "Revoke", site_mcp_key_path(@site, key), method: :delete, class: "btn btn-sm",
+            <%= button_to "Revoke", account_mcp_key_path(key), method: :delete, class: "btn btn-sm",
                           form: { data: { turbo_confirm: "Revoke #{key.name}? The agent using it stops working immediately." } } %>
           <% end %>
         </div>

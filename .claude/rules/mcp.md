@@ -5,13 +5,13 @@ paths:
   - "app/lib/mcp/**/*.rb"
   - "app/contracts/mcp_*.rb"
   - "app/values/mcp/**/*.rb"
-  - "app/controllers/sites/mcp_controller.rb"
+  - "app/controllers/accounts/mcp_controller.rb"
   - "app/policies/api_key_policy.rb"
   - "spec/requests/mcp_setup_spec.rb"
   - "spec/requests/mcp_spec.rb"
 ---
 
-### 21. The MCP server: an LLM agent reading one site's analytics
+### 21. The MCP server: an LLM agent reading an account's analytics
 
 `POST /mcp` speaks Model Context Protocol (Streamable HTTP, stateless JSON-RPC, no
 SSE, no sessions; `GET` is 405). Authenticated by an `ApiKey` holding
@@ -25,7 +25,7 @@ wrapper over an existing `Analytics::` / `Revenue::` service.
   agent lives in the least controlled place a credential can, which is why it must
   not be the one that asserts "visitor X is user Y".
 - **Any member may connect an agent; only an admin may make a key that writes.**
-  `/sites/:token/mcp` (`Sites::McpController`) is open to every role including
+  `/account/mcp` (`Accounts::McpController`) is open to every role including
   viewers, and it can only ever make `read:analytics` keys: the scope is fixed in
   the controller, not read from params. That is safe for three reasons that must
   all stay true: a read key grants nothing its maker cannot already see; it is
@@ -35,8 +35,18 @@ wrapper over an existing `Analytics::` / `Revenue::` service.
   indistinguishable 401; and a member sees and revokes only their own keys
   (`ApiKeyPolicy::Scope`). Identify keys have NO owner on purpose — they belong to
   a deployment and must outlive the admin who made them. Do not bind them.
-- **The site is never an argument.** The key names one site; every tool is built
-  with it. Anything addressed by id (a funnel) is looked up THROUGH `site`.
+- **Agent keys belong to an ACCOUNT; identify keys belong to a SITE.** Exactly one
+  of `api_keys.site_id` / `account_id` is set (a CHECK constraint and a model
+  validation), and an account key must have an owner. A membership is of an
+  account, so the key mirrors the access of the person who made it: one key for an
+  organisation with eight sites, not eight. Identify keys stay per-site on purpose:
+  widening a leaked server credential to every site would let it assert identities
+  everywhere.
+- **The account is never an argument; the site is, and only ever one of the
+  account's.** Tools are built with the key's account and `find_site` looks a
+  `site` (domain or token) up THROUGH `account.sites`, so another account's site is
+  simply not found and the error names only this account's sites. It may be omitted
+  when the account has exactly one. `list_sites` is the one tool that takes none.
 - **No tool writes SQL.** k-anonymity, complementary suppression and the
   distinct-counts-are-not-additive rule (§8, §13) reach the agent only because it
   calls the same services as the dashboard. A tool that needs a new query needs a
